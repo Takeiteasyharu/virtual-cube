@@ -27,7 +27,7 @@ function initCube() {
     0.1,
     100
   );
-  camera.position.set(0, 8, 8);
+  camera.position.set(0, 10, 10);
   camera.lookAt(0, 0, 0);
 
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });

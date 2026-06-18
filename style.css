@@ -42,8 +42,8 @@ main {
 }
 
 #cubeContainer {
-  width: 700px;
-  height: 700px;
+  width: min(70vw, 900px);
+  height: min(70vw, 900px);
   margin: 0 auto;
 }
 
@@ -52,7 +52,7 @@ main {
   right: 48px;
   top: 48%;
   transform: translateY(-50%);
-  width: 280px;
+  width: clamp(280px, 20vw, 360px);
 }
 
 .timer {
