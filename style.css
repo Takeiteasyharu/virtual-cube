@@ -45,6 +45,7 @@ main {
   width: min(70vw, 900px);
   height: min(70vw, 900px);
   margin: 0 auto;
+  transform: translateY(-180px);
 }
 
 .panel {
