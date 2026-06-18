@@ -31,6 +31,7 @@ function initCube() {
   camera.lookAt(0, 0, 0);
 
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setSize(container.clientWidth, container.clientHeight);
   container.appendChild(renderer.domElement);
 
@@ -158,6 +159,9 @@ function animateScene() {
 
 function onResize() {
   const container = document.getElementById("cubeContainer");
+
+  if (!container.clientWidth || !container.clientHeight) return;
+
   camera.aspect = container.clientWidth / container.clientHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(container.clientWidth, container.clientHeight);

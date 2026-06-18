@@ -50,7 +50,7 @@ const keyMap = {
 let readyToSolve = false;
 let firstTurnDone = false;
 
-const ROTATION_MOVES = ["x", "x'", "yRotation", "yRotation'", "z", "z'"];
+const ROTATION_MOVES = ["x", "x'", "yRotation", "yRotation'", "zRotation", "zRotation'"];
 
 document.addEventListener("DOMContentLoaded", () => {
   initCube();

@@ -37,15 +37,23 @@ h1 {
 main {
   position: relative;
   flex: 1;
-  display: block;
+  display: grid;
+  place-items: center;
   padding: 16px;
 }
 
 #cubeContainer {
-  width: min(70vw, 900px);
-  height: min(70vw, 900px);
+  width: min(72vw, 900px);
+  height: min(72vw, 900px);
   margin: 0 auto;
-  transform: translateY(-180px);
+  transform: translate(-10vw, -120px);
+  touch-action: manipulation;
+}
+
+#cubeContainer canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .panel {
@@ -100,6 +108,12 @@ h2 {
   overflow-y: auto;
 }
 
+#rankingList {
+  padding-left: 24px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
 footer {
   text-align: center;
   padding: 12px;
@@ -109,15 +123,9 @@ footer {
 
 @media (max-width: 900px) {
   main {
+    display: flex;
     flex-direction: column;
-  }
-
-  #cubeContainer {
-    height: 420px;
-  }
-
-  .panel {
-    width: 90vw;
+    align-items: center;
   }
 }
 
@@ -185,10 +193,11 @@ body.dark .theme-toggle {
   }
 
   #cubeContainer {
-    width: 95vw;
-    height: 95vw;
-    max-height: 55vh;
-    transform: translateY(0);
+    width: min(96vw, 55vh);
+    height: min(96vw, 55vh);
+    max-width: 520px;
+    max-height: 520px;
+    transform: none;
   }
 
   .panel {

@@ -57,7 +57,12 @@ function setCurrentScramble(scrambleText) {
 }
 
 function getSolves() {
-  return JSON.parse(localStorage.getItem("cubeSolves")) || [];
+  try {
+    const solves = JSON.parse(localStorage.getItem("cubeSolves")) || [];
+    return solves.filter(solve => Number.isFinite(solve.time));
+  } catch (error) {
+    return [];
+  }
 }
 
 function saveSolve(time, scramble) {
@@ -79,6 +84,7 @@ function clearTimes() {
 
 function renderStats() {
   renderTimes();
+  renderRanking();
   renderScrambleHistory();
   renderPB();
   renderAO();
@@ -93,6 +99,29 @@ function renderTimes() {
   solves.forEach((solve, index) => {
     const li = document.createElement("li");
     li.textContent = `${index + 1}. ${solve.time.toFixed(2)}`;
+    list.appendChild(li);
+  });
+}
+
+function renderRanking() {
+  const list = document.getElementById("rankingList");
+  const solves = [...getSolves()].sort((a, b) => a.time - b.time);
+
+  if (!list) return;
+
+  list.innerHTML = "";
+
+  if (solves.length === 0) {
+    const li = document.createElement("li");
+    li.textContent = "-";
+    list.appendChild(li);
+    return;
+  }
+
+  solves.slice(0, 20).forEach(solve => {
+    const li = document.createElement("li");
+    const date = solve.date ? ` (${solve.date})` : "";
+    li.textContent = `${solve.time.toFixed(2)}${date}`;
     list.appendChild(li);
   });
 }
