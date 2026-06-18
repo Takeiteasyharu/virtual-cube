@@ -1,0 +1,163 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #eaffc9;
+  color: #111;
+  overflow-x: hidden;
+}
+
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+header {
+  text-align: center;
+  padding: 16px;
+}
+
+h1 {
+  margin: 0 0 12px;
+  font-size: 28px;
+}
+
+.scramble {
+  min-height: 32px;
+  font-size: 20px;
+  font-weight: bold;
+  word-break: break-word;
+  padding: 8px 16px;
+}
+
+main {
+  position: relative;
+  flex: 1;
+  display: block;
+  padding: 16px;
+}
+
+#cubeContainer {
+  width: 700px;
+  height: 700px;
+  margin: 0 auto;
+}
+
+.panel {
+  position: absolute;
+  right: 48px;
+  top: 48%;
+  transform: translateY(-50%);
+  width: 280px;
+}
+
+.timer {
+  font-family: "Courier New", monospace;
+  font-size: 52px;
+  font-weight: bold;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+button {
+  border: none;
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 16px;
+  cursor: pointer;
+  background: #111;
+  color: white;
+}
+
+button:hover {
+  opacity: 0.8;
+}
+
+.last-move {
+  margin-top: 16px;
+  font-size: 16px;
+}
+
+h2 {
+  font-size: 20px;
+  margin-top: 20px;
+}
+
+#timeList {
+  padding-left: 20px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+footer {
+  text-align: center;
+  padding: 12px;
+  font-size: 14px;
+  opacity: 0.8;
+}
+
+@media (max-width: 900px) {
+  main {
+    flex-direction: column;
+  }
+
+  #cubeContainer {
+    height: 420px;
+  }
+
+  .panel {
+    width: 90vw;
+  }
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  margin-bottom: 16px;
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.theme-toggle {
+  width: 100%;
+  margin-bottom: 12px;
+  background: #333;
+}
+
+#scrambleHistoryList {
+  padding-left: 20px;
+  max-height: 160px;
+  overflow-y: auto;
+  font-size: 13px;
+}
+
+body.dark {
+  background: #111;
+  color: #f5f5f5;
+}
+
+body.dark .panel {
+  background: rgba(30, 30, 30, 0.92);
+  color: #f5f5f5;
+}
+
+body.dark button {
+  background: #f5f5f5;
+  color: #111;
+}
+
+body.dark .theme-toggle {
+  background: #444;
+  color: white;
+}

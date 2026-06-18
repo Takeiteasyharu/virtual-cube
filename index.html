@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Virtual Cube Timer</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Virtual Cube Timer</h1>
+      <div class="scramble" id="scrambleText">Scramble will appear here</div>
+    </header>
+
+    <main>
+      <div id="cubeContainer"></div>
+
+      <section class="panel">
+        <button id="themeToggleBtn" class="theme-toggle">Dark</button>
+
+        <div class="timer" id="timerDisplay">0.00</div>
+
+        <div class="stats">
+          <div>PB: <span id="pbDisplay">-</span></div>
+          <div>AO5: <span id="ao5Display">-</span></div>
+          <div>AO12: <span id="ao12Display">-</span></div>
+        </div>
+
+        <div class="buttons">
+          <button id="scrambleBtn">Scramble</button>
+          <button id="resetBtn">Reset</button>
+          <button id="clearTimesBtn">Clear Times</button>
+        </div>
+
+        <div class="last-move">
+          Last move: <span id="lastMove">-</span>
+        </div>
+
+        <h2>Solve History</h2>
+        <ul id="timeList"></ul>
+
+        <h2>Scramble History</h2>
+        <ul id="scrambleHistoryList"></ul>
+      </section>
+    </main>
+
+    <footer>
+      <p>Space: start / stop Esc: reset timer</p>
+      <p>R:i R':k L:e L':d U:j U':f D:s D':l F:h F':g B:w B':o</p>
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script src="cube.js"></script>
+  <script src="scramble.js"></script>
+  <script src="timer.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
