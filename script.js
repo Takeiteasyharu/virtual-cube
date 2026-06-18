@@ -56,6 +56,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initCube();
   renderStats();
   loadTheme();
+  setupTouchControls();
 
   setAfterMoveCallback(() => {
     checkSolvedAndStopTimer();
@@ -99,6 +100,10 @@ document.addEventListener("keydown", event => {
   const move = keyMap[key];
   if (!move) return;
 
+  performMove(move);
+});
+
+function performMove(move) {
   document.getElementById("lastMove").textContent = displayMove(move);
 
   const isRotationMove = ROTATION_MOVES.includes(move);
@@ -109,8 +114,46 @@ document.addEventListener("keydown", event => {
   }
 
   executeMove(move);
+}
 
-});
+function setupTouchControls() {
+  const container = document.getElementById("cubeContainer");
+  let touchStart = null;
+
+  container.addEventListener("pointerdown", event => {
+    if (event.pointerType !== "touch" && event.pointerType !== "pen") return;
+
+    touchStart = {
+      x: event.clientX,
+      y: event.clientY
+    };
+
+    container.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  });
+
+  container.addEventListener("pointerup", event => {
+    if (!touchStart) return;
+
+    const dx = event.clientX - touchStart.x;
+    const dy = event.clientY - touchStart.y;
+    const distance = Math.hypot(dx, dy);
+    touchStart = null;
+
+    if (distance < 28) return;
+
+    const move = Math.abs(dx) > Math.abs(dy)
+      ? (dx > 0 ? "R" : "L")
+      : (dy > 0 ? "D" : "U");
+
+    performMove(move);
+    event.preventDefault();
+  });
+
+  container.addEventListener("pointercancel", () => {
+    touchStart = null;
+  });
+}
 
 function scrambleCube() {
   resetCube();

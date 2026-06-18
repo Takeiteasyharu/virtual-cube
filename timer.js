@@ -25,6 +25,11 @@ function stopTimer() {
 
   const finalTime = Number(formatTime(elapsedTime));
   saveSolve(finalTime, currentScramble);
+
+  if (typeof window.submitOnlineSolve === "function") {
+    window.submitOnlineSolve(finalTime, currentScramble);
+  }
+
   renderStats();
 }
 
@@ -84,7 +89,6 @@ function clearTimes() {
 
 function renderStats() {
   renderTimes();
-  renderRanking();
   renderScrambleHistory();
   renderPB();
   renderAO();
@@ -99,29 +103,6 @@ function renderTimes() {
   solves.forEach((solve, index) => {
     const li = document.createElement("li");
     li.textContent = `${index + 1}. ${solve.time.toFixed(2)}`;
-    list.appendChild(li);
-  });
-}
-
-function renderRanking() {
-  const list = document.getElementById("rankingList");
-  const solves = [...getSolves()].sort((a, b) => a.time - b.time);
-
-  if (!list) return;
-
-  list.innerHTML = "";
-
-  if (solves.length === 0) {
-    const li = document.createElement("li");
-    li.textContent = "-";
-    list.appendChild(li);
-    return;
-  }
-
-  solves.slice(0, 20).forEach(solve => {
-    const li = document.createElement("li");
-    const date = solve.date ? ` (${solve.date})` : "";
-    li.textContent = `${solve.time.toFixed(2)}${date}`;
     list.appendChild(li);
   });
 }
