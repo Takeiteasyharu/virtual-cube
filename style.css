@@ -162,3 +162,48 @@ body.dark .theme-toggle {
   background: #444;
   color: white;
 }
+
+@media (max-width: 900px) {
+  header {
+    padding: 10px;
+  }
+
+  h1 {
+    font-size: 24px;
+  }
+
+  .scramble {
+    font-size: 16px;
+    padding: 6px 12px;
+  }
+
+  main {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8px;
+  }
+
+  #cubeContainer {
+    width: 95vw;
+    height: 95vw;
+    max-height: 55vh;
+    transform: translateY(0);
+  }
+
+  .panel {
+    position: static;
+    transform: none;
+    width: 92vw;
+    margin: 12px auto 24px;
+  }
+
+  .timer {
+    font-size: 44px;
+  }
+
+  footer {
+    font-size: 12px;
+    padding: 8px;
+  }
+}
