@@ -24,10 +24,19 @@ function stopTimer() {
   clearInterval(timerInterval);
 
   const finalTime = Number(formatTime(elapsedTime));
-  saveSolve(finalTime, currentScramble);
+  const solveStats = typeof window.getCurrentSolveStats === "function"
+    ? window.getCurrentSolveStats(finalTime)
+    : { moveCount: 0, moves: [], tps: null };
+
+  saveSolve(finalTime, currentScramble, solveStats);
+  updateTpsDisplay(solveStats.tps);
 
   if (typeof window.submitOnlineSolve === "function") {
-    window.submitOnlineSolve(finalTime, currentScramble, getCurrentAo5());
+    window.submitOnlineSolve(finalTime, currentScramble, getCurrentAo5(), solveStats);
+  }
+
+  if (typeof window.submitBattleSolve === "function") {
+    window.submitBattleSolve(finalTime, currentScramble, solveStats);
   }
 
   renderStats();
@@ -38,6 +47,7 @@ function resetTimer() {
   clearInterval(timerInterval);
   elapsedTime = 0;
   updateTimerDisplay();
+  updateTpsDisplay(null);
 }
 
 function toggleTimer() {
@@ -47,6 +57,13 @@ function toggleTimer() {
 
 function updateTimerDisplay() {
   document.getElementById("timerDisplay").textContent = formatTime(elapsedTime);
+}
+
+function updateTpsDisplay(tps) {
+  const display = document.getElementById("tpsDisplay");
+  if (!display) return;
+
+  display.textContent = Number.isFinite(tps) ? `TPS: ${tps.toFixed(2)}` : "TPS: -";
 }
 
 function formatTime(ms) {
@@ -70,11 +87,13 @@ function getSolves() {
   }
 }
 
-function saveSolve(time, scramble) {
+function saveSolve(time, scramble, solveStats = {}) {
   const solves = getSolves();
 
   solves.unshift({
     time,
+    tps: Number.isFinite(solveStats.tps) ? solveStats.tps : null,
+    moveCount: Number.isFinite(solveStats.moveCount) ? solveStats.moveCount : 0,
     scramble,
     date: new Date().toLocaleString()
   });
@@ -102,7 +121,8 @@ function renderTimes() {
 
   solves.forEach((solve, index) => {
     const li = document.createElement("li");
-    li.textContent = `${index + 1}. ${solve.time.toFixed(2)}`;
+    const tpsText = Number.isFinite(solve.tps) ? ` TPS: ${solve.tps.toFixed(2)}` : "";
+    li.textContent = `${index + 1}. ${solve.time.toFixed(2)}${tpsText}`;
     list.appendChild(li);
   });
 }

@@ -49,6 +49,9 @@ const keyMap = {
 
 let readyToSolve = false;
 let firstTurnDone = false;
+let solveMoveCount = 0;
+let solveMoves = [];
+let solveStartedAt = 0;
 
 const ROTATION_MOVES = ["x", "x'", "yRotation", "yRotation'", "zRotation", "zRotation'"];
 
@@ -125,10 +128,40 @@ function performMove(move) {
 
   if (readyToSolve && !firstTurnDone && !isRotationMove) {
     firstTurnDone = true;
+    resetSolveStats();
+    solveStartedAt = Date.now();
     startTimer();
+
+    if (typeof window.notifyBattleSolveStarted === "function") {
+      window.notifyBattleSolveStarted();
+    }
+  }
+
+  if (readyToSolve && firstTurnDone && isTimerRunning()) {
+    recordSolveMove(move, !isRotationMove);
   }
 
   executeMove(move);
+}
+
+function resetSolveStats() {
+  solveMoveCount = 0;
+  solveMoves = [];
+  solveStartedAt = 0;
+}
+
+function recordSolveMove(move, counted) {
+  const relativeTime = solveStartedAt ? Date.now() - solveStartedAt : 0;
+
+  if (counted) {
+    solveMoveCount++;
+  }
+
+  solveMoves.push({
+    move: displayMove(move),
+    t: relativeTime,
+    counted
+  });
 }
 
 function setupMoveInput() {
@@ -186,6 +219,7 @@ function setupMoveInput() {
 function scrambleCube() {
   resetCube();
   resetTimer();
+  resetSolveStats();
   setSolvingMode(true);
 
   const scramble = generateScramble(20);
@@ -202,8 +236,38 @@ function scrambleCube() {
   applyScramble(scramble);
 }
 
+function loadBattleScramble(scrambleText) {
+  const scramble = scrambleText.split(" ").filter(Boolean);
+
+  resetCube();
+  resetTimer();
+  resetSolveStats();
+  setSolvingMode(true);
+
+  document.getElementById("scrambleText").textContent = scrambleText;
+  document.getElementById("lastMove").textContent = "-";
+
+  setCurrentScramble(scrambleText);
+
+  readyToSolve = true;
+  firstTurnDone = false;
+
+  applyScramble(scramble);
+}
+
 function setSolvingMode(isSolving) {
   document.body.classList.toggle("solving", isSolving);
+}
+
+function getCurrentSolveStats(timeSeconds = null) {
+  const seconds = Number.isFinite(timeSeconds) ? timeSeconds : null;
+  const tps = seconds && seconds > 0 ? solveMoveCount / seconds : null;
+
+  return {
+    moveCount: solveMoveCount,
+    moves: [...solveMoves],
+    tps: tps === null ? null : Number(tps.toFixed(2))
+  };
 }
 
 function executeMove(move) {
@@ -261,6 +325,9 @@ function checkSolvedAndStopTimer() {
     setSolvingMode(false);
   }
 }
+
+window.getCurrentSolveStats = getCurrentSolveStats;
+window.loadBattleScramble = loadBattleScramble;
 
 function toggleTheme() {
   document.body.classList.toggle("dark");

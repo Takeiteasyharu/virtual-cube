@@ -105,6 +105,14 @@ main {
   font-size: 52px;
   font-weight: bold;
   text-align: center;
+  margin-bottom: 6px;
+}
+
+.tps-display {
+  font-family: "Courier New", monospace;
+  font-size: 20px;
+  font-weight: bold;
+  text-align: center;
   margin-bottom: 16px;
 }
 
@@ -192,11 +200,14 @@ footer {
 }
 
 .login-panel,
-.online-ranking-panel {
+.online-ranking-panel,
+.battle-panel {
   margin-bottom: 22px;
 }
 
-#playerNameInput {
+#playerNameInput,
+#roomIdInput,
+#roomUrlOutput {
   width: 100%;
   border: 2px solid #111;
   border-radius: 8px;
@@ -215,6 +226,22 @@ footer {
   font-size: 13px;
   line-height: 1.4;
   opacity: 0.85;
+}
+
+.battle-buttons {
+  margin-bottom: 10px;
+}
+
+.battle-status,
+.battle-players,
+.battle-winner {
+  font-size: 13px;
+  line-height: 1.45;
+  margin-top: 8px;
+}
+
+.battle-winner {
+  font-weight: bold;
 }
 
 .ranking-type-tabs,
@@ -284,7 +311,9 @@ body.dark .theme-toggle {
   color: white;
 }
 
-body.dark #playerNameInput {
+body.dark #playerNameInput,
+body.dark #roomIdInput,
+body.dark #roomUrlOutput {
   border-color: #f5f5f5;
   background: #222;
   color: #f5f5f5;

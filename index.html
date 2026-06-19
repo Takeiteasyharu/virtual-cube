@@ -48,6 +48,22 @@
           </div>
           <ol id="onlineRankingList"></ol>
         </section>
+
+        <section class="battle-panel" aria-label="Battle room">
+          <h2>Battle Room</h2>
+          <div class="buttons battle-buttons">
+            <button id="createRoomBtn">Create Room</button>
+            <button id="readyRoomBtn">Ready</button>
+          </div>
+          <input id="roomIdInput" type="text" maxlength="12" placeholder="Room ID" />
+          <div class="buttons battle-buttons">
+            <button id="joinRoomBtn">Join Room</button>
+          </div>
+          <input id="roomUrlOutput" type="text" readonly placeholder="Room URL" />
+          <div class="battle-status" id="battleStatus">Log in to create or join a room.</div>
+          <div class="battle-players" id="battlePlayers"></div>
+          <div class="battle-winner" id="battleWinner"></div>
+        </section>
       </section>
 
       <div class="cube-area">
@@ -69,6 +85,7 @@
         <button id="themeToggleBtn" class="theme-toggle">Dark</button>
 
         <div class="timer" id="timerDisplay">0.00</div>
+        <div class="tps-display" id="tpsDisplay">TPS: -</div>
 
         <div class="stats">
           <div>PB: <span id="pbDisplay">-</span></div>
