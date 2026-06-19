@@ -60,9 +60,12 @@ main {
 .panel {
   position: absolute;
   right: 48px;
-  top: 48%;
-  transform: translateY(-50%);
+  top: 16px;
+  transform: none;
   width: clamp(280px, 20vw, 360px);
+  max-height: calc(100vh - 180px);
+  overflow-y: auto;
+  padding-right: 8px;
 }
 
 .timer {
@@ -262,6 +265,9 @@ body.dark .ranking-tab.active {
     transform: none;
     width: 92vw;
     margin: 12px auto 24px;
+    max-height: none;
+    overflow-y: visible;
+    padding-right: 0;
   }
 
   .timer {
