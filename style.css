@@ -62,8 +62,8 @@ main {
 }
 
 #cubeContainer {
-  width: min(48vw, 820px);
-  height: min(48vw, 820px);
+  width: min(52vw, 860px);
+  height: min(52vw, 860px);
   margin: 0 auto;
   touch-action: manipulation;
   user-select: none;
@@ -382,9 +382,12 @@ body.solving .timer {
     font-size: 44px;
   }
 
-  body.solving .left-panel,
-  body.solving .move-input {
+  body.solving .left-panel {
     display: none;
+  }
+
+  body.solving .move-input {
+    display: block;
   }
 
   body.solving .panel {
