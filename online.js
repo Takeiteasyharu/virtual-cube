@@ -31,6 +31,7 @@ const nameInput = document.getElementById("playerNameInput");
 const googleLoginBtn = document.getElementById("googleLoginBtn");
 const guestLoginBtn = document.getElementById("guestLoginBtn");
 const logoutBtn = document.getElementById("logoutBtn");
+const PENDING_SOLVES_KEY = "pendingOnlineSolves";
 
 let auth = null;
 let db = null;
@@ -95,9 +96,8 @@ function updateAccountSummary(user, rank = null) {
   accountRank.textContent = rank ? `Current world rank: #${rank}` : "Current world rank: -";
 }
 
-function isValidOnlineSolve(time, scramble) {
+function isValidSolvePayload(time, scramble) {
   return Boolean(
-    currentUser &&
     Number.isFinite(time) &&
     time > 2 &&
     time < 3600 &&
@@ -106,14 +106,46 @@ function isValidOnlineSolve(time, scramble) {
   );
 }
 
+function isValidOnlineSolve(time, scramble) {
+  return Boolean(currentUser && isValidSolvePayload(time, scramble));
+}
+
 function isValidRankingEntry(solve) {
   return Boolean(
-    Number.isFinite(Number(solve.time)) &&
-    Number(solve.time) > 2 &&
-    Number(solve.time) < 3600 &&
-    typeof solve.scramble === "string" &&
-    solve.scramble.trim().length > 0
+    isValidSolvePayload(Number(solve.time), solve.scramble)
   );
+}
+
+function getPendingSolves() {
+  try {
+    return JSON.parse(localStorage.getItem(PENDING_SOLVES_KEY)) || [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function savePendingSolves(solves) {
+  localStorage.setItem(PENDING_SOLVES_KEY, JSON.stringify(solves.slice(-20)));
+}
+
+function queuePendingSolve(time, scramble, ao5) {
+  if (!isValidSolvePayload(time, scramble)) {
+    setStatus("This solve was saved locally but not submitted online.");
+    return false;
+  }
+
+  const pending = getPendingSolves();
+
+  pending.push({
+    time,
+    ao5: Number.isFinite(ao5) ? ao5 : null,
+    scramble,
+    solvedAt: new Date().toISOString()
+  });
+
+  savePendingSolves(pending);
+  setStatus(`${pending.length} pending time(s). Login to submit.`);
+  return true;
 }
 
 async function addRankingEntry(rankingType, time, scramble, solvedAt = new Date().toISOString()) {
@@ -147,6 +179,26 @@ async function addOnlineSolve(time, scramble, ao5, solvedAt = new Date().toISOSt
   }
 
   return submittedSingle;
+}
+
+async function submitPendingSolves() {
+  if (!currentUser) return;
+
+  const pending = getPendingSolves();
+  if (pending.length === 0) return;
+
+  while (pending.length > 0) {
+    const solve = pending[0];
+
+    await addOnlineSolve(solve.time, solve.scramble, solve.ao5, solve.solvedAt);
+    pending.shift();
+    savePendingSolves(pending);
+  }
+
+  localStorage.removeItem(PENDING_SOLVES_KEY);
+  setStatus(`Logged in as ${currentUser.displayName || "Guest"}. Pending times submitted.`);
+  refreshRanking();
+  refreshAccountRank();
 }
 
 async function refreshRanking() {
@@ -301,7 +353,7 @@ async function submitOnlineSolve(time, scramble, ao5 = null) {
   if (!isConfigured()) return;
 
   if (!currentUser) {
-    setStatus("Login is required to submit online times.");
+    queuePendingSolve(time, scramble, ao5);
     return;
   }
 
@@ -317,7 +369,8 @@ async function submitOnlineSolve(time, scramble, ao5 = null) {
     refreshRanking();
     refreshAccountRank();
   } catch (error) {
-    setStatus("Online submit failed.");
+    queuePendingSolve(time, scramble, ao5);
+    setStatus("Online submit failed. Saved locally for the next login.");
     console.error(error);
   }
 }
@@ -390,9 +443,16 @@ if (isConfigured()) {
     if (user) {
       setStatus(`Logged in as ${user.displayName || "Guest"}`);
       refreshAccountRank();
+      submitPendingSolves().catch(error => {
+        setStatus("Pending times could not be submitted.");
+        console.error(error);
+      });
     } else {
       updateAccountSummary(null);
-      setStatus("Login to submit online times.");
+      const pendingCount = getPendingSolves().length;
+      setStatus(pendingCount > 0
+        ? `${pendingCount} pending time(s). Login to submit.`
+        : "Login to submit online times.");
     }
   });
 
