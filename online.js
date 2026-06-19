@@ -25,11 +25,12 @@ const periodButtons = document.querySelectorAll(".ranking-tab");
 const rankingTypeButtons = document.querySelectorAll(".ranking-type-tab");
 const rankingList = document.getElementById("onlineRankingList");
 const authStatus = document.getElementById("authStatus");
+const accountGreeting = document.getElementById("accountGreeting");
+const accountRank = document.getElementById("accountRank");
 const nameInput = document.getElementById("playerNameInput");
 const googleLoginBtn = document.getElementById("googleLoginBtn");
 const guestLoginBtn = document.getElementById("guestLoginBtn");
 const logoutBtn = document.getElementById("logoutBtn");
-const PENDING_SOLVES_KEY = "pendingOnlineSolves";
 
 let auth = null;
 let db = null;
@@ -83,33 +84,43 @@ function getPlayerName() {
   return typedName || fallbackName;
 }
 
-function getPendingSolves() {
-  try {
-    return JSON.parse(localStorage.getItem(PENDING_SOLVES_KEY)) || [];
-  } catch (error) {
-    return [];
+function updateAccountSummary(user, rank = null) {
+  if (!user) {
+    accountGreeting.textContent = "ログインするとランキングに参加できます";
+    accountRank.textContent = "";
+    return;
   }
+
+  accountGreeting.textContent = `こんにちは、${getPlayerName()}`;
+  accountRank.textContent = rank ? `現在世界 ${rank} 位` : "現在世界 - 位";
 }
 
-function savePendingSolves(solves) {
-  localStorage.setItem(PENDING_SOLVES_KEY, JSON.stringify(solves.slice(-20)));
+function isValidOnlineSolve(time, scramble) {
+  return Boolean(
+    currentUser &&
+    Number.isFinite(time) &&
+    time > 2 &&
+    time < 3600 &&
+    typeof scramble === "string" &&
+    scramble.trim().length > 0
+  );
 }
 
-function queuePendingSolve(time, scramble, ao5) {
-  const pending = getPendingSolves();
-
-  pending.push({
-    time,
-    ao5,
-    scramble,
-    solvedAt: new Date().toISOString()
-  });
-
-  savePendingSolves(pending);
-  setStatus(`${pending.length} pending time(s). Login to submit.`);
+function isValidRankingEntry(solve) {
+  return Boolean(
+    Number.isFinite(Number(solve.time)) &&
+    Number(solve.time) > 2 &&
+    Number(solve.time) < 3600 &&
+    typeof solve.scramble === "string" &&
+    solve.scramble.trim().length > 0
+  );
 }
 
 async function addRankingEntry(rankingType, time, scramble, solvedAt = new Date().toISOString()) {
+  if (!isValidOnlineSolve(time, scramble)) {
+    return false;
+  }
+
   const solvedDate = new Date(solvedAt);
   const keys = getPeriodKeys(Number.isNaN(solvedDate.getTime()) ? new Date() : solvedDate);
 
@@ -124,32 +135,18 @@ async function addRankingEntry(rankingType, time, scramble, solvedAt = new Date(
     monthKey: keys.month,
     createdAt: serverTimestamp()
   });
+
+  return true;
 }
 
 async function addOnlineSolve(time, scramble, ao5, solvedAt = new Date().toISOString()) {
-  await addRankingEntry("single", time, scramble, solvedAt);
+  const submittedSingle = await addRankingEntry("single", time, scramble, solvedAt);
 
   if (Number.isFinite(ao5)) {
     await addRankingEntry("ao5", ao5, scramble, solvedAt);
   }
-}
 
-async function submitPendingSolves() {
-  if (!currentUser) return;
-
-  const pending = getPendingSolves();
-  if (pending.length === 0) return;
-
-  while (pending.length > 0) {
-    const solve = pending[0];
-    await addOnlineSolve(solve.time, solve.scramble, solve.ao5, solve.solvedAt);
-    pending.shift();
-    savePendingSolves(pending);
-  }
-
-  localStorage.removeItem(PENDING_SOLVES_KEY);
-  setStatus(`Logged in as ${currentUser.displayName || "Guest"}. Pending times submitted.`);
-  refreshRanking();
+  return submittedSingle;
 }
 
 async function refreshRanking() {
@@ -222,6 +219,8 @@ async function refreshRanking() {
           return;
         }
 
+        if (!isValidRankingEntry(solve)) return;
+
         seenIds.add(doc.id);
         entries.push(solve);
       });
@@ -247,20 +246,78 @@ async function refreshRanking() {
   }
 }
 
-async function submitOnlineSolve(time, scramble, ao5 = null) {
-  if (!isConfigured()) return;
+async function calculateMySingleRank() {
+  if (!currentUser) return null;
 
+  const solvesRef = collection(db, "solves");
+  const rankingQuery = query(
+    solvesRef,
+    where("rankingType", "==", "single"),
+    orderBy("time", "asc"),
+    limit(500)
+  );
+  const legacyQuery = query(solvesRef, orderBy("time", "asc"), limit(500));
+  const snapshots = [await getDocs(rankingQuery), await getDocs(legacyQuery)];
+  const entries = [];
+  const seenIds = new Set();
+
+  snapshots.forEach(snapshot => {
+    snapshot.forEach(doc => {
+      if (seenIds.has(doc.id)) return;
+
+      const solve = doc.data();
+      if (solve.rankingType && solve.rankingType !== "single") return;
+      if (!isValidRankingEntry(solve)) return;
+
+      seenIds.add(doc.id);
+      entries.push(solve);
+    });
+  });
+
+  entries.sort((a, b) => Number(a.time) - Number(b.time));
+
+  const myBest = entries.find(solve => solve.uid === currentUser.uid);
+  if (!myBest) return null;
+
+  return entries.findIndex(solve => solve === myBest) + 1;
+}
+
+async function refreshAccountRank() {
   if (!currentUser) {
-    queuePendingSolve(time, scramble, ao5);
+    updateAccountSummary(null);
     return;
   }
 
   try {
-    await addOnlineSolve(time, scramble, ao5);
-    refreshRanking();
+    const rank = await calculateMySingleRank();
+    updateAccountSummary(currentUser, rank);
   } catch (error) {
-    queuePendingSolve(time, scramble, ao5);
-    setStatus("Online submit failed. Saved locally for the next login.");
+    updateAccountSummary(currentUser, null);
+    console.error(error);
+  }
+}
+
+async function submitOnlineSolve(time, scramble, ao5 = null) {
+  if (!isConfigured()) return;
+
+  if (!currentUser) {
+    setStatus("Login is required to submit online times.");
+    return;
+  }
+
+  if (!isValidOnlineSolve(time, scramble)) {
+    setStatus("This solve was saved locally but not submitted online.");
+    return;
+  }
+
+  try {
+    const submitted = await addOnlineSolve(time, scramble, ao5);
+    if (!submitted) return;
+
+    refreshRanking();
+    refreshAccountRank();
+  } catch (error) {
+    setStatus("Online submit failed.");
     console.error(error);
   }
 }
@@ -272,7 +329,7 @@ async function loginWithGoogle() {
 
 async function loginAsGuest() {
   const credential = await signInAnonymously(auth);
-  const name = getPlayerName();
+  const name = nameInput.value.trim() || "Guest";
 
   if (name) {
     await updateProfile(credential.user, { displayName: name });
@@ -332,15 +389,10 @@ if (isConfigured()) {
 
     if (user) {
       setStatus(`Logged in as ${user.displayName || "Guest"}`);
-      submitPendingSolves().catch(error => {
-        setStatus("Pending times could not be submitted.");
-        console.error(error);
-      });
+      refreshAccountRank();
     } else {
-      const pendingCount = getPendingSolves().length;
-      setStatus(pendingCount > 0
-        ? `${pendingCount} pending time(s). Login to submit.`
-        : "Login to submit online times.");
+      updateAccountSummary(null);
+      setStatus("Login to submit online times.");
     }
   });
 

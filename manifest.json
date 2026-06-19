@@ -1,0 +1,18 @@
+{
+  "name": "Virtual Cube Timer",
+  "short_name": "Cube Timer",
+  "description": "A virtual cube timer with online rankings.",
+  "start_url": "/virtual-cube/",
+  "scope": "/virtual-cube/",
+  "display": "standalone",
+  "background_color": "#eaffc9",
+  "theme_color": "#eaffc9",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
