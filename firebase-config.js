@@ -1,8 +1,8 @@
 window.CUBE_FIREBASE_CONFIG = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyDPyf8FM2_yOSBYYv8vMDpKZwG3HqXK8nM",
+  authDomain: "virtual-cube-timer.firebaseapp.com",
+  projectId: "virtual-cube-timer",
+  storageBucket: "virtual-cube-timer.firebasestorage.app",
+  messagingSenderId: "855664871373",
+  appId: "1:855664871373:web:22c982d3cd188dde5e2684"
 };
