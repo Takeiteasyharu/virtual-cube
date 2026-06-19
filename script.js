@@ -75,6 +75,7 @@ document.addEventListener("DOMContentLoaded", () => {
     resetTimer();
     readyToSolve = false;
     firstTurnDone = false;
+    setSolvingMode(false);
     document.getElementById("lastMove").textContent = "-";
   });
 
@@ -96,6 +97,9 @@ document.addEventListener("keydown", event => {
 
   if (event.code === "Escape") {
     resetTimer();
+    readyToSolve = false;
+    firstTurnDone = false;
+    setSolvingMode(false);
     return;
   }
 
@@ -145,6 +149,9 @@ function setupMoveInput() {
     if (event.code === "Escape") {
       event.preventDefault();
       resetTimer();
+      readyToSolve = false;
+      firstTurnDone = false;
+      setSolvingMode(false);
       input.value = "";
       return;
     }
@@ -179,6 +186,7 @@ function setupMoveInput() {
 function scrambleCube() {
   resetCube();
   resetTimer();
+  setSolvingMode(true);
 
   const scramble = generateScramble(20);
   const scrambleText = scramble.join(" ");
@@ -192,6 +200,10 @@ function scrambleCube() {
   firstTurnDone = false;
 
   applyScramble(scramble);
+}
+
+function setSolvingMode(isSolving) {
+  document.body.classList.toggle("solving", isSolving);
 }
 
 function executeMove(move) {
@@ -246,6 +258,7 @@ function checkSolvedAndStopTimer() {
     stopTimer();
     readyToSolve = false;
     firstTurnDone = false;
+    setSolvingMode(false);
   }
 }
 

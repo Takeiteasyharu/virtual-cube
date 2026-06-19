@@ -22,6 +22,7 @@ import {
 
 const config = window.CUBE_FIREBASE_CONFIG || {};
 const periodButtons = document.querySelectorAll(".ranking-tab");
+const rankingTypeButtons = document.querySelectorAll(".ranking-type-tab");
 const rankingList = document.getElementById("onlineRankingList");
 const authStatus = document.getElementById("authStatus");
 const nameInput = document.getElementById("playerNameInput");
@@ -34,6 +35,7 @@ let auth = null;
 let db = null;
 let currentUser = null;
 let activePeriod = "today";
+let activeRankingType = "single";
 
 function isConfigured() {
   return Boolean(config.apiKey && !config.apiKey.startsWith("YOUR_"));
@@ -93,11 +95,12 @@ function savePendingSolves(solves) {
   localStorage.setItem(PENDING_SOLVES_KEY, JSON.stringify(solves.slice(-20)));
 }
 
-function queuePendingSolve(time, scramble) {
+function queuePendingSolve(time, scramble, ao5) {
   const pending = getPendingSolves();
 
   pending.push({
     time,
+    ao5,
     scramble,
     solvedAt: new Date().toISOString()
   });
@@ -106,11 +109,12 @@ function queuePendingSolve(time, scramble) {
   setStatus(`${pending.length} pending time(s). Login to submit.`);
 }
 
-async function addOnlineSolve(time, scramble, solvedAt = new Date().toISOString()) {
+async function addRankingEntry(rankingType, time, scramble, solvedAt = new Date().toISOString()) {
   const solvedDate = new Date(solvedAt);
   const keys = getPeriodKeys(Number.isNaN(solvedDate.getTime()) ? new Date() : solvedDate);
 
   await addDoc(collection(db, "solves"), {
+    rankingType,
     time,
     scramble,
     name: getPlayerName(),
@@ -122,6 +126,14 @@ async function addOnlineSolve(time, scramble, solvedAt = new Date().toISOString(
   });
 }
 
+async function addOnlineSolve(time, scramble, ao5, solvedAt = new Date().toISOString()) {
+  await addRankingEntry("single", time, scramble, solvedAt);
+
+  if (Number.isFinite(ao5)) {
+    await addRankingEntry("ao5", ao5, scramble, solvedAt);
+  }
+}
+
 async function submitPendingSolves() {
   if (!currentUser) return;
 
@@ -130,7 +142,7 @@ async function submitPendingSolves() {
 
   while (pending.length > 0) {
     const solve = pending[0];
-    await addOnlineSolve(solve.time, solve.scramble, solve.solvedAt);
+    await addOnlineSolve(solve.time, solve.scramble, solve.ao5, solve.solvedAt);
     pending.shift();
     savePendingSolves(pending);
   }
@@ -151,9 +163,19 @@ async function refreshRanking() {
   try {
     const solvesRef = collection(db, "solves");
     let rankingQuery;
+    let legacyQuery = null;
 
     if (activePeriod === "all") {
-      rankingQuery = query(solvesRef, orderBy("time", "asc"), limit(50));
+      rankingQuery = query(
+        solvesRef,
+        where("rankingType", "==", activeRankingType),
+        orderBy("time", "asc"),
+        limit(50)
+      );
+
+      if (activeRankingType === "single") {
+        legacyQuery = query(solvesRef, orderBy("time", "asc"), limit(50));
+      }
     } else {
       const keys = getPeriodKeys();
       const fieldMap = {
@@ -164,24 +186,59 @@ async function refreshRanking() {
 
       rankingQuery = query(
         solvesRef,
+        where("rankingType", "==", activeRankingType),
         where(fieldMap[activePeriod], "==", keys[activePeriod]),
         orderBy("time", "asc"),
         limit(50)
       );
+
+      if (activeRankingType === "single") {
+        legacyQuery = query(
+          solvesRef,
+          where(fieldMap[activePeriod], "==", keys[activePeriod]),
+          orderBy("time", "asc"),
+          limit(50)
+        );
+      }
     }
 
-    const snapshot = await getDocs(rankingQuery);
+    const snapshots = [await getDocs(rankingQuery)];
+    if (legacyQuery) {
+      snapshots.push(await getDocs(legacyQuery));
+    }
+
+    const entries = [];
+    const seenIds = new Set();
+
+    snapshots.forEach(snapshot => {
+      snapshot.forEach(doc => {
+        if (seenIds.has(doc.id)) return;
+
+        const solve = doc.data();
+
+        if (activeRankingType === "single") {
+          if (solve.rankingType && solve.rankingType !== "single") return;
+        } else if (solve.rankingType !== activeRankingType) {
+          return;
+        }
+
+        seenIds.add(doc.id);
+        entries.push(solve);
+      });
+    });
+
+    entries.sort((a, b) => Number(a.time) - Number(b.time));
     rankingList.innerHTML = "";
 
-    if (snapshot.empty) {
+    if (entries.length === 0) {
       setRankingMessage("-");
       return;
     }
 
-    snapshot.forEach(doc => {
-      const solve = doc.data();
+    entries.slice(0, 50).forEach(solve => {
       const li = document.createElement("li");
-      li.textContent = `${Number(solve.time).toFixed(2)} - ${solve.name || "Player"}`;
+      const label = activeRankingType === "ao5" ? "Ao5" : "Single";
+      li.textContent = `${Number(solve.time).toFixed(2)} ${label} - ${solve.name || "Player"}`;
       rankingList.appendChild(li);
     });
   } catch (error) {
@@ -190,19 +247,19 @@ async function refreshRanking() {
   }
 }
 
-async function submitOnlineSolve(time, scramble) {
+async function submitOnlineSolve(time, scramble, ao5 = null) {
   if (!isConfigured()) return;
 
   if (!currentUser) {
-    queuePendingSolve(time, scramble);
+    queuePendingSolve(time, scramble, ao5);
     return;
   }
 
   try {
-    await addOnlineSolve(time, scramble);
+    await addOnlineSolve(time, scramble, ao5);
     refreshRanking();
   } catch (error) {
-    queuePendingSolve(time, scramble);
+    queuePendingSolve(time, scramble, ao5);
     setStatus("Online submit failed. Saved locally for the next login.");
     console.error(error);
   }
@@ -250,6 +307,15 @@ periodButtons.forEach(button => {
     periodButtons.forEach(item => item.classList.remove("active"));
     button.classList.add("active");
     activePeriod = button.dataset.period;
+    refreshRanking();
+  });
+});
+
+rankingTypeButtons.forEach(button => {
+  button.addEventListener("click", () => {
+    rankingTypeButtons.forEach(item => item.classList.remove("active"));
+    button.classList.add("active");
+    activeRankingType = button.dataset.rankingType;
     refreshRanking();
   });
 });

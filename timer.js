@@ -27,7 +27,7 @@ function stopTimer() {
   saveSolve(finalTime, currentScramble);
 
   if (typeof window.submitOnlineSolve === "function") {
-    window.submitOnlineSolve(finalTime, currentScramble);
+    window.submitOnlineSolve(finalTime, currentScramble, getCurrentAo5());
   }
 
   renderStats();
@@ -139,9 +139,14 @@ function renderAO() {
 }
 
 function calculateAverage(count) {
+  const average = calculateAverageValue(count);
+  return average === null ? "-" : average.toFixed(2);
+}
+
+function calculateAverageValue(count) {
   const solves = getSolves();
 
-  if (solves.length < count) return "-";
+  if (solves.length < count) return null;
 
   const target = solves.slice(0, count).map(solve => solve.time);
 
@@ -151,9 +156,14 @@ function calculateAverage(count) {
     sorted.pop();
 
     const average = sorted.reduce((sum, time) => sum + time, 0) / sorted.length;
-    return average.toFixed(2);
+    return average;
   }
 
   const average = target.reduce((sum, time) => sum + time, 0) / target.length;
-  return average.toFixed(2);
+  return average;
+}
+
+function getCurrentAo5() {
+  const average = calculateAverageValue(5);
+  return average === null ? null : Number(average.toFixed(2));
 }
