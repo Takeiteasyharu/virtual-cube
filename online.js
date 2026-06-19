@@ -28,6 +28,7 @@ const nameInput = document.getElementById("playerNameInput");
 const googleLoginBtn = document.getElementById("googleLoginBtn");
 const guestLoginBtn = document.getElementById("guestLoginBtn");
 const logoutBtn = document.getElementById("logoutBtn");
+const PENDING_SOLVES_KEY = "pendingOnlineSolves";
 
 let auth = null;
 let db = null;
@@ -78,6 +79,65 @@ function getPlayerName() {
   const typedName = nameInput.value.trim();
   const fallbackName = currentUser?.displayName || "Guest";
   return typedName || fallbackName;
+}
+
+function getPendingSolves() {
+  try {
+    return JSON.parse(localStorage.getItem(PENDING_SOLVES_KEY)) || [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function savePendingSolves(solves) {
+  localStorage.setItem(PENDING_SOLVES_KEY, JSON.stringify(solves.slice(-20)));
+}
+
+function queuePendingSolve(time, scramble) {
+  const pending = getPendingSolves();
+
+  pending.push({
+    time,
+    scramble,
+    solvedAt: new Date().toISOString()
+  });
+
+  savePendingSolves(pending);
+  setStatus(`${pending.length} pending time(s). Login to submit.`);
+}
+
+async function addOnlineSolve(time, scramble, solvedAt = new Date().toISOString()) {
+  const solvedDate = new Date(solvedAt);
+  const keys = getPeriodKeys(Number.isNaN(solvedDate.getTime()) ? new Date() : solvedDate);
+
+  await addDoc(collection(db, "solves"), {
+    time,
+    scramble,
+    name: getPlayerName(),
+    uid: currentUser.uid,
+    dayKey: keys.today,
+    weekKey: keys.week,
+    monthKey: keys.month,
+    createdAt: serverTimestamp()
+  });
+}
+
+async function submitPendingSolves() {
+  if (!currentUser) return;
+
+  const pending = getPendingSolves();
+  if (pending.length === 0) return;
+
+  while (pending.length > 0) {
+    const solve = pending[0];
+    await addOnlineSolve(solve.time, solve.scramble, solve.solvedAt);
+    pending.shift();
+    savePendingSolves(pending);
+  }
+
+  localStorage.removeItem(PENDING_SOLVES_KEY);
+  setStatus(`Logged in as ${currentUser.displayName || "Guest"}. Pending times submitted.`);
+  refreshRanking();
 }
 
 async function refreshRanking() {
@@ -131,23 +191,21 @@ async function refreshRanking() {
 }
 
 async function submitOnlineSolve(time, scramble) {
-  if (!isConfigured() || !currentUser) return;
+  if (!isConfigured()) return;
 
-  const now = new Date();
-  const keys = getPeriodKeys(now);
+  if (!currentUser) {
+    queuePendingSolve(time, scramble);
+    return;
+  }
 
-  await addDoc(collection(db, "solves"), {
-    time,
-    scramble,
-    name: getPlayerName(),
-    uid: currentUser.uid,
-    dayKey: keys.today,
-    weekKey: keys.week,
-    monthKey: keys.month,
-    createdAt: serverTimestamp()
-  });
-
-  refreshRanking();
+  try {
+    await addOnlineSolve(time, scramble);
+    refreshRanking();
+  } catch (error) {
+    queuePendingSolve(time, scramble);
+    setStatus("Online submit failed. Saved locally for the next login.");
+    console.error(error);
+  }
 }
 
 async function loginWithGoogle() {
@@ -208,8 +266,15 @@ if (isConfigured()) {
 
     if (user) {
       setStatus(`Logged in as ${user.displayName || "Guest"}`);
+      submitPendingSolves().catch(error => {
+        setStatus("Pending times could not be submitted.");
+        console.error(error);
+      });
     } else {
-      setStatus("Login to submit online times.");
+      const pendingCount = getPendingSolves().length;
+      setStatus(pendingCount > 0
+        ? `${pendingCount} pending time(s). Login to submit.`
+        : "Login to submit online times.");
     }
   });
 

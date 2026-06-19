@@ -56,7 +56,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initCube();
   renderStats();
   loadTheme();
-  setupTouchControls();
+  setupMoveInput();
 
   setAfterMoveCallback(() => {
     checkSolvedAndStopTimer();
@@ -84,6 +84,8 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 document.addEventListener("keydown", event => {
+  if (isTypingInForm(event.target)) return;
+
   const key = event.key;
 
   if (event.code === "Space") {
@@ -103,6 +105,15 @@ document.addEventListener("keydown", event => {
   performMove(move);
 });
 
+function isTypingInForm(target) {
+  if (!target) return false;
+  return ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName);
+}
+
+function getMoveFromKey(key) {
+  return keyMap[key] || keyMap[key.toLowerCase()] || null;
+}
+
 function performMove(move) {
   document.getElementById("lastMove").textContent = displayMove(move);
 
@@ -116,42 +127,52 @@ function performMove(move) {
   executeMove(move);
 }
 
-function setupTouchControls() {
-  const container = document.getElementById("cubeContainer");
-  let touchStart = null;
+function setupMoveInput() {
+  const input = document.getElementById("moveInput");
+  if (!input) return;
 
-  container.addEventListener("pointerdown", event => {
-    if (event.pointerType !== "touch" && event.pointerType !== "pen") return;
+  input.addEventListener("keydown", event => {
+    const key = event.key;
+    event.stopPropagation();
 
-    touchStart = {
-      x: event.clientX,
-      y: event.clientY
-    };
+    if (event.code === "Space") {
+      event.preventDefault();
+      scrambleCube();
+      input.value = "";
+      return;
+    }
 
-    container.setPointerCapture(event.pointerId);
+    if (event.code === "Escape") {
+      event.preventDefault();
+      resetTimer();
+      input.value = "";
+      return;
+    }
+
+    const move = getMoveFromKey(key);
+    if (!move) return;
+
     event.preventDefault();
-  });
-
-  container.addEventListener("pointerup", event => {
-    if (!touchStart) return;
-
-    const dx = event.clientX - touchStart.x;
-    const dy = event.clientY - touchStart.y;
-    const distance = Math.hypot(dx, dy);
-    touchStart = null;
-
-    if (distance < 28) return;
-
-    const move = Math.abs(dx) > Math.abs(dy)
-      ? (dx > 0 ? "R" : "L")
-      : (dy > 0 ? "D" : "U");
-
     performMove(move);
-    event.preventDefault();
+    input.value = "";
   });
 
-  container.addEventListener("pointercancel", () => {
-    touchStart = null;
+  input.addEventListener("input", () => {
+    const value = input.value;
+
+    for (const key of value) {
+      if (key === " ") {
+        scrambleCube();
+        continue;
+      }
+
+      const move = getMoveFromKey(key);
+      if (move) {
+        performMove(move);
+      }
+    }
+
+    input.value = "";
   });
 }
 
