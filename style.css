@@ -50,18 +50,20 @@ main {
   max-height: calc(100vh - 180px);
   overflow-y: auto;
   padding-right: 8px;
+  z-index: 2;
 }
 
 .cube-area {
   display: flex;
   flex-direction: column;
   align-items: center;
-  transform: translate(-10vw, -120px);
+  transform: none;
+  z-index: 1;
 }
 
 #cubeContainer {
-  width: min(72vw, 900px);
-  height: min(72vw, 900px);
+  width: min(48vw, 820px);
+  height: min(48vw, 820px);
   margin: 0 auto;
   touch-action: manipulation;
   user-select: none;
@@ -95,6 +97,7 @@ main {
   max-height: calc(100vh - 180px);
   overflow-y: auto;
   padding-right: 8px;
+  z-index: 2;
 }
 
 .timer {
