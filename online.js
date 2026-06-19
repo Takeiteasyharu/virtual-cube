@@ -86,13 +86,13 @@ function getPlayerName() {
 
 function updateAccountSummary(user, rank = null) {
   if (!user) {
-    accountGreeting.textContent = "ログインするとランキングに参加できます";
+    accountGreeting.textContent = "Log in to join the rankings.";
     accountRank.textContent = "";
     return;
   }
 
-  accountGreeting.textContent = `こんにちは、${getPlayerName()}`;
-  accountRank.textContent = rank ? `現在世界 ${rank} 位` : "現在世界 - 位";
+  accountGreeting.textContent = `Hello, ${getPlayerName()}`;
+  accountRank.textContent = rank ? `Current world rank: #${rank}` : "Current world rank: -";
 }
 
 function isValidOnlineSolve(time, scramble) {
