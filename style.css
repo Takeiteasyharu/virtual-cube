@@ -340,6 +340,29 @@ body.battle-mode #cubeContainer {
   font-size: 14px;
 }
 
+.battle-ready-button {
+  display: none;
+  width: min(92vw, 360px);
+  min-height: 52px;
+  margin-top: 12px;
+  border: 2px solid #0d4c76;
+  background: #0f78b8;
+  color: #fff;
+  font-size: 20px;
+  font-weight: bold;
+}
+
+body.battle-mode .battle-ready-button:not([hidden]) {
+  display: block;
+}
+
+.battle-ready-button:disabled {
+  cursor: default;
+  opacity: 1;
+  background: #4a6474;
+  border-color: #4a6474;
+}
+
 .secondary-action {
   background: #1e5f8b;
 }
@@ -373,6 +396,33 @@ body.battle-mode #cubeContainer {
 
 .battle-result-badge.loser {
   color: #b33131;
+}
+
+.battle-rematch {
+  max-width: 520px;
+  margin: 18px auto 0;
+  padding: 16px;
+  border: 2px solid #1e5f8b;
+  border-radius: 8px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.76);
+  font-weight: bold;
+}
+
+.battle-rematch h2 {
+  margin: 0 0 10px;
+  font-size: 24px;
+}
+
+.battle-rematch > div:not(.battle-rematch-actions) {
+  margin: 5px 0;
+}
+
+.battle-rematch-actions {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-top: 14px;
 }
 
 .battle-notice {
@@ -573,6 +623,23 @@ body.dark .battle-result-badge.loser {
   color: #ffaaa3;
 }
 
+body.dark .battle-ready-button {
+  border-color: #9ddcff;
+  background: #2c91cf;
+  color: #111;
+}
+
+body.dark .battle-ready-button:disabled {
+  background: #4b6573;
+  border-color: #4b6573;
+  color: #f5f5f5;
+}
+
+body.dark .battle-rematch {
+  border-color: #78c5ef;
+  background: #183747;
+}
+
 body.dark.battle-mode {
   background: #10212c;
 }
@@ -744,6 +811,15 @@ body.solving .timer {
 
   .battle-result-badge {
     font-size: 34px;
+  }
+
+  .battle-ready-button {
+    width: min(92vw, 420px);
+    min-height: 58px;
+  }
+
+  .battle-rematch-actions {
+    grid-template-columns: 1fr;
   }
 
   footer {

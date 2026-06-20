@@ -24,7 +24,6 @@
           <p id="battleRoomMeta">Room: - | Players: 0/2</p>
         </div>
         <div class="battle-mode-actions">
-          <button id="battleReadyBtn">Ready</button>
           <button id="copyRoomUrlBtn" title="Copy room URL">Copy Room URL</button>
           <button id="leaveBattleBtn" class="secondary-action">Return to Normal Mode</button>
         </div>
@@ -61,6 +60,15 @@
       </div>
       <div class="battle-result" id="battleResult"></div>
       <div class="battle-result-badge" id="battleResultBadge"></div>
+      <section class="battle-rematch" id="battleRematchPanel" hidden>
+        <h2>Play again?</h2>
+        <div id="battleRematchYou">You: Waiting</div>
+        <div id="battleRematchOpponent">Opponent: Waiting</div>
+        <div class="battle-rematch-actions">
+          <button id="playAgainBtn">Play Again</button>
+          <button id="rematchReturnBtn" class="secondary-action">Return to Normal Mode</button>
+        </div>
+      </section>
     </section>
 
     <main>
@@ -137,6 +145,7 @@
           placeholder="Move keys"
           aria-label="Move input"
         />
+        <button id="battleReadyBtn" class="battle-ready-button" hidden>Ready</button>
       </div>
 
       <section class="panel">

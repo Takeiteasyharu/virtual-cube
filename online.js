@@ -59,6 +59,11 @@ const battleNotice = document.getElementById("battleNotice");
 const battleResult = document.getElementById("battleResult");
 const battleResultBadge = document.getElementById("battleResultBadge");
 const battleModeLabel = document.getElementById("battleModeLabel");
+const battleRematchPanel = document.getElementById("battleRematchPanel");
+const battleRematchYou = document.getElementById("battleRematchYou");
+const battleRematchOpponent = document.getElementById("battleRematchOpponent");
+const playAgainBtn = document.getElementById("playAgainBtn");
+const rematchReturnBtn = document.getElementById("rematchReturnBtn");
 const PENDING_SOLVES_KEY = "pendingOnlineSolves";
 const BATTLE_ROOMS_COLLECTION = "battleRooms";
 const MATCHMAKING_COLLECTION = "matchmaking";
@@ -74,6 +79,7 @@ let activeRoomUnsubscribe = null;
 let activePlayerUnsubscribes = [];
 let activeMoveUnsubscribes = [];
 let activeRoom = null;
+let activeRound = 1;
 let selectedBattleMode = "friend";
 let battlePlayersByRole = { host: null, guest: null };
 let battleMovesByRole = { host: [], guest: [] };
@@ -134,7 +140,7 @@ function getPlayerName() {
 function updateAccountSummary(user, rank = null) {
   if (!user) {
     accountGreeting.textContent = "Log in to join the rankings.";
-    accountRank.textContent = "";
+    accountRank.textContent = "Current world rank: -";
     return;
   }
 
@@ -263,75 +269,7 @@ async function refreshRanking() {
   setRankingMessage("Loading...");
 
   try {
-    const solvesRef = collection(db, "solves");
-    let rankingQuery;
-    let legacyQuery = null;
-
-    if (activePeriod === "all") {
-      rankingQuery = query(
-        solvesRef,
-        where("rankingType", "==", activeRankingType),
-        orderBy("time", "asc"),
-        limit(50)
-      );
-
-      if (activeRankingType === "single") {
-        legacyQuery = query(solvesRef, orderBy("time", "asc"), limit(50));
-      }
-    } else {
-      const keys = getPeriodKeys();
-      const fieldMap = {
-        today: "dayKey",
-        week: "weekKey",
-        month: "monthKey"
-      };
-
-      rankingQuery = query(
-        solvesRef,
-        where("rankingType", "==", activeRankingType),
-        where(fieldMap[activePeriod], "==", keys[activePeriod]),
-        orderBy("time", "asc"),
-        limit(50)
-      );
-
-      if (activeRankingType === "single") {
-        legacyQuery = query(
-          solvesRef,
-          where(fieldMap[activePeriod], "==", keys[activePeriod]),
-          orderBy("time", "asc"),
-          limit(50)
-        );
-      }
-    }
-
-    const snapshots = [await getDocs(rankingQuery)];
-    if (legacyQuery) {
-      snapshots.push(await getDocs(legacyQuery));
-    }
-
-    const entries = [];
-    const seenIds = new Set();
-
-    snapshots.forEach(snapshot => {
-      snapshot.forEach(doc => {
-        if (seenIds.has(doc.id)) return;
-
-        const solve = doc.data();
-
-        if (activeRankingType === "single") {
-          if (solve.rankingType && solve.rankingType !== "single") return;
-        } else if (solve.rankingType !== activeRankingType) {
-          return;
-        }
-
-        if (!isValidRankingEntry(solve)) return;
-
-        seenIds.add(doc.id);
-        entries.push(solve);
-      });
-    });
-
-    entries.sort((a, b) => Number(a.time) - Number(b.time));
+    const entries = await getRankingEntries(activeRankingType, activePeriod);
     rankingList.innerHTML = "";
 
     if (entries.length === 0) {
@@ -339,10 +277,10 @@ async function refreshRanking() {
       return;
     }
 
-    entries.slice(0, 50).forEach(solve => {
+    entries.slice(0, 50).forEach((solve, index) => {
       const li = document.createElement("li");
       const label = activeRankingType === "ao5" ? "Ao5" : "Single";
-      li.textContent = `${Number(solve.time).toFixed(2)} ${label} - ${solve.name || "Player"}`;
+      li.textContent = `#${index + 1} ${Number(solve.time).toFixed(2)} ${label} - ${solve.name || "Player"}`;
       rankingList.appendChild(li);
     });
   } catch (error) {
@@ -351,35 +289,70 @@ async function refreshRanking() {
   }
 }
 
-async function calculateMySingleRank() {
-  if (!currentUser) return null;
-
+async function getRankingEntries(rankingType, period) {
   const solvesRef = collection(db, "solves");
-  const rankingQuery = query(
-    solvesRef,
-    where("rankingType", "==", "single"),
-    orderBy("time", "asc"),
-    limit(500)
-  );
-  const legacyQuery = query(solvesRef, orderBy("time", "asc"), limit(500));
-  const snapshots = [await getDocs(rankingQuery), await getDocs(legacyQuery)];
+  let rankingQuery;
+  let legacyQuery = null;
+
+  if (period === "all") {
+    rankingQuery = query(
+      solvesRef,
+      where("rankingType", "==", rankingType),
+      orderBy("time", "asc")
+    );
+
+    if (rankingType === "single") {
+      legacyQuery = query(solvesRef, orderBy("time", "asc"));
+    }
+  } else {
+    const keys = getPeriodKeys();
+    const fieldMap = { today: "dayKey", week: "weekKey", month: "monthKey" };
+
+    rankingQuery = query(
+      solvesRef,
+      where("rankingType", "==", rankingType),
+      where(fieldMap[period], "==", keys[period]),
+      orderBy("time", "asc")
+    );
+
+    if (rankingType === "single") {
+      legacyQuery = query(
+        solvesRef,
+        where(fieldMap[period], "==", keys[period]),
+        orderBy("time", "asc")
+      );
+    }
+  }
+
+  const snapshots = [await getDocs(rankingQuery)];
+  if (legacyQuery) snapshots.push(await getDocs(legacyQuery));
+
   const entries = [];
   const seenIds = new Set();
 
   snapshots.forEach(snapshot => {
-    snapshot.forEach(doc => {
-      if (seenIds.has(doc.id)) return;
+    snapshot.forEach(entryDoc => {
+      if (seenIds.has(entryDoc.id)) return;
 
-      const solve = doc.data();
-      if (solve.rankingType && solve.rankingType !== "single") return;
+      const solve = entryDoc.data();
+      if (rankingType === "single") {
+        if (solve.rankingType && solve.rankingType !== "single") return;
+      } else if (solve.rankingType !== rankingType) {
+        return;
+      }
+
       if (!isValidRankingEntry(solve)) return;
-
-      seenIds.add(doc.id);
+      seenIds.add(entryDoc.id);
       entries.push(solve);
     });
   });
 
-  entries.sort((a, b) => Number(a.time) - Number(b.time));
+  return entries.sort((a, b) => Number(a.time) - Number(b.time));
+}
+
+async function calculateMyRankingRank() {
+  if (!currentUser) return null;
+  const entries = await getRankingEntries(activeRankingType, activePeriod);
 
   const myBest = entries.find(solve => solve.uid === currentUser.uid);
   if (!myBest) return null;
@@ -394,7 +367,7 @@ async function refreshAccountRank() {
   }
 
   try {
-    const rank = await calculateMySingleRank();
+    const rank = await calculateMyRankingRank();
     updateAccountSummary(currentUser, rank);
   } catch (error) {
     updateAccountSummary(currentUser, null);
@@ -466,6 +439,8 @@ function createPlayer(role) {
     tps: null,
     moveCount: 0,
     lastMove: "",
+    round: 1,
+    rematchReady: false,
     updatedAt: serverTimestamp()
   };
 }
@@ -655,7 +630,7 @@ function renderBattleNotice() {
 
   if (activeRoom.status === "finishing") {
     const remaining = Math.max(0, Math.ceil((Number(activeRoom.finishDeadlineMs) - Date.now()) / 1000));
-    battleNotice.textContent = `Opponent's cube is solved. Battle ends in ${remaining}...`;
+    battleNotice.textContent = `Your opponent has finished. Battle ends in ${remaining} second${remaining === 1 ? "" : "s"}.`;
     return;
   }
 
@@ -697,6 +672,34 @@ function renderBattleResult() {
   battleResultBadge.className = `battle-result-badge ${iWon ? "winner" : "loser"}`;
 }
 
+function renderBattleReadyButton(you, opponent) {
+  const battleEnded = activeRoom?.status === "finished" || activeRoom?.status === "finishing";
+  battleReadyBtn.hidden = battleEnded || !you || !opponent;
+  if (battleReadyBtn.hidden) return;
+
+  if (you.status === "ready") {
+    battleReadyBtn.disabled = true;
+    battleReadyBtn.textContent = opponent.status === "ready" ? "Ready ✓" : "Waiting for opponent...";
+    return;
+  }
+
+  battleReadyBtn.disabled = false;
+  battleReadyBtn.textContent = "Ready";
+}
+
+function renderRematchPanel(you, opponent) {
+  const battleFinished = activeRoom?.status === "finished";
+  battleRematchPanel.hidden = !battleFinished;
+  if (!battleFinished) return;
+
+  const youReady = Boolean(you?.rematchReady);
+  const opponentReady = Boolean(opponent?.rematchReady);
+  battleRematchYou.textContent = `You: ${youReady ? "Ready for rematch" : "Waiting"}`;
+  battleRematchOpponent.textContent = `Opponent: ${opponentReady ? "Ready for rematch" : "Waiting"}`;
+  playAgainBtn.disabled = youReady;
+  playAgainBtn.textContent = youReady ? "Ready ✓" : "Play Again";
+}
+
 function renderBattleUi() {
   if (!activeRoomId || !activeRoom) return;
 
@@ -713,6 +716,8 @@ function renderBattleUi() {
   renderBattlePlayer("battleOpponent", opponent, getOpponentRole());
   renderBattleNotice();
   renderBattleResult();
+  renderBattleReadyButton(you, opponent);
+  renderRematchPanel(you, opponent);
 
   if (activeRoom.status === "finishing" && Date.now() >= Number(activeRoom.finishDeadlineMs)) {
     finalizeBattle().catch(console.error);
@@ -725,6 +730,12 @@ function watchPlayer(roomId, role, uid) {
   activePlayerUnsubscribes.push(onSnapshot(doc(db, BATTLE_ROOMS_COLLECTION, roomId, "players", uid), snapshot => {
     battlePlayersByRole[role] = snapshot.exists() ? snapshot.data() : null;
     renderBattleUi();
+
+    const host = getDisplayPlayer("host");
+    const guest = getDisplayPlayer("guest");
+    if (activeRoom?.status === "finished" && host?.rematchReady && guest?.rematchReady) {
+      startRematchIfBothReady().catch(console.error);
+    }
   }));
 
   const movesQuery = query(
@@ -734,7 +745,10 @@ function watchPlayer(roomId, role, uid) {
   );
 
   activeMoveUnsubscribes.push(onSnapshot(movesQuery, snapshot => {
-    battleMovesByRole[role] = snapshot.docs.map(move => move.data()).reverse();
+    battleMovesByRole[role] = snapshot.docs
+      .map(move => move.data())
+      .filter(move => !move.round || move.round === activeRound)
+      .reverse();
     renderBattleUi();
   }));
 }
@@ -742,6 +756,7 @@ function watchPlayer(roomId, role, uid) {
 function watchRoom(roomId) {
   clearBattleListeners();
   activeRoom = null;
+  activeRound = 0;
   battlePlayersByRole = { host: null, guest: null };
   battleMovesByRole = { host: [], guest: [] };
   setBattleMode(true);
@@ -756,7 +771,9 @@ function watchRoom(roomId) {
     const room = snapshot.data();
     const previousHostUid = activeRoom?.hostUid;
     const previousGuestUid = activeRoom?.guestUid;
+    const previousRound = activeRound;
     activeRoom = room;
+    activeRound = Number(room.round) || 1;
 
     if (room.hostUid !== previousHostUid || room.guestUid !== previousGuestUid) {
       activePlayerUnsubscribes.forEach(unsubscribe => unsubscribe());
@@ -767,9 +784,81 @@ function watchRoom(roomId) {
       watchPlayer(roomId, "guest", room.guestUid);
     }
 
+    if (previousRound && activeRound > previousRound) {
+      beginNextBattleRound(room).catch(console.error);
+    }
+
     renderBattleUi();
     setBattleStatus(`Room ${roomId}: ${activeRoomRole}`);
   });
+}
+
+async function beginNextBattleRound(room) {
+  if (!currentUser || !activeRoomId || room.round !== activeRound) return;
+
+  localBattleTimerSeconds = 0;
+  battleMovesByRole = { host: [], guest: [] };
+  await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
+    status: "joined",
+    startTime: null,
+    startTimeMs: 0,
+    endTime: null,
+    finalTime: null,
+    tps: null,
+    moveCount: 0,
+    lastMove: "",
+    rematchReady: false,
+    round: activeRound,
+    updatedAt: serverTimestamp()
+  });
+
+  if (typeof window.loadBattleScramble === "function") {
+    window.loadBattleScramble(room.scramble);
+  }
+}
+
+async function startRematchIfBothReady() {
+  if (!activeRoomId || !activeRoom || activeRoom.status !== "finished") return;
+
+  const roomRef = doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId);
+  const hostRef = doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", activeRoom.hostUid);
+  const guestRef = doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", activeRoom.guestUid);
+
+  await runTransaction(db, async transaction => {
+    const roomSnapshot = await transaction.get(roomRef);
+    if (!roomSnapshot.exists()) return;
+    const room = roomSnapshot.data();
+    if (room.status !== "finished") return;
+
+    const host = (await transaction.get(hostRef)).data();
+    const guest = (await transaction.get(guestRef)).data();
+    if (!host?.rematchReady || !guest?.rematchReady) return;
+
+    const scramble = getBattleScramble();
+    if (!scramble) return;
+
+    transaction.update(roomRef, {
+      status: "waiting",
+      scramble,
+      round: (Number(room.round) || 1) + 1,
+      winnerUid: "",
+      winnerName: "",
+      firstFinisherUid: "",
+      finishDeadlineMs: 0,
+      finishedAt: null,
+      updatedAt: serverTimestamp()
+    });
+  });
+}
+
+async function requestRematch() {
+  if (!currentUser || !activeRoomId || activeRoom?.status !== "finished") return;
+
+  await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
+    rematchReady: true,
+    updatedAt: serverTimestamp()
+  });
+  await startRematchIfBothReady();
 }
 
 async function createBattleRoom(mode = "friend") {
@@ -799,6 +888,7 @@ async function createBattleRoom(mode = "friend") {
     winnerUid: "",
     winnerName: "",
     finishDeadlineMs: 0,
+    round: 1,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
@@ -876,6 +966,7 @@ async function startRandomBattle() {
     winnerUid: "",
     winnerName: "",
     finishDeadlineMs: 0,
+    round: 1,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
   };
@@ -996,6 +1087,7 @@ async function readyBattleRoom() {
   });
   await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
     status: "ready",
+    round: activeRound,
     updatedAt: serverTimestamp()
   });
 
@@ -1026,6 +1118,7 @@ async function notifyBattleMove(move) {
     move: String(move.move || ""),
     moveIndex: Number(move.index) || 0,
     elapsedMs: Math.max(0, Number(move.elapsedMs) || 0),
+    round: activeRound,
     timestamp: serverTimestamp()
   };
   const playerRef = doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid);
@@ -1110,7 +1203,10 @@ function leaveBattleMode() {
   activeRoom = null;
   activeRoomId = "";
   activeRoomRole = "";
+  activeRound = 1;
   localBattleTimerSeconds = 0;
+  battleReadyBtn.hidden = true;
+  battleRematchPanel.hidden = true;
   setBattleMode(false);
   if (typeof window.cancelCurrentSolve === "function") {
     window.cancelCurrentSolve();
@@ -1207,6 +1303,13 @@ function setupAuthUi() {
     });
   });
 
+  playAgainBtn.addEventListener("click", () => {
+    requestRematch().catch(error => {
+      battleNotice.textContent = "Could not start a rematch.";
+      console.error(error);
+    });
+  });
+
   copyRoomUrlBtn.addEventListener("click", async () => {
     if (!activeRoomId) return;
 
@@ -1216,6 +1319,7 @@ function setupAuthUi() {
   });
 
   leaveBattleBtn.addEventListener("click", leaveBattleMode);
+  rematchReturnBtn.addEventListener("click", leaveBattleMode);
 }
 
 periodButtons.forEach(button => {
@@ -1224,6 +1328,7 @@ periodButtons.forEach(button => {
     button.classList.add("active");
     activePeriod = button.dataset.period;
     refreshRanking();
+    refreshAccountRank();
   });
 });
 
@@ -1233,6 +1338,7 @@ rankingTypeButtons.forEach(button => {
     button.classList.add("active");
     activeRankingType = button.dataset.rankingType;
     refreshRanking();
+    refreshAccountRank();
   });
 });
 
