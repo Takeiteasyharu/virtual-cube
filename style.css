@@ -16,6 +16,12 @@ body {
   flex-direction: column;
 }
 
+.battle-screen {
+  display: none;
+  width: min(1080px, calc(100% - 32px));
+  margin: 16px auto 0;
+}
+
 header {
   text-align: center;
   padding: 16px;
@@ -244,6 +250,178 @@ footer {
   font-weight: bold;
 }
 
+body.battle-mode {
+  background: #d9f1ff;
+}
+
+body.battle-mode header,
+body.battle-mode .left-panel,
+body.battle-mode .panel,
+body.battle-mode footer {
+  display: none;
+}
+
+body.battle-mode .battle-screen {
+  display: block;
+}
+
+body.battle-mode main {
+  min-height: 0;
+  padding-top: 4px;
+}
+
+body.battle-mode #cubeContainer {
+  width: min(50vw, 760px);
+  height: min(50vw, 760px);
+}
+
+.battle-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 2px solid #1e5f8b;
+  padding-bottom: 10px;
+}
+
+.battle-heading h2 {
+  margin: 0;
+  font-size: 30px;
+}
+
+.battle-heading p,
+.battle-scramble {
+  margin: 5px 0 0;
+  font-weight: bold;
+}
+
+.battle-mode-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.battle-mode-actions button {
+  padding: 9px 12px;
+  font-size: 14px;
+}
+
+.secondary-action {
+  background: #1e5f8b;
+}
+
+.battle-scramble {
+  text-align: center;
+  min-height: 24px;
+  font-size: 16px;
+  word-break: break-word;
+}
+
+.battle-notice,
+.battle-result {
+  text-align: center;
+  font-weight: bold;
+  min-height: 24px;
+  margin: 10px 0;
+}
+
+.battle-notice {
+  color: #164c70;
+}
+
+.battle-player-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.battle-player-card {
+  border: 2px solid #226a93;
+  border-radius: 8px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.76);
+  min-height: 240px;
+}
+
+.battle-player-card.opponent {
+  border-color: #8a4e25;
+}
+
+.battle-player-title {
+  font-size: 14px;
+  font-weight: bold;
+  text-transform: uppercase;
+  color: #1e5f8b;
+}
+
+.opponent .battle-player-title {
+  color: #8a4e25;
+}
+
+.battle-player-name {
+  font-size: 24px;
+  font-weight: bold;
+  overflow-wrap: anywhere;
+}
+
+.battle-player-state {
+  display: inline-block;
+  margin: 8px 0;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #1e5f8b;
+  color: #fff;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.opponent .battle-player-state {
+  background: #8a4e25;
+}
+
+.battle-player-timer {
+  font-family: "Courier New", monospace;
+  font-size: 40px;
+  font-weight: bold;
+}
+
+.battle-player-card dl {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.battle-player-card dl div {
+  border-left: 3px solid #a8d8f1;
+  padding-left: 7px;
+}
+
+.battle-player-card dt {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.battle-player-card dd {
+  margin: 2px 0 0;
+  font-weight: bold;
+}
+
+.battle-move-title {
+  font-size: 14px;
+  font-weight: bold;
+}
+
+.battle-move-log {
+  min-height: 42px;
+  margin-top: 5px;
+  padding: 7px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.08);
+  font-family: "Courier New", monospace;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
 .ranking-type-tabs,
 .ranking-tabs {
   display: grid;
@@ -329,6 +507,36 @@ body.dark .ranking-type-tab.active,
 body.dark .ranking-tab.active {
   background: #78a6ff;
   color: #111;
+}
+
+body.dark.battle-mode {
+  background: #10212c;
+}
+
+body.dark .battle-heading {
+  border-color: #78c5ef;
+}
+
+body.dark .battle-player-card {
+  background: #183747;
+  border-color: #78c5ef;
+}
+
+body.dark .battle-player-card.opponent {
+  border-color: #e9ae82;
+}
+
+body.dark .battle-player-title,
+body.dark .battle-notice {
+  color: #a8dfff;
+}
+
+body.dark .opponent .battle-player-title {
+  color: #ffd0a9;
+}
+
+body.dark .battle-move-log {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 body.solving header,
@@ -444,6 +652,30 @@ body.solving .timer {
 
   body.solving .timer {
     font-size: 52px;
+  }
+
+  body.battle-mode .battle-screen {
+    width: calc(100% - 16px);
+    margin-top: 8px;
+  }
+
+  body.battle-mode #cubeContainer {
+    width: min(96vw, 55vh);
+    height: min(96vw, 55vh);
+  }
+
+  .battle-heading,
+  .battle-mode-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .battle-player-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .battle-player-card {
+    min-height: 0;
   }
 
   footer {

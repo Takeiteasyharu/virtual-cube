@@ -94,6 +94,7 @@ document.addEventListener("keydown", event => {
 
   if (event.code === "Space") {
     event.preventDefault();
+    if (typeof window.isBattleMode === "function" && window.isBattleMode()) return;
     scrambleCube();
     return;
   }
@@ -162,6 +163,14 @@ function recordSolveMove(move, counted) {
     t: relativeTime,
     counted
   });
+
+  if (typeof window.notifyBattleMove === "function") {
+    window.notifyBattleMove({
+      move: displayMove(move),
+      elapsedMs: relativeTime,
+      index: solveMoves.length
+    });
+  }
 }
 
 function setupMoveInput() {
@@ -217,6 +226,8 @@ function setupMoveInput() {
 }
 
 function scrambleCube() {
+  if (typeof window.isBattleMode === "function" && window.isBattleMode()) return;
+
   resetCube();
   resetTimer();
   resetSolveStats();
@@ -257,6 +268,16 @@ function loadBattleScramble(scrambleText) {
 
 function setSolvingMode(isSolving) {
   document.body.classList.toggle("solving", isSolving);
+}
+
+function cancelCurrentSolve() {
+  resetCube();
+  resetTimer();
+  resetSolveStats();
+  readyToSolve = false;
+  firstTurnDone = false;
+  setSolvingMode(false);
+  document.getElementById("lastMove").textContent = "-";
 }
 
 function getCurrentSolveStats(timeSeconds = null) {
@@ -328,6 +349,7 @@ function checkSolvedAndStopTimer() {
 
 window.getCurrentSolveStats = getCurrentSolveStats;
 window.loadBattleScramble = loadBattleScramble;
+window.cancelCurrentSolve = cancelCurrentSolve;
 
 function toggleTheme() {
   document.body.classList.toggle("dark");

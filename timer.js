@@ -57,6 +57,10 @@ function toggleTimer() {
 
 function updateTimerDisplay() {
   document.getElementById("timerDisplay").textContent = formatTime(elapsedTime);
+
+  if (typeof window.renderBattleLocalTimer === "function") {
+    window.renderBattleLocalTimer(elapsedTime / 1000);
+  }
 }
 
 function updateTpsDisplay(tps) {
