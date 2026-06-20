@@ -366,10 +366,14 @@ body.battle-mode.battle-locked #cubeContainer {
   opacity: 0.35;
 }
 
+body.battle-mode.battle-inspecting .cube-area {
+  padding-top: 96px;
+}
+
 .battle-inspection-overlay {
   position: absolute;
   z-index: 3;
-  top: 50%;
+  top: 0;
   left: 50%;
   min-width: 160px;
   padding: 12px 18px;
@@ -377,7 +381,7 @@ body.battle-mode.battle-locked #cubeContainer {
   background: rgba(8, 50, 76, 0.88);
   color: #fff;
   text-align: center;
-  transform: translate(-50%, -50%);
+  transform: translateX(-50%);
 }
 
 .battle-inspection-overlay[hidden] {

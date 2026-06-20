@@ -380,6 +380,7 @@ function setBattleInspectionOverlay(visible, count = "15") {
 
   overlay.hidden = !visible;
   countDisplay.textContent = count;
+  document.body.classList.toggle("battle-inspecting", visible);
 }
 
 function setSolvingMode(isSolving) {

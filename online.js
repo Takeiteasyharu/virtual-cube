@@ -586,13 +586,19 @@ function getPlayerElapsedSeconds(player) {
 }
 
 function isPlayerFinished(player) {
-  return Boolean(player && player.status === "finished" && Number.isFinite(player.finalTime));
+  return Boolean(player && Number.isFinite(player.finalTime));
 }
 
 function isPlayerDisconnected(player) {
-  if (!player || isPlayerFinished(player)) return false;
+  if (!player) return false;
+  if (player.status === "disconnected") return true;
+  if (isPlayerFinished(player)) return false;
   const updatedAt = player.updatedAt?.toMillis?.() || 0;
   return updatedAt > 0 && Date.now() - updatedAt > 45000;
+}
+
+function isCountedBattleMove(move) {
+  return !["x", "x'", "y", "y'", "z", "z'"].includes(move?.move);
 }
 
 function getOpponentRole() {
@@ -618,11 +624,15 @@ function renderBattlePlayer(prefix, player, role) {
     : getPlayerElapsedSeconds(player);
 
   setBattleText(`${prefix}Name`, player?.name || (prefix === "battleOpponent" ? "Waiting for player..." : "-"));
-  setBattleText(`${prefix}State`, isDnf ? "DNF" : (isDisconnected ? "DISCONNECTED" : (player?.status || "waiting").toUpperCase()));
+  const visibleMoveCount = isFinished
+    ? player.moveCount
+    : moves.filter(isCountedBattleMove).length;
+
+  setBattleText(`${prefix}State`, isDisconnected ? "DISCONNECTED" : (isDnf ? "DNF" : (player?.status || "waiting").toUpperCase()));
   setBattleText(`${prefix}Timer`, isFinished ? formatBattleTime(player.finalTime) : formatBattleTime(currentTimer));
   setBattleText(`${prefix}Final`, isDnf ? "DNF" : formatBattleTime(player?.finalTime));
   setBattleText(`${prefix}Tps`, isDnf ? "-" : (Number.isFinite(player?.tps) ? player.tps.toFixed(2) : "-"));
-  setBattleText(`${prefix}MoveCount`, isDnf ? "-" : (Number.isFinite(player?.moveCount) ? String(player.moveCount) : "-"));
+  setBattleText(`${prefix}MoveCount`, isDnf || !player ? "-" : String(visibleMoveCount || 0));
   setBattleText(`${prefix}LastMove`, player?.lastMove || moves.at(-1)?.move || "-");
   setBattleText(`${prefix}MoveLog`, moves.length ? moves.map(move => move.move).join(" ") : "-");
 }
@@ -636,13 +646,17 @@ function renderBattleNotice() {
     return;
   }
 
+  const host = getDisplayPlayer("host");
+  const guest = getDisplayPlayer("guest");
+  if (host?.status === "disconnected" || guest?.status === "disconnected") {
+    battleNotice.textContent = "Your opponent returned to Normal Mode.";
+    return;
+  }
+
   if (activeRoom.status === "finished") {
     battleNotice.textContent = "Battle finished.";
     return;
   }
-
-  const host = getDisplayPlayer("host");
-  const guest = getDisplayPlayer("guest");
   const activeStates = ["inspecting", "solving"];
   battleNotice.textContent = activeStates.includes(host?.status) && activeStates.includes(guest?.status)
     ? "Both players are ready."
@@ -1235,6 +1249,13 @@ function renderBattleLocalTimer(seconds) {
 }
 
 function leaveBattleMode() {
+  if (currentUser && activeRoomId && document.body.classList.contains("battle-mode")) {
+    updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
+      status: "disconnected",
+      updatedAt: serverTimestamp()
+    }).catch(console.error);
+  }
+
   clearBattleListeners();
   clearFriendLobby();
   clearMatchmakingListeners();
