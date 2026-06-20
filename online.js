@@ -432,6 +432,8 @@ function createPlayer(role) {
     name: getPlayerName(),
     role,
     status: "joined",
+    inspectionStartTime: null,
+    inspectionStartTimeMs: 0,
     startTime: null,
     startTimeMs: 0,
     endTime: null,
@@ -641,9 +643,10 @@ function renderBattleNotice() {
 
   const host = getDisplayPlayer("host");
   const guest = getDisplayPlayer("guest");
-  battleNotice.textContent = host?.status === "ready" && guest?.status === "ready"
-    ? "Both players are ready. Make your first move to start."
-    : "Waiting for both players to get ready.";
+  const activeStates = ["inspecting", "solving"];
+  battleNotice.textContent = activeStates.includes(host?.status) && activeStates.includes(guest?.status)
+    ? "Both players are ready."
+    : "Press Ready to begin inspection.";
 }
 
 function renderBattleResult() {
@@ -674,14 +677,8 @@ function renderBattleResult() {
 
 function renderBattleReadyButton(you, opponent) {
   const battleEnded = activeRoom?.status === "finished" || activeRoom?.status === "finishing";
-  battleReadyBtn.hidden = battleEnded || !you || !opponent;
+  battleReadyBtn.hidden = battleEnded || !you || ["inspecting", "solving"].includes(you.status);
   if (battleReadyBtn.hidden) return;
-
-  if (you.status === "ready") {
-    battleReadyBtn.disabled = true;
-    battleReadyBtn.textContent = opponent.status === "ready" ? "Ready ✓" : "Waiting for opponent...";
-    return;
-  }
 
   battleReadyBtn.disabled = false;
   battleReadyBtn.textContent = "Ready";
@@ -724,12 +721,36 @@ function renderBattleUi() {
   }
 }
 
+function getInspectionStartMs(player) {
+  return player?.inspectionStartTime?.toMillis?.() || player?.inspectionStartTimeMs || Date.now();
+}
+
+function syncLocalBattleState(player) {
+  if (!activeRoom || !player || !document.body.classList.contains("battle-mode")) return;
+
+  if (player.status === "joined" || player.status === "ready") {
+    window.prepareBattleCube?.(activeRoom.scramble, activeRound);
+  }
+
+  if (player.status === "inspecting") {
+    window.startBattleInspection?.(
+      activeRoom.scramble,
+      getInspectionStartMs(player),
+      activeRound
+    );
+  }
+}
+
 function watchPlayer(roomId, role, uid) {
   if (!uid) return;
 
   activePlayerUnsubscribes.push(onSnapshot(doc(db, BATTLE_ROOMS_COLLECTION, roomId, "players", uid), snapshot => {
     battlePlayersByRole[role] = snapshot.exists() ? snapshot.data() : null;
     renderBattleUi();
+
+    if (role === activeRoomRole && snapshot.exists()) {
+      syncLocalBattleState(snapshot.data());
+    }
 
     const host = getDisplayPlayer("host");
     const guest = getDisplayPlayer("guest");
@@ -800,6 +821,8 @@ async function beginNextBattleRound(room) {
   battleMovesByRole = { host: [], guest: [] };
   await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
     status: "joined",
+    inspectionStartTime: null,
+    inspectionStartTimeMs: 0,
     startTime: null,
     startTimeMs: 0,
     endTime: null,
@@ -812,9 +835,7 @@ async function beginNextBattleRound(room) {
     updatedAt: serverTimestamp()
   });
 
-  if (typeof window.loadBattleScramble === "function") {
-    window.loadBattleScramble(room.scramble);
-  }
+  window.prepareBattleCube?.(room.scramble, activeRound);
 }
 
 async function startRematchIfBothReady() {
@@ -1081,19 +1102,36 @@ async function readyBattleRoom() {
     return;
   }
 
+  let scramble = room.scramble;
+  if (!scramble && activeRoomRole === "host") {
+    scramble = getBattleScramble();
+    if (!scramble) {
+      setBattleStatus("Scramble generator is not ready.");
+      return;
+    }
+    await updateDoc(roomRef, { scramble, updatedAt: serverTimestamp() });
+  }
+
+  if (!scramble) {
+    setBattleStatus("Waiting for the room scramble.");
+    return;
+  }
+
+  const inspectionStartTimeMs = Date.now();
+
   await updateDoc(roomRef, {
     status: "ready",
     updatedAt: serverTimestamp()
   });
   await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
-    status: "ready",
+    status: "inspecting",
     round: activeRound,
+    inspectionStartTime: serverTimestamp(),
+    inspectionStartTimeMs,
     updatedAt: serverTimestamp()
   });
 
-  if (typeof window.loadBattleScramble === "function") {
-    window.loadBattleScramble(room.scramble);
-  }
+  window.startBattleInspection?.(scramble, inspectionStartTimeMs, activeRound);
 }
 
 async function notifyBattleSolveStarted() {

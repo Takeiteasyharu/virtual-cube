@@ -52,6 +52,9 @@ let firstTurnDone = false;
 let solveMoveCount = 0;
 let solveMoves = [];
 let solveStartedAt = 0;
+let battleInputState = "inactive";
+let battleInspectionInterval = null;
+let battleInspectionRound = 0;
 
 const ROTATION_MOVES = ["x", "x'", "yRotation", "yRotation'", "zRotation", "zRotation'"];
 
@@ -100,6 +103,10 @@ document.addEventListener("keydown", event => {
   }
 
   if (event.code === "Escape") {
+    if (isBattleModeActive()) {
+      event.preventDefault();
+      return;
+    }
     resetTimer();
     readyToSolve = false;
     firstTurnDone = false;
@@ -123,9 +130,15 @@ function getMoveFromKey(key) {
 }
 
 function performMove(move) {
+  if (isBattleInputLocked()) return;
+
   document.getElementById("lastMove").textContent = displayMove(move);
 
   const isRotationMove = ROTATION_MOVES.includes(move);
+
+  if (isBattleInspecting() && !isRotationMove) {
+    startBattleSolve();
+  }
 
   if (readyToSolve && !firstTurnDone && !isRotationMove) {
     firstTurnDone = true;
@@ -143,6 +156,18 @@ function performMove(move) {
   }
 
   executeMove(move);
+}
+
+function isBattleModeActive() {
+  return typeof window.isBattleMode === "function" && window.isBattleMode();
+}
+
+function isBattleInspecting() {
+  return isBattleModeActive() && battleInputState === "inspecting";
+}
+
+function isBattleInputLocked() {
+  return isBattleModeActive() && !["inspecting", "solving"].includes(battleInputState);
 }
 
 function resetSolveStats() {
@@ -190,6 +215,10 @@ function setupMoveInput() {
 
     if (event.code === "Escape") {
       event.preventDefault();
+      if (isBattleModeActive()) {
+        input.value = "";
+        return;
+      }
       resetTimer();
       readyToSolve = false;
       firstTurnDone = false;
@@ -266,17 +295,108 @@ function loadBattleScramble(scrambleText) {
   applyScramble(scramble);
 }
 
+function prepareBattleCube(scrambleText, round = 1) {
+  if (!isBattleModeActive()) return;
+
+  clearBattleInspection();
+  resetCube();
+  resetTimer();
+  resetSolveStats();
+  setSolvingMode(false);
+  document.getElementById("scrambleText").textContent = scrambleText || "";
+  document.getElementById("lastMove").textContent = "-";
+  setCurrentScramble(scrambleText || "");
+  readyToSolve = false;
+  firstTurnDone = false;
+  battleInputState = "joined";
+  battleInspectionRound = round;
+  setBattleInspectionOverlay(false);
+  document.body.classList.add("battle-locked");
+}
+
+function startBattleInspection(scrambleText, inspectionStartMs = Date.now(), round = 1) {
+  if (!isBattleModeActive()) return;
+  if (battleInputState === "inspecting" && battleInspectionRound === round) return;
+
+  clearBattleInspection();
+  const scramble = (scrambleText || "").split(" ").filter(Boolean);
+  resetCube();
+  resetTimer();
+  resetSolveStats();
+  setSolvingMode(false);
+  document.getElementById("scrambleText").textContent = scrambleText || "";
+  document.getElementById("lastMove").textContent = "-";
+  setCurrentScramble(scrambleText || "");
+  readyToSolve = true;
+  firstTurnDone = false;
+  battleInputState = "inspecting";
+  battleInspectionRound = round;
+  document.body.classList.remove("battle-locked");
+  applyScramble(scramble);
+
+  const updateInspection = () => {
+    const remaining = Math.max(0, Math.ceil(15 - (Date.now() - inspectionStartMs) / 1000));
+    setBattleInspectionOverlay(true, remaining > 0 ? String(remaining) : "Go!");
+
+    if (remaining <= 0) {
+      clearBattleInspection();
+      setBattleInspectionOverlay(true, "Go!");
+      startBattleSolve();
+      window.setTimeout(() => setBattleInspectionOverlay(false), 650);
+    }
+  };
+
+  updateInspection();
+  battleInspectionInterval = window.setInterval(updateInspection, 100);
+}
+
+function startBattleSolve() {
+  if (!isBattleModeActive() || battleInputState === "solving") return;
+
+  clearBattleInspection();
+  setBattleInspectionOverlay(false);
+  battleInputState = "solving";
+  firstTurnDone = true;
+  resetSolveStats();
+  solveStartedAt = Date.now();
+  startTimer();
+
+  if (typeof window.notifyBattleSolveStarted === "function") {
+    window.notifyBattleSolveStarted();
+  }
+}
+
+function clearBattleInspection() {
+  if (battleInspectionInterval) {
+    window.clearInterval(battleInspectionInterval);
+    battleInspectionInterval = null;
+  }
+}
+
+function setBattleInspectionOverlay(visible, count = "15") {
+  const overlay = document.getElementById("battleInspectionOverlay");
+  const countDisplay = document.getElementById("battleInspectionCount");
+  if (!overlay || !countDisplay) return;
+
+  overlay.hidden = !visible;
+  countDisplay.textContent = count;
+}
+
 function setSolvingMode(isSolving) {
   document.body.classList.toggle("solving", isSolving);
 }
 
 function cancelCurrentSolve() {
+  clearBattleInspection();
   resetCube();
   resetTimer();
   resetSolveStats();
   readyToSolve = false;
   firstTurnDone = false;
   setSolvingMode(false);
+  battleInputState = "inactive";
+  document.body.classList.remove("battle-locked");
+  setBattleInspectionOverlay(false);
   document.getElementById("lastMove").textContent = "-";
 }
 
@@ -343,12 +463,15 @@ function checkSolvedAndStopTimer() {
     stopTimer();
     readyToSolve = false;
     firstTurnDone = false;
+    if (isBattleModeActive()) battleInputState = "finished";
     setSolvingMode(false);
   }
 }
 
 window.getCurrentSolveStats = getCurrentSolveStats;
 window.loadBattleScramble = loadBattleScramble;
+window.prepareBattleCube = prepareBattleCube;
+window.startBattleInspection = startBattleInspection;
 window.cancelCurrentSolve = cancelCurrentSolve;
 
 function toggleTheme() {

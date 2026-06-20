@@ -60,6 +60,7 @@ main {
 }
 
 .cube-area {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -342,18 +343,56 @@ body.battle-mode #cubeContainer {
 
 .battle-ready-button {
   display: none;
-  width: min(92vw, 360px);
-  min-height: 52px;
-  margin-top: 12px;
+  position: absolute;
+  z-index: 4;
+  top: 50%;
+  left: 50%;
+  width: min(74%, 360px);
+  min-height: 64px;
+  margin: 0;
   border: 2px solid #0d4c76;
   background: #0f78b8;
   color: #fff;
   font-size: 20px;
   font-weight: bold;
+  transform: translate(-50%, -50%);
 }
 
 body.battle-mode .battle-ready-button:not([hidden]) {
   display: block;
+}
+
+body.battle-mode.battle-locked #cubeContainer {
+  opacity: 0.35;
+}
+
+.battle-inspection-overlay {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  left: 50%;
+  min-width: 160px;
+  padding: 12px 18px;
+  border-radius: 8px;
+  background: rgba(8, 50, 76, 0.88);
+  color: #fff;
+  text-align: center;
+  transform: translate(-50%, -50%);
+}
+
+.battle-inspection-overlay[hidden] {
+  display: none;
+}
+
+#battleInspectionLabel {
+  font-size: 16px;
+  font-weight: bold;
+}
+
+#battleInspectionCount {
+  font-family: "Courier New", monospace;
+  font-size: 52px;
+  font-weight: bold;
 }
 
 .battle-ready-button:disabled {
@@ -814,8 +853,8 @@ body.solving .timer {
   }
 
   .battle-ready-button {
-    width: min(92vw, 420px);
-    min-height: 58px;
+    width: min(76vw, 420px);
+    min-height: 68px;
   }
 
   .battle-rematch-actions {
