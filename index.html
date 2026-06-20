@@ -20,6 +20,7 @@
       <div class="battle-heading">
         <div>
           <h2>Real-time Battle</h2>
+          <div class="battle-mode-label" id="battleModeLabel">Friend Battle</div>
           <p id="battleRoomMeta">Room: - | Players: 0/2</p>
         </div>
         <div class="battle-mode-actions">
@@ -59,6 +60,7 @@
         </article>
       </div>
       <div class="battle-result" id="battleResult"></div>
+      <div class="battle-result-badge" id="battleResultBadge"></div>
     </section>
 
     <main>
@@ -94,20 +96,31 @@
           <ol id="onlineRankingList"></ol>
         </section>
 
-        <section class="battle-panel" aria-label="Battle room">
-          <h2>Battle Room</h2>
-          <div class="buttons battle-buttons">
-            <button id="createRoomBtn">Create Room</button>
-            <button id="readyRoomBtn">Ready</button>
+        <section class="battle-panel" aria-label="Battle selection">
+          <h2>Battle</h2>
+          <div class="battle-choice-tabs" role="tablist">
+            <button class="battle-choice-tab active" data-battle-choice="friend">Friend Battle</button>
+            <button class="battle-choice-tab" data-battle-choice="random">Random Battle</button>
           </div>
-          <input id="roomIdInput" type="text" maxlength="12" placeholder="Room ID" />
-          <div class="buttons battle-buttons">
-            <button id="joinRoomBtn">Join Room</button>
+          <div id="friendBattleControls">
+            <div class="buttons battle-buttons">
+              <button id="createRoomBtn">Create Room</button>
+            </div>
+            <input id="roomIdInput" type="text" maxlength="12" placeholder="Room ID" />
+            <div class="buttons battle-buttons">
+              <button id="joinRoomBtn">Join Room</button>
+              <button id="copyInviteBtn">Copy Invite Link</button>
+            </div>
+            <input id="roomUrlOutput" type="text" readonly placeholder="Invite URL" />
           </div>
-          <input id="roomUrlOutput" type="text" readonly placeholder="Room URL" />
-          <div class="battle-status" id="battleStatus">Log in to create or join a room.</div>
-          <div class="battle-players" id="battlePlayers"></div>
-          <div class="battle-winner" id="battleWinner"></div>
+          <div id="randomBattleControls" hidden>
+            <div class="buttons battle-buttons">
+              <button id="randomBattleBtn">Random Battle</button>
+              <button id="cancelMatchBtn">Cancel</button>
+            </div>
+            <div class="random-status" id="randomStatus"></div>
+          </div>
+          <div class="battle-status" id="battleStatus">Log in to start a battle.</div>
         </section>
       </section>
 

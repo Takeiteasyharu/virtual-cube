@@ -11,6 +11,7 @@ import {
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDocs,
   getDoc,
@@ -39,12 +40,16 @@ const guestLoginBtn = document.getElementById("guestLoginBtn");
 const logoutBtn = document.getElementById("logoutBtn");
 const createRoomBtn = document.getElementById("createRoomBtn");
 const joinRoomBtn = document.getElementById("joinRoomBtn");
-const readyRoomBtn = document.getElementById("readyRoomBtn");
+const copyInviteBtn = document.getElementById("copyInviteBtn");
+const randomBattleBtn = document.getElementById("randomBattleBtn");
+const cancelMatchBtn = document.getElementById("cancelMatchBtn");
+const battleChoiceButtons = document.querySelectorAll(".battle-choice-tab");
+const friendBattleControls = document.getElementById("friendBattleControls");
+const randomBattleControls = document.getElementById("randomBattleControls");
+const randomStatus = document.getElementById("randomStatus");
 const roomIdInput = document.getElementById("roomIdInput");
 const roomUrlOutput = document.getElementById("roomUrlOutput");
 const battleStatus = document.getElementById("battleStatus");
-const battlePlayers = document.getElementById("battlePlayers");
-const battleWinner = document.getElementById("battleWinner");
 const battleReadyBtn = document.getElementById("battleReadyBtn");
 const copyRoomUrlBtn = document.getElementById("copyRoomUrlBtn");
 const leaveBattleBtn = document.getElementById("leaveBattleBtn");
@@ -52,7 +57,11 @@ const battleRoomMeta = document.getElementById("battleRoomMeta");
 const battleScramble = document.getElementById("battleScramble");
 const battleNotice = document.getElementById("battleNotice");
 const battleResult = document.getElementById("battleResult");
+const battleResultBadge = document.getElementById("battleResultBadge");
+const battleModeLabel = document.getElementById("battleModeLabel");
 const PENDING_SOLVES_KEY = "pendingOnlineSolves";
+const BATTLE_ROOMS_COLLECTION = "battleRooms";
+const MATCHMAKING_COLLECTION = "matchmaking";
 
 let auth = null;
 let db = null;
@@ -65,11 +74,16 @@ let activeRoomUnsubscribe = null;
 let activePlayerUnsubscribes = [];
 let activeMoveUnsubscribes = [];
 let activeRoom = null;
+let selectedBattleMode = "friend";
 let battlePlayersByRole = { host: null, guest: null };
 let battleMovesByRole = { host: [], guest: [] };
 let battleClockInterval = null;
 let battlePresenceInterval = null;
 let localBattleTimerSeconds = 0;
+let matchmakingUnsubscribe = null;
+let randomRoomUnsubscribe = null;
+let matchmakingTimeout = null;
+let friendLobbyUnsubscribe = null;
 
 function isConfigured() {
   return Boolean(config.apiKey && !config.apiKey.startsWith("YOUR_"));
@@ -420,8 +434,23 @@ function createRoomId() {
 
 function getRoomUrl(roomId) {
   const url = new URL(window.location.href);
-  url.searchParams.set("room", roomId);
+  url.searchParams.delete("room");
+  url.searchParams.set("battleRoom", roomId);
   return url.toString();
+}
+
+async function copyRoomUrl(roomId, onCopied) {
+  const roomUrl = getRoomUrl(roomId);
+
+  try {
+    await navigator.clipboard.writeText(roomUrl);
+  } catch (error) {
+    roomUrlOutput.value = roomUrl;
+    roomUrlOutput.select();
+    document.execCommand("copy");
+  }
+
+  onCopied("Invite link copied.");
 }
 
 function createPlayer(role) {
@@ -452,6 +481,81 @@ function getBattleScramble() {
 
 function setBattleStatus(message) {
   if (battleStatus) battleStatus.textContent = message;
+}
+
+function setRandomStatus(message) {
+  if (randomStatus) randomStatus.textContent = message;
+}
+
+function setBattleChoice(choice) {
+  selectedBattleMode = choice;
+  battleChoiceButtons.forEach(button => {
+    button.classList.toggle("active", button.dataset.battleChoice === choice);
+  });
+  friendBattleControls.hidden = choice !== "friend";
+  randomBattleControls.hidden = choice !== "random";
+}
+
+function clearFriendLobby() {
+  if (friendLobbyUnsubscribe) friendLobbyUnsubscribe();
+  friendLobbyUnsubscribe = null;
+}
+
+function clearMatchmakingListeners() {
+  if (matchmakingUnsubscribe) matchmakingUnsubscribe();
+  if (randomRoomUnsubscribe) randomRoomUnsubscribe();
+  if (matchmakingTimeout) window.clearTimeout(matchmakingTimeout);
+  matchmakingUnsubscribe = null;
+  randomRoomUnsubscribe = null;
+  matchmakingTimeout = null;
+}
+
+async function clearMyMatchmakingEntry() {
+  if (!currentUser) return;
+  await deleteDoc(doc(db, MATCHMAKING_COLLECTION, currentUser.uid)).catch(() => {});
+}
+
+function enterMatchedRandomRoom(roomId) {
+  if (!roomId || activeRoomId) return;
+  clearMatchmakingListeners();
+  clearMyMatchmakingEntry();
+  setRandomStatus("Matched!");
+  joinBattleRoom(roomId).catch(error => {
+    setRandomStatus("Match could not be opened.");
+    console.error(error);
+  });
+}
+
+function watchForRandomRoom() {
+  if (!currentUser || randomRoomUnsubscribe) return;
+
+  const roomQuery = query(
+    collection(db, BATTLE_ROOMS_COLLECTION),
+    where("guestUid", "==", currentUser.uid)
+  );
+
+  randomRoomUnsubscribe = onSnapshot(roomQuery, snapshot => {
+    const room = snapshot.docs
+      .map(roomDoc => ({ id: roomDoc.id, ...roomDoc.data() }))
+      .find(room => room.mode === "random" && ["waiting", "ready", "solving"].includes(room.status));
+
+    if (room) enterMatchedRandomRoom(room.id);
+  });
+}
+
+async function cancelRandomMatch(message = "Matchmaking cancelled.") {
+  clearMatchmakingListeners();
+  clearFriendLobby();
+  if (currentUser && activeRoomId && !document.body.classList.contains("battle-mode")) {
+    await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId), {
+      status: "cancelled",
+      updatedAt: serverTimestamp()
+    }).catch(() => {});
+    activeRoomId = "";
+    activeRoomRole = "";
+  }
+  await clearMyMatchmakingEntry();
+  setRandomStatus(message);
 }
 
 function clearBattleListeners() {
@@ -489,7 +593,7 @@ function setBattleMode(enabled) {
 function sendBattleHeartbeat() {
   if (!currentUser || !activeRoomId || !document.body.classList.contains("battle-mode")) return;
 
-  updateDoc(doc(db, "rooms", activeRoomId, "players", currentUser.uid), {
+  updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
     updatedAt: serverTimestamp()
   }).catch(() => {});
 }
@@ -570,6 +674,8 @@ function renderBattleNotice() {
 function renderBattleResult() {
   if (!activeRoom || activeRoom.status !== "finished") {
     battleResult.textContent = "";
+    battleResultBadge.textContent = "";
+    battleResultBadge.className = "battle-result-badge";
     return;
   }
 
@@ -585,6 +691,10 @@ function renderBattleResult() {
   const hostResult = formatResultPlayer(host);
   const guestResult = formatResultPlayer(guest);
   battleResult.textContent = `Winner: ${winner} | ${hostResult} | ${guestResult}`;
+
+  const iWon = activeRoom.winnerUid === currentUser?.uid;
+  battleResultBadge.textContent = iWon ? "WINNER" : "LOSER";
+  battleResultBadge.className = `battle-result-badge ${iWon ? "winner" : "loser"}`;
 }
 
 function renderBattleUi() {
@@ -597,6 +707,7 @@ function renderBattleUi() {
   roomIdInput.value = activeRoomId;
   roomUrlOutput.value = getRoomUrl(activeRoomId);
   battleRoomMeta.textContent = `Room: ${activeRoomId} | Players: ${count}/2`;
+  battleModeLabel.textContent = activeRoom.mode === "random" ? "Random Battle" : "Friend Battle";
   battleScramble.textContent = activeRoom.scramble || "";
   renderBattlePlayer("battleYou", you, activeRoomRole);
   renderBattlePlayer("battleOpponent", opponent, getOpponentRole());
@@ -611,13 +722,13 @@ function renderBattleUi() {
 function watchPlayer(roomId, role, uid) {
   if (!uid) return;
 
-  activePlayerUnsubscribes.push(onSnapshot(doc(db, "rooms", roomId, "players", uid), snapshot => {
+  activePlayerUnsubscribes.push(onSnapshot(doc(db, BATTLE_ROOMS_COLLECTION, roomId, "players", uid), snapshot => {
     battlePlayersByRole[role] = snapshot.exists() ? snapshot.data() : null;
     renderBattleUi();
   }));
 
   const movesQuery = query(
-    collection(db, "rooms", roomId, "players", uid, "moves"),
+    collection(db, BATTLE_ROOMS_COLLECTION, roomId, "players", uid, "moves"),
     orderBy("moveIndex", "desc"),
     limit(20)
   );
@@ -636,7 +747,7 @@ function watchRoom(roomId) {
   setBattleMode(true);
   window.history.replaceState({}, "", getRoomUrl(roomId));
 
-  activeRoomUnsubscribe = onSnapshot(doc(db, "rooms", roomId), snapshot => {
+  activeRoomUnsubscribe = onSnapshot(doc(db, BATTLE_ROOMS_COLLECTION, roomId), snapshot => {
     if (!snapshot.exists()) {
       setBattleStatus("Room not found.");
       return;
@@ -661,10 +772,14 @@ function watchRoom(roomId) {
   });
 }
 
-async function createBattleRoom() {
+async function createBattleRoom(mode = "friend") {
   if (!currentUser) {
     setBattleStatus("Log in or use Guest Login to create a room.");
     return;
+  }
+
+  if (mode === "friend" && matchmakingUnsubscribe) {
+    await cancelRandomMatch();
   }
 
   const roomId = createRoomId();
@@ -676,6 +791,7 @@ async function createBattleRoom() {
 
   const room = {
     roomId,
+    mode,
     scramble: scrambleText,
     status: "waiting",
     hostUid: currentUser.uid,
@@ -687,14 +803,116 @@ async function createBattleRoom() {
     updatedAt: serverTimestamp(),
   };
 
-  await setDoc(doc(db, "rooms", roomId), room);
-  await setDoc(doc(db, "rooms", roomId, "players", currentUser.uid), createPlayer("host"));
+  await setDoc(doc(db, BATTLE_ROOMS_COLLECTION, roomId), room);
+  await setDoc(doc(db, BATTLE_ROOMS_COLLECTION, roomId, "players", currentUser.uid), createPlayer("host"));
   activeRoomId = roomId;
   activeRoomRole = "host";
   roomIdInput.value = roomId;
   roomUrlOutput.value = getRoomUrl(roomId);
-  setBattleStatus("Room created. Share the URL or room ID.");
-  watchRoom(roomId);
+  if (mode === "friend") {
+    clearFriendLobby();
+    setBattleStatus("Friend room created. Share the invite link.");
+    friendLobbyUnsubscribe = onSnapshot(doc(db, BATTLE_ROOMS_COLLECTION, roomId), snapshot => {
+      const waitingRoom = snapshot.data();
+      if (waitingRoom?.guestUid) {
+        clearFriendLobby();
+        watchRoom(roomId);
+      }
+    });
+  } else {
+    watchRoom(roomId);
+  }
+}
+
+async function startRandomBattle() {
+  if (!currentUser) {
+    setRandomStatus("Log in or use Guest Login to find an opponent.");
+    return;
+  }
+
+  if (matchmakingUnsubscribe || randomRoomUnsubscribe) {
+    setRandomStatus("Searching for an opponent...");
+    return;
+  }
+
+  if (activeRoomId && !document.body.classList.contains("battle-mode")) {
+    clearFriendLobby();
+    activeRoomId = "";
+    activeRoomRole = "";
+  }
+
+  await clearMyMatchmakingEntry();
+  const waitingQuery = query(
+    collection(db, MATCHMAKING_COLLECTION),
+    where("status", "==", "waiting"),
+    orderBy("createdAt", "asc"),
+    limit(10)
+  );
+  const waitingSnapshot = await getDocs(waitingQuery);
+  const candidate = waitingSnapshot.docs.find(queueDoc =>
+    queueDoc.id !== currentUser.uid && queueDoc.data().roomId
+  );
+
+  if (candidate) {
+    setRandomStatus("Matched!");
+    await joinBattleRoom(candidate.data().roomId);
+    return;
+  }
+
+  const roomId = createRoomId();
+  const scramble = getBattleScramble();
+  if (!scramble) {
+    setRandomStatus("Scramble generator is not ready.");
+    return;
+  }
+
+  const room = {
+    roomId,
+    mode: "random",
+    scramble,
+    status: "waiting",
+    hostUid: currentUser.uid,
+    guestUid: "",
+    winnerUid: "",
+    winnerName: "",
+    finishDeadlineMs: 0,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  };
+
+  await setDoc(doc(db, BATTLE_ROOMS_COLLECTION, roomId), room);
+  await setDoc(doc(db, BATTLE_ROOMS_COLLECTION, roomId, "players", currentUser.uid), createPlayer("host"));
+  await setDoc(doc(db, MATCHMAKING_COLLECTION, currentUser.uid), {
+    uid: currentUser.uid,
+    name: getPlayerName(),
+    status: "waiting",
+    roomId,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  });
+
+  setRandomStatus("Searching for an opponent...");
+  activeRoomId = roomId;
+  activeRoomRole = "host";
+  clearFriendLobby();
+  friendLobbyUnsubscribe = onSnapshot(doc(db, BATTLE_ROOMS_COLLECTION, roomId), snapshot => {
+    const waitingRoom = snapshot.data();
+    if (waitingRoom?.guestUid) {
+      clearFriendLobby();
+      clearMatchmakingListeners();
+      clearMyMatchmakingEntry();
+      setRandomStatus("Matched!");
+      watchRoom(roomId);
+    }
+  });
+  matchmakingUnsubscribe = onSnapshot(doc(db, MATCHMAKING_COLLECTION, currentUser.uid), snapshot => {
+    const entry = snapshot.data();
+    if (entry?.status === "matched" && entry.roomId) enterMatchedRandomRoom(entry.roomId);
+  });
+  watchForRandomRoom();
+  matchmakingTimeout = window.setTimeout(() => {
+    cancelRandomMatch("No opponent found. Matchmaking cancelled.");
+  }, 60000);
 }
 
 async function joinBattleRoom(roomId) {
@@ -706,7 +924,7 @@ async function joinBattleRoom(roomId) {
   const normalizedRoomId = roomId.trim().toUpperCase();
   if (!normalizedRoomId) return;
 
-  const roomRef = doc(db, "rooms", normalizedRoomId);
+  const roomRef = doc(db, BATTLE_ROOMS_COLLECTION, normalizedRoomId);
   const snapshot = await getDoc(roomRef);
 
   if (!snapshot.exists()) {
@@ -714,19 +932,39 @@ async function joinBattleRoom(roomId) {
     return;
   }
 
-  const room = snapshot.data();
+  let room = snapshot.data();
+  if (room.status === "cancelled" || room.status === "finished") {
+    setBattleStatus("This room is no longer available.");
+    return;
+  }
+
   if (room.hostUid === currentUser.uid) {
     activeRoomRole = "host";
-  } else if (!room.guestUid || room.guestUid === currentUser.uid) {
-    activeRoomRole = "guest";
-    await updateDoc(roomRef, {
-      guestUid: currentUser.uid,
-      updatedAt: serverTimestamp()
-    });
-    await setDoc(doc(db, "rooms", normalizedRoomId, "players", currentUser.uid), createPlayer("guest"));
   } else {
-    setBattleStatus("This room already has two players.");
-    return;
+    try {
+      await runTransaction(db, async transaction => {
+        const currentRoomSnapshot = await transaction.get(roomRef);
+        if (!currentRoomSnapshot.exists()) throw new Error("Room not found.");
+        room = currentRoomSnapshot.data();
+
+        if (room.guestUid && room.guestUid !== currentUser.uid) {
+          throw new Error("This room already has two players.");
+        }
+
+        if (!room.guestUid) {
+          transaction.update(roomRef, {
+            guestUid: currentUser.uid,
+            updatedAt: serverTimestamp()
+          });
+        }
+      });
+    } catch (error) {
+      setBattleStatus(error.message || "This room already has two players.");
+      return;
+    }
+
+    activeRoomRole = "guest";
+    await setDoc(doc(db, BATTLE_ROOMS_COLLECTION, normalizedRoomId, "players", currentUser.uid), createPlayer("guest"));
   }
 
   activeRoomId = normalizedRoomId;
@@ -742,7 +980,7 @@ async function readyBattleRoom() {
     return;
   }
 
-  const roomRef = doc(db, "rooms", activeRoomId);
+  const roomRef = doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId);
   const snapshot = await getDoc(roomRef);
   if (!snapshot.exists()) return;
 
@@ -756,7 +994,7 @@ async function readyBattleRoom() {
     status: "ready",
     updatedAt: serverTimestamp()
   });
-  await updateDoc(doc(db, "rooms", activeRoomId, "players", currentUser.uid), {
+  await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
     status: "ready",
     updatedAt: serverTimestamp()
   });
@@ -769,13 +1007,13 @@ async function readyBattleRoom() {
 async function notifyBattleSolveStarted() {
   if (!currentUser || !activeRoomId || !activeRoomRole || !document.body.classList.contains("battle-mode")) return;
 
-  await updateDoc(doc(db, "rooms", activeRoomId, "players", currentUser.uid), {
+  await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
     status: "solving",
     startTime: serverTimestamp(),
     startTimeMs: Date.now(),
     updatedAt: serverTimestamp()
   }).catch(console.error);
-  await updateDoc(doc(db, "rooms", activeRoomId), {
+  await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId), {
     status: "solving",
     updatedAt: serverTimestamp()
   }).catch(console.error);
@@ -790,10 +1028,10 @@ async function notifyBattleMove(move) {
     elapsedMs: Math.max(0, Number(move.elapsedMs) || 0),
     timestamp: serverTimestamp()
   };
-  const playerRef = doc(db, "rooms", activeRoomId, "players", currentUser.uid);
+  const playerRef = doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid);
 
   await Promise.all([
-    addDoc(collection(db, "rooms", activeRoomId, "players", currentUser.uid, "moves"), moveData),
+    addDoc(collection(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid, "moves"), moveData),
     updateDoc(playerRef, { lastMove: moveData.move, updatedAt: serverTimestamp() })
   ]).catch(console.error);
 }
@@ -802,8 +1040,8 @@ async function submitBattleSolve(time, scramble, solveStats = {}) {
   if (!currentUser || !activeRoomId || !document.body.classList.contains("battle-mode")) return;
   if (!Number.isFinite(time) || time < 3 || time >= 3600) return;
 
-  const roomRef = doc(db, "rooms", activeRoomId);
-  const playerRef = doc(db, "rooms", activeRoomId, "players", currentUser.uid);
+  const roomRef = doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId);
+  const playerRef = doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid);
 
   await runTransaction(db, async transaction => {
     const roomSnapshot = await transaction.get(roomRef);
@@ -835,9 +1073,9 @@ async function finalizeBattle() {
   if (!activeRoomId || !activeRoom || activeRoom.status !== "finishing") return;
   if (Date.now() < Number(activeRoom.finishDeadlineMs)) return;
 
-  const roomRef = doc(db, "rooms", activeRoomId);
-  const hostRef = activeRoom.hostUid ? doc(db, "rooms", activeRoomId, "players", activeRoom.hostUid) : null;
-  const guestRef = activeRoom.guestUid ? doc(db, "rooms", activeRoomId, "players", activeRoom.guestUid) : null;
+  const roomRef = doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId);
+  const hostRef = activeRoom.hostUid ? doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", activeRoom.hostUid) : null;
+  const guestRef = activeRoom.guestUid ? doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", activeRoom.guestUid) : null;
 
   await runTransaction(db, async transaction => {
     const roomSnapshot = await transaction.get(roomRef);
@@ -867,6 +1105,8 @@ function renderBattleLocalTimer(seconds) {
 
 function leaveBattleMode() {
   clearBattleListeners();
+  clearFriendLobby();
+  clearMatchmakingListeners();
   activeRoom = null;
   activeRoomId = "";
   activeRoomRole = "";
@@ -879,6 +1119,7 @@ function leaveBattleMode() {
   }
   const url = new URL(window.location.href);
   url.searchParams.delete("room");
+  url.searchParams.delete("battleRoom");
   window.history.replaceState({}, "", url);
 }
 
@@ -919,7 +1160,7 @@ function setupAuthUi() {
   });
 
   createRoomBtn.addEventListener("click", () => {
-    createBattleRoom().catch(error => {
+    createBattleRoom("friend").catch(error => {
       setBattleStatus("Room could not be created.");
       console.error(error);
     });
@@ -932,11 +1173,31 @@ function setupAuthUi() {
     });
   });
 
-  readyRoomBtn.addEventListener("click", () => {
-    readyBattleRoom().catch(error => {
-      setBattleStatus("Could not set ready.");
+  copyInviteBtn.addEventListener("click", () => {
+    if (!activeRoomId) {
+      setBattleStatus("Create or join a friend room first.");
+      return;
+    }
+
+    copyRoomUrl(activeRoomId, setBattleStatus);
+  });
+
+  randomBattleBtn.addEventListener("click", () => {
+    startRandomBattle().catch(error => {
+      setRandomStatus("Matchmaking could not start.");
       console.error(error);
     });
+  });
+
+  cancelMatchBtn.addEventListener("click", () => {
+    cancelRandomMatch().catch(error => {
+      setRandomStatus("Could not cancel matchmaking.");
+      console.error(error);
+    });
+  });
+
+  battleChoiceButtons.forEach(button => {
+    button.addEventListener("click", () => setBattleChoice(button.dataset.battleChoice));
   });
 
   battleReadyBtn.addEventListener("click", () => {
@@ -949,16 +1210,9 @@ function setupAuthUi() {
   copyRoomUrlBtn.addEventListener("click", async () => {
     if (!activeRoomId) return;
 
-    const roomUrl = getRoomUrl(activeRoomId);
-    try {
-      await navigator.clipboard.writeText(roomUrl);
-      battleNotice.textContent = "Room URL copied.";
-    } catch (error) {
-      roomUrlOutput.value = roomUrl;
-      roomUrlOutput.select();
-      document.execCommand("copy");
-      battleNotice.textContent = "Room URL copied.";
-    }
+    copyRoomUrl(activeRoomId, message => {
+      battleNotice.textContent = message;
+    });
   });
 
   leaveBattleBtn.addEventListener("click", leaveBattleMode);
@@ -1000,7 +1254,7 @@ if (isConfigured()) {
         console.error(error);
       });
 
-      const roomFromUrl = new URLSearchParams(window.location.search).get("room");
+      const roomFromUrl = new URLSearchParams(window.location.search).get("battleRoom");
       if (roomFromUrl && !activeRoomId) {
         joinBattleRoom(roomFromUrl).catch(console.error);
       }

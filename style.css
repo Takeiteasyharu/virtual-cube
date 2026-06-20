@@ -238,6 +238,30 @@ footer {
   margin-bottom: 10px;
 }
 
+.battle-choice-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.battle-choice-tab {
+  border-radius: 8px;
+  padding: 9px 4px;
+  font-size: 13px;
+}
+
+.battle-choice-tab.active {
+  background: #1e5f8b;
+}
+
+.random-status {
+  min-height: 20px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: bold;
+}
+
 .battle-status,
 .battle-players,
 .battle-winner {
@@ -295,6 +319,17 @@ body.battle-mode #cubeContainer {
   font-weight: bold;
 }
 
+.battle-mode-label {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #1e5f8b;
+  color: #fff;
+  font-size: 13px;
+  font-weight: bold;
+}
+
 .battle-mode-actions {
   display: flex;
   gap: 8px;
@@ -322,6 +357,22 @@ body.battle-mode #cubeContainer {
   font-weight: bold;
   min-height: 24px;
   margin: 10px 0;
+}
+
+.battle-result-badge {
+  min-height: 0;
+  text-align: center;
+  font-size: 42px;
+  font-weight: bold;
+  letter-spacing: 0;
+}
+
+.battle-result-badge.winner {
+  color: #147a3f;
+}
+
+.battle-result-badge.loser {
+  color: #b33131;
 }
 
 .battle-notice {
@@ -509,6 +560,19 @@ body.dark .ranking-tab.active {
   color: #111;
 }
 
+body.dark .battle-choice-tab.active {
+  background: #78c5ef;
+  color: #111;
+}
+
+body.dark .battle-result-badge.winner {
+  color: #8ee6ad;
+}
+
+body.dark .battle-result-badge.loser {
+  color: #ffaaa3;
+}
+
 body.dark.battle-mode {
   background: #10212c;
 }
@@ -676,6 +740,10 @@ body.solving .timer {
 
   .battle-player-card {
     min-height: 0;
+  }
+
+  .battle-result-badge {
+    font-size: 34px;
   }
 
   footer {
