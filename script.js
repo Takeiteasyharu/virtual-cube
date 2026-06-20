@@ -55,6 +55,8 @@ let solveStartedAt = 0;
 let battleInputState = "inactive";
 let battleInspectionInterval = null;
 let battleInspectionRound = 0;
+let normalInspectionInterval = null;
+let normalInspectionActive = false;
 
 const ROTATION_MOVES = ["x", "x'", "yRotation", "yRotation'", "zRotation", "zRotation'"];
 
@@ -77,6 +79,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   document.getElementById("resetBtn").addEventListener("click", () => {
+    clearNormalInspection();
     resetCube();
     resetTimer();
     readyToSolve = false;
@@ -107,6 +110,7 @@ document.addEventListener("keydown", event => {
       event.preventDefault();
       return;
     }
+    clearNormalInspection();
     resetTimer();
     readyToSolve = false;
     firstTurnDone = false;
@@ -138,6 +142,10 @@ function performMove(move) {
 
   if (isBattleInspecting() && !isRotationMove) {
     startBattleSolve();
+  }
+
+  if (normalInspectionActive && !isRotationMove) {
+    startNormalSolve();
   }
 
   if (readyToSolve && !firstTurnDone && !isRotationMove) {
@@ -174,6 +182,48 @@ function resetSolveStats() {
   solveMoveCount = 0;
   solveMoves = [];
   solveStartedAt = 0;
+}
+
+function startNormalInspection() {
+  clearNormalInspection();
+  normalInspectionActive = true;
+  document.body.classList.add("inspection-active");
+
+  const inspectionStartedAt = Date.now();
+  const updateInspection = () => {
+    const remaining = Math.max(0, Math.ceil(15 - (Date.now() - inspectionStartedAt) / 1000));
+    setBattleInspectionOverlay(true, remaining > 0 ? String(remaining) : "Go!");
+
+    if (remaining <= 0) {
+      clearNormalInspection();
+      startNormalSolve();
+      setBattleInspectionOverlay(true, "Go!");
+      window.setTimeout(() => setBattleInspectionOverlay(false), 650);
+    }
+  };
+
+  updateInspection();
+  normalInspectionInterval = window.setInterval(updateInspection, 100);
+}
+
+function startNormalSolve() {
+  if (!normalInspectionActive && isTimerRunning()) return;
+
+  clearNormalInspection();
+  setBattleInspectionOverlay(false);
+  firstTurnDone = true;
+  resetSolveStats();
+  solveStartedAt = Date.now();
+  startTimer();
+}
+
+function clearNormalInspection() {
+  if (normalInspectionInterval) {
+    window.clearInterval(normalInspectionInterval);
+    normalInspectionInterval = null;
+  }
+  normalInspectionActive = false;
+  document.body.classList.remove("inspection-active");
 }
 
 function recordSolveMove(move, counted) {
@@ -219,6 +269,7 @@ function setupMoveInput() {
         input.value = "";
         return;
       }
+      clearNormalInspection();
       resetTimer();
       readyToSolve = false;
       firstTurnDone = false;
@@ -257,6 +308,7 @@ function setupMoveInput() {
 function scrambleCube() {
   if (typeof window.isBattleMode === "function" && window.isBattleMode()) return;
 
+  clearNormalInspection();
   resetCube();
   resetTimer();
   resetSolveStats();
@@ -293,6 +345,7 @@ function loadBattleScramble(scrambleText) {
   firstTurnDone = false;
 
   applyScramble(scramble);
+  startNormalInspection();
 }
 
 function prepareBattleCube(scrambleText, round = 1) {
@@ -340,8 +393,8 @@ function startBattleInspection(scrambleText, inspectionStartMs = Date.now(), rou
 
     if (remaining <= 0) {
       clearBattleInspection();
-      setBattleInspectionOverlay(true, "Go!");
       startBattleSolve();
+      setBattleInspectionOverlay(true, "Go!");
       window.setTimeout(() => setBattleInspectionOverlay(false), 650);
     }
   };
@@ -380,7 +433,8 @@ function setBattleInspectionOverlay(visible, count = "15") {
 
   overlay.hidden = !visible;
   countDisplay.textContent = count;
-  document.body.classList.toggle("battle-inspecting", visible);
+  document.body.classList.toggle("inspection-active", visible);
+  document.body.classList.toggle("battle-inspecting", visible && isBattleModeActive());
 }
 
 function setSolvingMode(isSolving) {
@@ -389,6 +443,7 @@ function setSolvingMode(isSolving) {
 
 function cancelCurrentSolve() {
   clearBattleInspection();
+  clearNormalInspection();
   resetCube();
   resetTimer();
   resetSolveStats();

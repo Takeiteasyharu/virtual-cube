@@ -1284,12 +1284,15 @@ async function loginWithGoogle() {
 }
 
 async function loginAsGuest() {
-  const credential = await signInAnonymously(auth);
-  const name = nameInput.value.trim() || "Guest";
-
-  if (name) {
-    await updateProfile(credential.user, { displayName: name });
+  const name = nameInput.value.trim();
+  if (!name) {
+    setStatus("Please enter a player name.");
+    nameInput.focus();
+    return;
   }
+
+  const credential = await signInAnonymously(auth);
+  await updateProfile(credential.user, { displayName: name });
 }
 
 function setupAuthUi() {

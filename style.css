@@ -366,7 +366,7 @@ body.battle-mode.battle-locked #cubeContainer {
   opacity: 0.35;
 }
 
-body.battle-mode.battle-inspecting .cube-area {
+body.inspection-active .cube-area {
   padding-top: 96px;
 }
 
