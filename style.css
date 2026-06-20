@@ -69,6 +69,7 @@ main {
 }
 
 #cubeContainer {
+  position: relative;
   width: min(52vw, 860px);
   height: min(52vw, 860px);
   margin: 0 auto;
@@ -366,14 +367,10 @@ body.battle-mode.battle-locked #cubeContainer {
   opacity: 0.35;
 }
 
-body.inspection-active .cube-area {
-  padding-top: 96px;
-}
-
 .battle-inspection-overlay {
   position: absolute;
   z-index: 3;
-  top: 0;
+  top: 12%;
   left: 50%;
   min-width: 160px;
   padding: 12px 18px;
@@ -382,6 +379,7 @@ body.inspection-active .cube-area {
   color: #fff;
   text-align: center;
   transform: translateX(-50%);
+  pointer-events: none;
 }
 
 .battle-inspection-overlay[hidden] {
@@ -755,26 +753,18 @@ body.solving .cube-area {
 body.solving .panel {
   position: fixed;
   top: 24px;
-  left: 50%;
-  right: auto;
+  left: auto;
+  right: 48px;
   width: auto;
   max-height: none;
   overflow: visible;
   padding: 0;
-  transform: translateX(-50%);
+  transform: none;
 }
 
 body.solving .timer {
   margin: 0;
   font-size: 64px;
-}
-
-@media (min-width: 901px) {
-  body.solving.inspection-active:not(.battle-mode) .panel {
-    left: auto;
-    right: 32px;
-    transform: none;
-  }
 }
 
 @media (max-width: 900px) {
