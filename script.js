@@ -57,6 +57,9 @@ let battleInspectionInterval = null;
 let battleInspectionRound = 0;
 let normalInspectionInterval = null;
 let normalInspectionActive = false;
+let normalSolveState = "idle";
+let lockedScramble = "";
+let normalActiveScramble = "";
 
 const ROTATION_MOVES = ["x", "x'", "yRotation", "yRotation'", "zRotation", "zRotation'"];
 
@@ -79,13 +82,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   document.getElementById("resetBtn").addEventListener("click", () => {
-    clearNormalInspection();
-    resetCube();
-    resetTimer();
-    readyToSolve = false;
-    firstTurnDone = false;
-    setSolvingMode(false);
-    document.getElementById("lastMove").textContent = "-";
+    abortNormalSolve();
   });
 
   document.getElementById("clearTimesBtn").addEventListener("click", () => {
@@ -110,11 +107,7 @@ document.addEventListener("keydown", event => {
       event.preventDefault();
       return;
     }
-    clearNormalInspection();
-    resetTimer();
-    readyToSolve = false;
-    firstTurnDone = false;
-    setSolvingMode(false);
+    abortNormalSolve();
     return;
   }
 
@@ -139,6 +132,8 @@ function performMove(move) {
   document.getElementById("lastMove").textContent = displayMove(move);
 
   const isRotationMove = ROTATION_MOVES.includes(move);
+
+  if (!isBattleModeActive() && normalSolveState === "aborted") return;
 
   if (isBattleInspecting() && !isRotationMove) {
     startBattleSolve();
@@ -187,6 +182,7 @@ function resetSolveStats() {
 function startNormalInspection() {
   clearNormalInspection();
   normalInspectionActive = true;
+  normalSolveState = "inspecting";
   document.body.classList.add("inspection-active");
 
   const inspectionStartedAt = Date.now();
@@ -211,6 +207,7 @@ function startNormalSolve() {
 
   clearNormalInspection();
   setBattleInspectionOverlay(false);
+  normalSolveState = "solving";
   firstTurnDone = true;
   resetSolveStats();
   solveStartedAt = Date.now();
@@ -269,11 +266,7 @@ function setupMoveInput() {
         input.value = "";
         return;
       }
-      clearNormalInspection();
-      resetTimer();
-      readyToSolve = false;
-      firstTurnDone = false;
-      setSolvingMode(false);
+      abortNormalSolve();
       input.value = "";
       return;
     }
@@ -307,6 +300,7 @@ function setupMoveInput() {
 
 function scrambleCube() {
   if (typeof window.isBattleMode === "function" && window.isBattleMode()) return;
+  if (["inspecting", "solving"].includes(normalSolveState)) return;
 
   clearNormalInspection();
   resetCube();
@@ -314,18 +308,41 @@ function scrambleCube() {
   resetSolveStats();
   setSolvingMode(true);
 
-  const scramble = generateScramble(20);
-  const scrambleText = scramble.join(" ");
+  const scrambleText = lockedScramble || generateScramble(20).join(" ");
+  const scramble = scrambleText.split(" ").filter(Boolean);
 
   document.getElementById("scrambleText").textContent = scrambleText;
   document.getElementById("lastMove").textContent = "-";
 
   setCurrentScramble(scrambleText);
 
+  normalActiveScramble = scrambleText;
   readyToSolve = true;
   firstTurnDone = false;
 
   applyScramble(scramble);
+  startNormalInspection();
+}
+
+function abortNormalSolve() {
+  if (isBattleModeActive()) return;
+
+  if (["inspecting", "solving"].includes(normalSolveState) && normalActiveScramble) {
+    lockedScramble = normalActiveScramble;
+    normalSolveState = "aborted";
+  } else if (normalSolveState !== "aborted") {
+    normalSolveState = "idle";
+  }
+
+  clearNormalInspection();
+  resetCube();
+  resetTimer();
+  resetSolveStats();
+  readyToSolve = false;
+  firstTurnDone = false;
+  setSolvingMode(false);
+  setBattleInspectionOverlay(false);
+  document.getElementById("lastMove").textContent = "-";
 }
 
 function loadBattleScramble(scrambleText) {
@@ -345,7 +362,6 @@ function loadBattleScramble(scrambleText) {
   firstTurnDone = false;
 
   applyScramble(scramble);
-  startNormalInspection();
 }
 
 function prepareBattleCube(scrambleText, round = 1) {
@@ -519,7 +535,13 @@ function checkSolvedAndStopTimer() {
     stopTimer();
     readyToSolve = false;
     firstTurnDone = false;
-    if (isBattleModeActive()) battleInputState = "finished";
+    if (isBattleModeActive()) {
+      battleInputState = "finished";
+    } else {
+      normalSolveState = "idle";
+      lockedScramble = "";
+      normalActiveScramble = "";
+    }
     setSolvingMode(false);
   }
 }

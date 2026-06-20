@@ -718,11 +718,30 @@ body.solving footer,
 body.solving .left-panel,
 body.solving .panel .theme-toggle,
 body.solving .panel .stats,
-body.solving .panel .buttons,
 body.solving .panel .last-move,
 body.solving .panel h2,
 body.solving .panel ul {
   display: none;
+}
+
+body.solving:not(.battle-mode) .panel .buttons {
+  display: flex;
+  margin-top: 12px;
+}
+
+body.solving:not(.battle-mode) .panel #scrambleBtn,
+body.solving:not(.battle-mode) .panel #clearTimesBtn {
+  display: none;
+}
+
+body.solving:not(.battle-mode) .panel #resetBtn {
+  display: block;
+  background: #8f2929;
+}
+
+body.dark.solving:not(.battle-mode) .panel #resetBtn {
+  background: #f3a19d;
+  color: #111;
 }
 
 body.solving main {

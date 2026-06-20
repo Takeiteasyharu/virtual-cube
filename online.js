@@ -591,7 +591,7 @@ function isPlayerFinished(player) {
 
 function isPlayerDisconnected(player) {
   if (!player) return false;
-  if (player.status === "disconnected") return true;
+  if (["disconnected", "left", "returned", "normal"].includes(player.status)) return true;
   if (isPlayerFinished(player)) return false;
   const updatedAt = player.updatedAt?.toMillis?.() || 0;
   return updatedAt > 0 && Date.now() - updatedAt > 45000;
@@ -648,7 +648,7 @@ function renderBattleNotice() {
 
   const host = getDisplayPlayer("host");
   const guest = getDisplayPlayer("guest");
-  if (host?.status === "disconnected" || guest?.status === "disconnected") {
+  if (isPlayerDisconnected(host) || isPlayerDisconnected(guest)) {
     battleNotice.textContent = "Your opponent returned to Normal Mode.";
     return;
   }
@@ -706,9 +706,12 @@ function renderRematchPanel(you, opponent) {
   const youReady = Boolean(you?.rematchReady);
   const opponentReady = Boolean(opponent?.rematchReady);
   battleRematchYou.textContent = `You: ${youReady ? "Ready for rematch" : "Waiting"}`;
-  battleRematchOpponent.textContent = `Opponent: ${opponentReady ? "Ready for rematch" : "Waiting"}`;
-  playAgainBtn.disabled = youReady;
-  playAgainBtn.textContent = youReady ? "Ready ✓" : "Play Again";
+  const opponentLeft = isPlayerDisconnected(opponent);
+  battleRematchOpponent.textContent = opponentLeft
+    ? "Opponent: Left the room"
+    : `Opponent: ${opponentReady ? "Ready for rematch" : "Waiting"}`;
+  playAgainBtn.disabled = youReady || opponentLeft;
+  playAgainBtn.textContent = opponentLeft ? "Opponent left" : (youReady ? "Ready" : "Play Again");
 }
 
 function renderBattleUi() {
@@ -867,6 +870,7 @@ async function startRematchIfBothReady() {
 
     const host = (await transaction.get(hostRef)).data();
     const guest = (await transaction.get(guestRef)).data();
+    if (isPlayerDisconnected(host) || isPlayerDisconnected(guest)) return;
     if (!host?.rematchReady || !guest?.rematchReady) return;
 
     const scramble = getBattleScramble();
@@ -888,6 +892,7 @@ async function startRematchIfBothReady() {
 
 async function requestRematch() {
   if (!currentUser || !activeRoomId || activeRoom?.status !== "finished") return;
+  if (isPlayerDisconnected(getDisplayPlayer(getOpponentRole()))) return;
 
   await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
     rematchReady: true,
@@ -1251,7 +1256,7 @@ function renderBattleLocalTimer(seconds) {
 function leaveBattleMode() {
   if (currentUser && activeRoomId && document.body.classList.contains("battle-mode")) {
     updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
-      status: "disconnected",
+      status: "returned",
       updatedAt: serverTimestamp()
     }).catch(console.error);
   }
