@@ -769,6 +769,14 @@ body.solving .timer {
   font-size: 64px;
 }
 
+@media (min-width: 901px) {
+  body.solving.inspection-active:not(.battle-mode) .panel {
+    left: auto;
+    right: 32px;
+    transform: none;
+  }
+}
+
 @media (max-width: 900px) {
   header {
     padding: 10px;
