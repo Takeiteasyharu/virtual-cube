@@ -79,8 +79,6 @@ const BATTLE_ROOMS_COLLECTION = "battleRooms";
 const MATCHMAKING_COLLECTION = "matchmaking";
 const USERS_COLLECTION = "users";
 const INITIAL_RATING = 1200;
-const RATING_K = 32;
-const SAME_OPPONENT_RANKED_LIMIT = 5;
 
 let auth = null;
 let db = null;
@@ -202,7 +200,7 @@ function getPeriodKeys(date = new Date()) {
 function getPlayerName() {
   const typedName = nameInput.value.trim();
   const fallbackName = currentUser?.displayName || "Guest";
-  return typedName || fallbackName;
+  return (typedName || fallbackName).slice(0, 24);
 }
 
 function updateAccountSummary(user, rank = null) {
@@ -894,10 +892,37 @@ async function saveBattleResultForCurrentUser() {
       opponentName: opponent?.name || "Player",
       createdAt: serverTimestamp()
     });
+    await recordOwnBattleStats(result, activeRoom.mode);
   } catch (error) {
     savedBattleResultKeys.delete(resultId);
     throw error;
   }
+}
+
+async function recordOwnBattleStats(result, mode) {
+  if (!currentUser) return;
+
+  const reference = userRef();
+  const snapshot = await getDoc(reference);
+  const profile = { ...defaultUserStats(), ...(snapshot.data() || {}) };
+  const prefix = mode === "ranked" ? "ranked" : "friend";
+  const won = result === "win";
+  const updates = {
+    uid: currentUser.uid,
+    name: getPlayerName(),
+    wins: Number(profile.wins || 0) + (won ? 1 : 0),
+    losses: Number(profile.losses || 0) + (won ? 0 : 1),
+    [`${prefix}Battles`]: Number(profile[`${prefix}Battles`] || 0) + 1,
+    [`${prefix}Wins`]: Number(profile[`${prefix}Wins`] || 0) + (won ? 1 : 0),
+    [`${prefix}Losses`]: Number(profile[`${prefix}Losses`] || 0) + (won ? 0 : 1),
+    updatedAt: serverTimestamp()
+  };
+  if (!snapshot.exists()) {
+    updates.rating = INITIAL_RATING;
+  } else if (Object.prototype.hasOwnProperty.call(snapshot.data() || {}, "rating")) {
+    updates.rating = Number(profile.rating) || INITIAL_RATING;
+  }
+  await setDoc(reference, updates, { merge: true });
 }
 
 function getOpponentRole() {
@@ -1518,8 +1543,8 @@ async function notifyBattleMove(move) {
 
   const moveData = {
     move: String(move.move || ""),
-    moveIndex: Number(move.index) || 0,
-    elapsedMs: Math.max(0, Number(move.elapsedMs) || 0),
+    moveIndex: Math.max(1, Math.floor(Number(move.index) || 0)),
+    elapsedMs: Math.max(0, Math.floor(Number(move.elapsedMs) || 0)),
     round: activeRound,
     timestamp: serverTimestamp()
   };
@@ -1582,96 +1607,17 @@ async function finalizeBattle() {
     const guest = guestRef ? (await transaction.get(guestRef)).data() : null;
     const completed = [host, guest].filter(isPlayerFinished).sort((a, b) => a.finalTime - b.finalTime);
     const winner = completed[0] || null;
-    const mode = room.mode === "ranked" ? "ranked" : "friend";
-    const hostUserRef = host?.uid ? doc(db, USERS_COLLECTION, host.uid) : null;
-    const guestUserRef = guest?.uid ? doc(db, USERS_COLLECTION, guest.uid) : null;
-    const hostUserSnapshot = hostUserRef ? await transaction.get(hostUserRef) : null;
-    const guestUserSnapshot = guestUserRef ? await transaction.get(guestUserRef) : null;
-    const hostStats = { ...defaultUserStats(), ...(hostUserSnapshot?.data() || {}) };
-    const guestStats = { ...defaultUserStats(), ...(guestUserSnapshot?.data() || {}) };
-    const hostWon = Boolean(winner?.uid && winner.uid === host?.uid);
-    const guestWon = Boolean(winner?.uid && winner.uid === guest?.uid);
-
-    const updateStats = (stats, won) => {
-      const prefix = mode === "ranked" ? "ranked" : "friend";
-      return {
-        wins: Number(stats.wins || 0) + (won ? 1 : 0),
-        losses: Number(stats.losses || 0) + (won ? 0 : 1),
-        [`${prefix}Battles`]: Number(stats[`${prefix}Battles`] || 0) + 1,
-        [`${prefix}Wins`]: Number(stats[`${prefix}Wins`] || 0) + (won ? 1 : 0),
-        [`${prefix}Losses`]: Number(stats[`${prefix}Losses`] || 0) + (won ? 0 : 1)
-      };
-    };
-
-    const hostUpdate = updateStats(hostStats, hostWon);
-    const guestUpdate = updateStats(guestStats, guestWon);
-    let ratingApplied = false;
-    let ratingNotice = "Friend Battle: no rating change";
-    const ratingChanges = {};
-
-    if (mode === "ranked" && host?.uid && guest?.uid) {
-      const hostOpponentRef = doc(db, USERS_COLLECTION, host.uid, "opponents", guest.uid);
-      const guestOpponentRef = doc(db, USERS_COLLECTION, guest.uid, "opponents", host.uid);
-      const hostOpponent = (await transaction.get(hostOpponentRef)).data() || {};
-      const guestOpponent = (await transaction.get(guestOpponentRef)).data() || {};
-      const previousMeetings = Math.max(
-        Number(hostOpponent.rankedBattleCount || 0),
-        Number(guestOpponent.rankedBattleCount || 0)
-      );
-      const hostRating = Number(hostStats.rating) || INITIAL_RATING;
-      const guestRating = Number(guestStats.rating) || INITIAL_RATING;
-
-      if (previousMeetings < SAME_OPPONENT_RANKED_LIMIT) {
-        const hostExpected = 1 / (1 + 10 ** ((guestRating - hostRating) / 400));
-        const hostChange = Math.round(RATING_K * ((hostWon ? 1 : 0) - hostExpected));
-        const guestChange = -hostChange;
-        hostUpdate.rating = hostRating + hostChange;
-        guestUpdate.rating = guestRating + guestChange;
-        ratingChanges[host.uid] = { before: hostRating, after: hostRating + hostChange, change: hostChange };
-        ratingChanges[guest.uid] = { before: guestRating, after: guestRating + guestChange, change: guestChange };
-        ratingApplied = true;
-        ratingNotice = "";
-      } else {
-        ratingChanges[host.uid] = { before: hostRating, after: hostRating, change: 0 };
-        ratingChanges[guest.uid] = { before: guestRating, after: guestRating, change: 0 };
-        ratingNotice = "No rating change: same opponent limit reached.";
-      }
-
-      transaction.set(hostOpponentRef, {
-        rankedBattleCount: previousMeetings + 1,
-        lastRankedBattleAt: serverTimestamp()
-      }, { merge: true });
-      transaction.set(guestOpponentRef, {
-        rankedBattleCount: previousMeetings + 1,
-        lastRankedBattleAt: serverTimestamp()
-      }, { merge: true });
-    }
-
-    if (hostUserRef) {
-      transaction.set(hostUserRef, {
-        uid: host.uid,
-        name: host.name || "Player",
-        ...hostUpdate,
-        updatedAt: serverTimestamp()
-      }, { merge: true });
-    }
-    if (guestUserRef) {
-      transaction.set(guestUserRef, {
-        uid: guest.uid,
-        name: guest.name || "Player",
-        ...guestUpdate,
-        updatedAt: serverTimestamp()
-      }, { merge: true });
-    }
 
     transaction.update(roomRef, {
       status: "finished",
       finishedAt: serverTimestamp(),
       winnerUid: winner?.uid || "",
       winnerName: winner?.name || "",
-      ratingApplied,
-      ratingNotice,
-      ratingChanges,
+      ratingApplied: false,
+      ratingNotice: room.mode === "ranked"
+        ? "Rating updates require server validation."
+        : "Friend Battle: no rating change",
+      ratingChanges: {},
       updatedAt: serverTimestamp()
     });
   });
