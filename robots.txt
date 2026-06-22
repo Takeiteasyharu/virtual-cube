@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://takeiteasyharu.github.io/virtual-cube/sitemap.xml
