@@ -33,6 +33,7 @@ const rankingTypeButtons = document.querySelectorAll(".ranking-type-tab");
 const rankingList = document.getElementById("onlineRankingList");
 const battleRatingList = document.getElementById("battleRatingList");
 const authStatus = document.getElementById("authStatus");
+const totalUsersDisplay = document.getElementById("totalUsersDisplay");
 const accountGreeting = document.getElementById("accountGreeting");
 const accountRank = document.getElementById("accountRank");
 const accountRating = document.getElementById("accountRating");
@@ -78,6 +79,8 @@ const PENDING_SOLVES_KEY = "pendingOnlineSolves";
 const BATTLE_ROOMS_COLLECTION = "battleRooms";
 const MATCHMAKING_COLLECTION = "matchmaking";
 const USERS_COLLECTION = "users";
+const STATS_COLLECTION = "stats";
+const GLOBAL_STATS_DOCUMENT = "global";
 const INITIAL_RATING = 1200;
 
 let auth = null;
@@ -101,6 +104,8 @@ let localBattleTimerSeconds = 0;
 let matchmakingUnsubscribe = null;
 let randomRoomUnsubscribe = null;
 let matchmakingTimeout = null;
+let rankedSearchInterval = null;
+let rankedSearchStartedAt = 0;
 let friendLobbyUnsubscribe = null;
 let opponentExitTimeout = null;
 const savedBattleResultKeys = new Set();
@@ -116,6 +121,10 @@ function setStatus(message) {
 
 function userRef(uid = currentUser?.uid) {
   return uid ? doc(db, USERS_COLLECTION, uid) : null;
+}
+
+function globalStatsRef() {
+  return doc(db, STATS_COLLECTION, GLOBAL_STATS_DOCUMENT);
 }
 
 function defaultUserStats() {
@@ -136,15 +145,55 @@ async function ensureUserProfile() {
   if (!currentUser || !db) return;
 
   const reference = userRef();
-  const snapshot = await getDoc(reference);
   const profile = {
     uid: currentUser.uid,
     name: getPlayerName(),
     loginType: currentUser.isAnonymous ? "guest" : "google",
     updatedAt: serverTimestamp()
   };
-  if (!snapshot.exists()) Object.assign(profile, defaultUserStats());
-  await setDoc(reference, profile, { merge: true });
+  const statsReference = globalStatsRef();
+  let profileAlreadyExists = false;
+
+  try {
+    await runTransaction(db, async transaction => {
+      const profileSnapshot = await transaction.get(reference);
+      profileAlreadyExists = profileSnapshot.exists();
+
+      if (profileAlreadyExists) {
+        transaction.set(reference, profile, { merge: true });
+        return;
+      }
+
+      const statsSnapshot = await transaction.get(statsReference);
+      const totalUsers = Number(statsSnapshot.data()?.totalUsers || 0);
+      transaction.set(reference, { ...profile, ...defaultUserStats() }, { merge: true });
+      transaction.set(statsReference, {
+        totalUsers: totalUsers + 1,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    });
+  } catch (error) {
+    // Keep authentication usable while the optional counter rule is being deployed.
+    await setDoc(
+      reference,
+      profileAlreadyExists ? profile : { ...profile, ...defaultUserStats() },
+      { merge: true }
+    );
+    console.warn("The total user counter could not be updated.", error);
+  }
+}
+
+async function refreshTotalUsers() {
+  if (!totalUsersDisplay || !db) return;
+
+  try {
+    const snapshot = await getDoc(globalStatsRef());
+    const totalUsers = Number(snapshot.data()?.totalUsers);
+    totalUsersDisplay.textContent = `Users: ${Number.isFinite(totalUsers) ? totalUsers : 0}`;
+  } catch (error) {
+    totalUsersDisplay.textContent = "Users: -";
+    console.warn("The total user count could not be loaded.", error);
+  }
 }
 
 async function getRankedBattleEligibility() {
@@ -714,6 +763,31 @@ function setRandomStatus(message) {
   if (randomStatus) randomStatus.textContent = message;
 }
 
+function formatRankedSearchElapsed(milliseconds) {
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = String(totalSeconds % 60).padStart(2, "0");
+  return `${minutes}:${seconds}`;
+}
+
+function stopRankedSearchTimer() {
+  if (rankedSearchInterval) window.clearInterval(rankedSearchInterval);
+  rankedSearchInterval = null;
+  rankedSearchStartedAt = 0;
+}
+
+function startRankedSearchTimer() {
+  stopRankedSearchTimer();
+  rankedSearchStartedAt = Date.now();
+
+  const render = () => {
+    setRandomStatus(`Opponent searching... ${formatRankedSearchElapsed(Date.now() - rankedSearchStartedAt)}`);
+  };
+
+  render();
+  rankedSearchInterval = window.setInterval(render, 1000);
+}
+
 function setBattleChoice(choice) {
   selectedBattleMode = choice;
   battleChoiceButtons.forEach(button => {
@@ -735,6 +809,7 @@ function clearMatchmakingListeners() {
   matchmakingUnsubscribe = null;
   randomRoomUnsubscribe = null;
   matchmakingTimeout = null;
+  stopRankedSearchTimer();
 }
 
 async function clearMyMatchmakingEntry() {
@@ -1327,7 +1402,7 @@ async function startRankedBattle() {
   }
 
   if (matchmakingUnsubscribe || randomRoomUnsubscribe) {
-    setRandomStatus("Searching for an opponent...");
+    if (!rankedSearchInterval) startRankedSearchTimer();
     return;
   }
 
@@ -1337,6 +1412,7 @@ async function startRankedBattle() {
     activeRoomRole = "";
   }
 
+  startRankedSearchTimer();
   await clearMyMatchmakingEntry();
   const waitingQuery = query(
     collection(db, MATCHMAKING_COLLECTION),
@@ -1352,6 +1428,7 @@ async function startRankedBattle() {
   );
 
   if (candidate) {
+    stopRankedSearchTimer();
     setRandomStatus("Matched!");
     await joinBattleRoom(candidate.data().roomId, true);
     return;
@@ -1360,6 +1437,7 @@ async function startRankedBattle() {
   const roomId = createRoomId();
   const scramble = getBattleScramble();
   if (!scramble) {
+    stopRankedSearchTimer();
     setRandomStatus("Scramble generator is not ready.");
     return;
   }
@@ -1391,7 +1469,6 @@ async function startRankedBattle() {
     updatedAt: serverTimestamp()
   });
 
-  setRandomStatus("Searching for an opponent...");
   activeRoomId = roomId;
   activeRoomRole = "host";
   clearFriendLobby();
@@ -1790,6 +1867,7 @@ function setupAuthUi() {
 
   randomBattleBtn.addEventListener("click", () => {
     startRankedBattle().catch(error => {
+      stopRankedSearchTimer();
       setRandomStatus("Matchmaking could not start.");
       console.error(error);
     });
@@ -1867,7 +1945,10 @@ if (isConfigured()) {
     if (user) {
       setStatus(`Logged in as ${user.displayName || "Guest"}`);
       ensureUserProfile()
-        .then(refreshBattleRatingRanking)
+        .then(() => Promise.all([
+          refreshBattleRatingRanking(),
+          refreshTotalUsers()
+        ]))
         .catch(console.error);
       refreshAccountRank();
       refreshBattleAccountRating();
@@ -1892,6 +1973,7 @@ if (isConfigured()) {
 
   refreshRanking();
   refreshBattleRatingRanking();
+  refreshTotalUsers();
 } else {
   setStatus("Set firebase-config.js to enable login and online ranking.");
   setRankingMessage("Firebase config is required.");

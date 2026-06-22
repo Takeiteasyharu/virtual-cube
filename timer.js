@@ -11,6 +11,7 @@ function startTimer() {
 
   timerRunning = true;
   startTime = Date.now() - elapsedTime;
+  updateMovesDisplay(null);
 
   timerInterval = setInterval(() => {
     elapsedTime = Date.now() - startTime;
@@ -31,6 +32,7 @@ function stopTimer() {
 
   saveSolve(finalTime, currentScramble, solveStats);
   updateTpsDisplay(solveStats.tps);
+  updateMovesDisplay(solveStats.moveCount);
   window.trackCubeEvent?.("solve_complete", {
     time: finalTime,
     tps: Number.isFinite(solveStats.tps) ? solveStats.tps : 0,
@@ -54,6 +56,7 @@ function resetTimer() {
   elapsedTime = 0;
   updateTimerDisplay();
   updateTpsDisplay(null);
+  updateMovesDisplay(null);
 }
 
 function toggleTimer() {
@@ -74,6 +77,13 @@ function updateTpsDisplay(tps) {
   if (!display) return;
 
   display.textContent = Number.isFinite(tps) ? `TPS: ${tps.toFixed(2)}` : "TPS: -";
+}
+
+function updateMovesDisplay(moveCount) {
+  const display = document.getElementById("movesDisplay");
+  if (!display) return;
+
+  display.textContent = Number.isFinite(moveCount) ? `Moves: ${moveCount}` : "Moves: -";
 }
 
 function formatTime(ms) {

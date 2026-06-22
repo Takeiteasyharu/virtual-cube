@@ -130,6 +130,14 @@ main {
   margin-bottom: 16px;
 }
 
+.moves-display {
+  font-family: "Courier New", monospace;
+  font-size: 18px;
+  font-weight: bold;
+  text-align: center;
+  margin: -10px 0 16px;
+}
+
 .buttons {
   display: flex;
   flex-direction: column;
@@ -378,6 +386,13 @@ body.dark .page-return a {
   font-size: 13px;
   line-height: 1.4;
   opacity: 0.85;
+}
+
+.user-count {
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: bold;
+  opacity: 0.8;
 }
 
 .profile-button {
