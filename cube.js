@@ -267,7 +267,7 @@ function rotateLayer(axis, layers, angle, durationMs = 100) {
 
   let startedAt = 0;
 
-  function animate(now) {
+  function animate(now = performance.now()) {
     if (!startedAt) startedAt = now;
     const progress = Math.min(1, (now - startedAt) / durationMs);
     group.rotation[axis] = angle * progress;
@@ -288,7 +288,7 @@ function rotateLayer(axis, layers, angle, durationMs = 100) {
     }
   }
 
-  animate();
+  requestAnimationFrame(animate);
 }
 
 function updateCoord(cubie, axis, angle) {
