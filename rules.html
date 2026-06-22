@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#eaffc9" />
+  <title>Rules - Virtual Cube Timer</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="info-page">
+  <header class="info-header">
+    <h1>Rules</h1>
+    <button id="themeToggleBtn" class="theme-toggle">Dark</button>
+  </header>
+
+  <main class="info-content">
+    <h2>Solves</h2>
+    <p>Press Space to generate a scramble and begin a 15-second inspection. The first valid move starts the timer. Whole-cube rotations do not start the timer.</p>
+    <p>A solve finishes when the cube is solved. Invalid or suspicious solves may remain in local history but are not submitted to online rankings.</p>
+
+    <h2>Online Rankings</h2>
+    <p>Log in to submit valid solves. Rankings use submitted valid solves and display the fastest results first.</p>
+
+    <h2>Battles</h2>
+    <p>Friend Battle uses an invite link or room ID. Ranked Battle uses automatic matchmaking and requires Google Login plus one valid solve.</p>
+    <p>Both players solve the same scramble. A battle ends shortly after one player finishes.</p>
+  </main>
+
+  <div class="page-return"><a href="index.html">Return to Virtual Cube Timer</a></div>
+
+  <script>
+    const themeButton = document.getElementById("themeToggleBtn");
+    const applyTheme = () => {
+      const isDark = localStorage.getItem("theme") === "dark";
+      document.body.classList.toggle("dark", isDark);
+      themeButton.textContent = isDark ? "Light" : "Dark";
+    };
+    themeButton.addEventListener("click", () => {
+      localStorage.setItem("theme", document.body.classList.contains("dark") ? "light" : "dark");
+      applyTheme();
+    });
+    applyTheme();
+  </script>
+</body>
+</html>

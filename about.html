@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#eaffc9" />
+  <title>About Virtual Cube Timer</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="info-page">
+  <header class="info-header">
+    <h1>About Virtual Cube Timer</h1>
+    <button id="themeToggleBtn" class="theme-toggle">Dark</button>
+  </header>
+
+  <main class="info-content">
+    <p>Virtual Cube Timer is an online Rubik's Cube timer and battle platform.</p>
+
+    <h2>Features</h2>
+    <ul>
+      <li>Virtual Cube</li>
+      <li>15 Second Inspection</li>
+      <li>TPS Tracking</li>
+      <li>Online Ranking</li>
+      <li>Ranked Battle</li>
+      <li>Friend Battle</li>
+      <li>User Profiles</li>
+      <li>PWA Support</li>
+    </ul>
+
+    <h2>Mission</h2>
+    <p>Provide a free and competitive Rubik's Cube experience directly in the browser.</p>
+
+    <h2>Creator</h2>
+    <p>Takeiteasyharu</p>
+  </main>
+
+  <div class="page-return"><a href="index.html">Return to Virtual Cube Timer</a></div>
+
+  <script>
+    const themeButton = document.getElementById("themeToggleBtn");
+    const applyTheme = () => {
+      const isDark = localStorage.getItem("theme") === "dark";
+      document.body.classList.toggle("dark", isDark);
+      themeButton.textContent = isDark ? "Light" : "Dark";
+    };
+    themeButton.addEventListener("click", () => {
+      localStorage.setItem("theme", document.body.classList.contains("dark") ? "light" : "dark");
+      applyTheme();
+    });
+    applyTheme();
+  </script>
+</body>
+</html>
