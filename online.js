@@ -38,6 +38,11 @@ const nameInput = document.getElementById("playerNameInput");
 const googleLoginBtn = document.getElementById("googleLoginBtn");
 const guestLoginBtn = document.getElementById("guestLoginBtn");
 const logoutBtn = document.getElementById("logoutBtn");
+const howToPlayBtn = document.getElementById("howToPlayBtn");
+const profileBtn = document.getElementById("profileBtn");
+const howToPlayModal = document.getElementById("howToPlayModal");
+const profileModal = document.getElementById("profileModal");
+const profileBody = document.getElementById("profileBody");
 const createRoomBtn = document.getElementById("createRoomBtn");
 const joinRoomBtn = document.getElementById("joinRoomBtn");
 const copyInviteBtn = document.getElementById("copyInviteBtn");
@@ -90,6 +95,7 @@ let matchmakingUnsubscribe = null;
 let randomRoomUnsubscribe = null;
 let matchmakingTimeout = null;
 let friendLobbyUnsubscribe = null;
+const savedBattleResultKeys = new Set();
 
 function isConfigured() {
   return Boolean(config.apiKey && !config.apiKey.startsWith("YOUR_"));
@@ -375,6 +381,108 @@ async function refreshAccountRank() {
   }
 }
 
+function timestampToMillis(value) {
+  return value?.toMillis?.() || 0;
+}
+
+function profileAverage(solves, count) {
+  if (solves.length < count) return null;
+  const times = solves
+    .slice(0, count)
+    .map(solve => Number(solve.time));
+  const sorted = [...times].sort((a, b) => a - b);
+  sorted.shift();
+  sorted.pop();
+  return sorted.reduce((sum, time) => sum + time, 0) / sorted.length;
+}
+
+function createProfileGrid(items) {
+  const grid = document.createElement("dl");
+  grid.className = "profile-grid";
+  items.forEach(([label, value]) => {
+    const item = document.createElement("div");
+    const term = document.createElement("dt");
+    const description = document.createElement("dd");
+    term.textContent = label;
+    description.textContent = value;
+    item.append(term, description);
+    grid.appendChild(item);
+  });
+  return grid;
+}
+
+async function showProfile() {
+  profileModal.hidden = false;
+  profileBody.textContent = "Loading profile...";
+
+  if (!currentUser) {
+    profileBody.textContent = "Please log in to view your profile.";
+    return;
+  }
+
+  try {
+    const solvesSnapshot = await getDocs(query(collection(db, "solves"), where("uid", "==", currentUser.uid)));
+    const allSingleSolves = solvesSnapshot.docs
+      .map(entryDoc => entryDoc.data())
+      .filter(solve => !solve.rankingType || solve.rankingType === "single");
+    const validSolves = allSingleSolves
+      .filter(isValidRankingEntry)
+      .sort((a, b) => timestampToMillis(b.createdAt) - timestampToMillis(a.createdAt));
+    const battleSnapshot = await getDocs(query(collection(db, "battleResults"), where("uid", "==", currentUser.uid)));
+    const battleResults = battleSnapshot.docs.map(entryDoc => entryDoc.data());
+    const rank = await calculateMyRankingRank();
+
+    const times = validSolves.map(solve => Number(solve.time));
+    const tpsValues = validSolves.map(solve => Number(solve.tps)).filter(Number.isFinite);
+    const battleTimes = battleResults.map(result => Number(result.finalTime)).filter(Number.isFinite);
+    const wins = battleResults.filter(result => result.result === "win").length;
+    const losses = battleResults.filter(result => result.result === "loss").length;
+    const dnfs = battleResults.filter(result => result.result === "dnf").length;
+    const orderedBattles = [...battleResults].sort((a, b) => timestampToMillis(b.createdAt) - timestampToMillis(a.createdAt));
+    let streak = 0;
+    for (const result of orderedBattles) {
+      if (result.result !== "win") break;
+      streak++;
+    }
+    const latest = validSolves[0]?.createdAt?.toDate?.();
+
+    profileBody.innerHTML = "";
+    profileBody.appendChild(createProfileGrid([
+      ["Display name", getPlayerName()],
+      ["Login type", currentUser.isAnonymous ? "Guest" : "Google"],
+      ["PB", times.length ? Math.min(...times).toFixed(2) : "-"],
+      ["AO5", profileAverage(validSolves, 5)?.toFixed(2) || "-"],
+      ["AO12", profileAverage(validSolves, 12)?.toFixed(2) || "-"],
+      ["Current world rank", rank ? `#${rank}` : "-"],
+      ["Total solves", String(allSingleSolves.length)],
+      ["Valid solves", String(validSolves.length)],
+      ["Best TPS", tpsValues.length ? Math.max(...tpsValues).toFixed(2) : "-"],
+      ["Average TPS", tpsValues.length ? (tpsValues.reduce((sum, value) => sum + value, 0) / tpsValues.length).toFixed(2) : "-"],
+      ["Last solve date", latest ? latest.toLocaleString() : "-"]
+    ]));
+
+    const title = document.createElement("h3");
+    title.className = "profile-section-title";
+    title.textContent = "Battle Stats";
+    profileBody.appendChild(title);
+    profileBody.appendChild(createProfileGrid([
+      ["Total battles", String(battleResults.length)],
+      ["Wins", String(wins)],
+      ["Losses", String(losses)],
+      ["DNFs", String(dnfs)],
+      ["Win rate", battleResults.length ? `${((wins / battleResults.length) * 100).toFixed(1)}%` : "-"],
+      ["Best battle time", battleTimes.length ? Math.min(...battleTimes).toFixed(2) : "-"],
+      ["Average battle time", battleTimes.length ? (battleTimes.reduce((sum, value) => sum + value, 0) / battleTimes.length).toFixed(2) : "-"],
+      ["Current battle streak", String(streak)],
+      ["Random battle wins", String(battleResults.filter(result => result.mode === "random" && result.result === "win").length)],
+      ["Friend battle wins", String(battleResults.filter(result => result.mode === "friend" && result.result === "win").length)]
+    ]));
+  } catch (error) {
+    profileBody.textContent = "Profile could not be loaded.";
+    console.error(error);
+  }
+}
+
 async function submitOnlineSolve(time, scramble, ao5 = null, solveStats = {}) {
   if (!isConfigured()) return;
 
@@ -601,6 +709,50 @@ function isCountedBattleMove(move) {
   return !["x", "x'", "y", "y'", "z", "z'"].includes(move?.move);
 }
 
+async function saveBattleResultForCurrentUser() {
+  if (!currentUser || !activeRoom || activeRoom.status !== "finished") return;
+
+  const you = getDisplayPlayer(activeRoomRole);
+  const opponent = getDisplayPlayer(getOpponentRole());
+  if (!you) return;
+
+  const resultId = `${activeRoomId}_${currentUser.uid}_${activeRound}`;
+  if (savedBattleResultKeys.has(resultId)) return;
+
+  const resultRef = doc(db, "battleResults", resultId);
+  // Reserve this key before awaiting Firestore. Room snapshots may otherwise
+  // trigger two create attempts before the first write has finished.
+  savedBattleResultKeys.add(resultId);
+
+  try {
+    const existing = await getDoc(resultRef);
+    if (existing.exists()) return;
+
+    const finished = isPlayerFinished(you);
+    const result = finished
+      ? (activeRoom.winnerUid === currentUser.uid ? "win" : "loss")
+      : "dnf";
+
+    await setDoc(resultRef, {
+      uid: currentUser.uid,
+      name: getPlayerName(),
+      roomId: activeRoomId,
+      round: activeRound,
+      mode: activeRoom.mode === "random" ? "random" : "friend",
+      result,
+      finalTime: finished ? Number(you.finalTime) : null,
+      tps: finished && Number.isFinite(you.tps) ? Number(you.tps) : null,
+      moveCount: finished && Number.isFinite(you.moveCount) ? Number(you.moveCount) : 0,
+      opponentUid: opponent?.uid || "",
+      opponentName: opponent?.name || "Player",
+      createdAt: serverTimestamp()
+    });
+  } catch (error) {
+    savedBattleResultKeys.delete(resultId);
+    throw error;
+  }
+}
+
 function getOpponentRole() {
   return activeRoomRole === "host" ? "guest" : "host";
 }
@@ -732,6 +884,10 @@ function renderBattleUi() {
   renderBattleResult();
   renderBattleReadyButton(you, opponent);
   renderRematchPanel(you, opponent);
+
+  if (activeRoom.status === "finished") {
+    saveBattleResultForCurrentUser().catch(console.error);
+  }
 
   if (activeRoom.status === "finishing" && Date.now() >= Number(activeRoom.finishDeadlineMs)) {
     finalizeBattle().catch(console.error);
@@ -1300,6 +1456,33 @@ async function loginAsGuest() {
   await updateProfile(credential.user, { displayName: name });
 }
 
+function setupModalUi() {
+  howToPlayBtn?.addEventListener("click", () => {
+    howToPlayModal.hidden = false;
+  });
+
+  profileBtn?.addEventListener("click", () => {
+    showProfile().catch(error => {
+      profileModal.hidden = false;
+      profileBody.textContent = "Profile could not be loaded.";
+      console.error(error);
+    });
+  });
+
+  document.querySelectorAll("[data-close-modal]").forEach(button => {
+    button.addEventListener("click", () => {
+      const modal = document.getElementById(button.dataset.closeModal);
+      if (modal) modal.hidden = true;
+    });
+  });
+
+  [howToPlayModal, profileModal].forEach(modal => {
+    modal?.addEventListener("click", event => {
+      if (event.target === modal) modal.hidden = true;
+    });
+  });
+}
+
 function setupAuthUi() {
   googleLoginBtn.addEventListener("click", () => {
     loginWithGoogle().catch(error => {
@@ -1408,6 +1591,8 @@ rankingTypeButtons.forEach(button => {
     refreshAccountRank();
   });
 });
+
+setupModalUi();
 
 if (isConfigured()) {
   const app = initializeApp(config);

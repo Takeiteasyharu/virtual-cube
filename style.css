@@ -27,6 +27,12 @@ header {
   padding: 16px;
 }
 
+.header-action {
+  margin-top: 4px;
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
 h1 {
   margin: 0 0 12px;
   font-size: 28px;
@@ -234,6 +240,109 @@ footer {
   font-size: 13px;
   line-height: 1.4;
   opacity: 0.85;
+}
+
+.profile-button {
+  width: 100%;
+  margin-top: 10px;
+}
+
+.app-modal[hidden] {
+  display: none;
+}
+
+.app-modal {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.modal-content {
+  width: min(760px, 100%);
+  max-height: min(82vh, 820px);
+  overflow-y: auto;
+  border: 2px solid #1e5f8b;
+  border-radius: 8px;
+  padding: 20px;
+  background: #f7fff0;
+  color: #111;
+}
+
+.modal-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #a6c2d0;
+  padding-bottom: 10px;
+}
+
+.modal-heading h2,
+.modal-content h3 {
+  margin: 0;
+}
+
+.modal-content h3 {
+  margin-top: 18px;
+  font-size: 18px;
+}
+
+.modal-content p {
+  line-height: 1.55;
+}
+
+.modal-close {
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
+.key-map {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.key-map span {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px;
+  border: 1px solid #b7cbd6;
+  border-radius: 4px;
+  background: #fff;
+  font-family: "Courier New", monospace;
+}
+
+.profile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 18px;
+  margin-top: 18px;
+}
+
+.profile-grid div {
+  border-left: 3px solid #1e5f8b;
+  padding-left: 8px;
+}
+
+.profile-grid dt {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.profile-grid dd {
+  margin: 3px 0 0;
+  font-weight: bold;
+}
+
+.profile-section-title {
+  margin: 24px 0 8px;
+  font-size: 18px;
 }
 
 .battle-buttons {
@@ -645,6 +754,25 @@ body.dark .move-input {
   color: #f5f5f5;
 }
 
+body.dark .modal-content {
+  border-color: #78c5ef;
+  background: #183747;
+  color: #f5f5f5;
+}
+
+body.dark .modal-heading {
+  border-color: #4d7184;
+}
+
+body.dark .key-map span {
+  border-color: #4d7184;
+  background: #10212c;
+}
+
+body.dark .profile-grid div {
+  border-color: #78c5ef;
+}
+
 body.dark .ranking-type-tab.active,
 body.dark .ranking-tab.active {
   background: #78a6ff;
@@ -879,6 +1007,14 @@ body.solving .timer {
   }
 
   .battle-rematch-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .key-map {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .profile-grid {
     grid-template-columns: 1fr;
   }
 

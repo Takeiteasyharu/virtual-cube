@@ -14,6 +14,7 @@
     <header>
       <h1>Virtual Cube Timer</h1>
       <div class="scramble" id="scrambleText">Scramble will appear here</div>
+      <button id="howToPlayBtn" class="header-action">How to Play</button>
     </header>
 
     <section class="battle-screen" aria-label="Real-time battle">
@@ -87,6 +88,7 @@
             <button id="logoutBtn">Logout</button>
           </div>
           <div class="auth-status" id="authStatus">Online features are not configured.</div>
+          <button id="profileBtn" class="profile-button">Profile</button>
         </section>
 
         <section class="online-ranking-panel" aria-label="Online Ranking">
@@ -187,6 +189,35 @@
       <p>Space: start / stop Esc: reset timer</p>
       <p>R:i R':k L:e L':d U:j U':f D:s D':l F:h F':g B:w B':o</p>
     </footer>
+  </div>
+
+  <div class="app-modal" id="howToPlayModal" hidden role="dialog" aria-modal="true" aria-labelledby="howToPlayTitle">
+    <section class="modal-content how-to-play-content">
+      <div class="modal-heading"><h2 id="howToPlayTitle">How to Play</h2><button class="modal-close" data-close-modal="howToPlayModal" aria-label="Close">Close</button></div>
+      <h3>Basic Controls</h3>
+      <p>Space: generate a scramble and start inspection. Esc: abort the current solve. Keyboard controls follow a csTimer-style virtual cube layout.</p>
+      <h3>Solve Flow</h3>
+      <p>Press Space to scramble. A 15-second inspection begins. Your first valid move starts the timer. x, y, and z rotations do not start it. The timer stops when the cube is solved.</p>
+      <h3>Ranking Rules</h3>
+      <p>Only valid solves are submitted. Suspicious solves are excluded. Log in to join the online rankings.</p>
+      <h3>Battle Mode</h3>
+      <p>Friend Battle uses invite links. Random Battle matches another player. Both players solve the same scramble, and a battle ends shortly after one player finishes.</p>
+      <h3>Keyboard Map</h3>
+      <div class="key-map" aria-label="Keyboard map">
+        <span>R <b>I</b></span><span>R' <b>K</b></span><span>L <b>D</b></span><span>L' <b>E</b></span>
+        <span>U <b>J</b></span><span>U' <b>F</b></span><span>D <b>S</b></span><span>D' <b>L</b></span>
+        <span>F <b>H</b></span><span>F' <b>G</b></span><span>B <b>W</b></span><span>B' <b>O</b></span>
+        <span>Rw <b>U</b></span><span>Rw' <b>M</b></span><span>M <b>.</b></span><span>S <b>0</b></span>
+        <span>x <b>T / Y</b></span><span>y <b>:</b></span><span>z <b>P</b></span>
+      </div>
+    </section>
+  </div>
+
+  <div class="app-modal" id="profileModal" hidden role="dialog" aria-modal="true" aria-labelledby="profileTitle">
+    <section class="modal-content profile-content">
+      <div class="modal-heading"><h2 id="profileTitle">Profile</h2><button class="modal-close" data-close-modal="profileModal" aria-label="Close">Close</button></div>
+      <div id="profileBody">Please log in to view your profile.</div>
+    </section>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
