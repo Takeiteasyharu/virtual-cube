@@ -969,17 +969,28 @@ async function applyOwnRankedRating() {
 
   try {
     await runTransaction(db, async transaction => {
+      const roomRef = doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId);
       const profileRef = userRef();
+      const roomSnapshot = await transaction.get(roomRef);
       const profileSnapshot = await transaction.get(profileRef);
+      const room = roomSnapshot.data();
       const profile = profileSnapshot.data() || defaultUserStats();
+      const confirmedChange = room?.ratingChanges?.[currentUser.uid];
+      if (
+        room?.mode !== "ranked" ||
+        room?.status !== "finished" ||
+        !room?.ratingApplied ||
+        Number(room.round) !== activeRound ||
+        !Number.isFinite(confirmedChange?.after)
+      ) return;
       if (
         profile.lastRatedRoomId === activeRoomId &&
         Number(profile.lastRatedRound) === activeRound
       ) return;
 
-      const won = activeRoom.winnerUid === currentUser.uid;
+      const won = room.winnerUid === currentUser.uid;
       transaction.update(profileRef, {
-        rating: Number(change.after),
+        rating: Number(confirmedChange.after),
         rankedBattles: Number(profile.rankedBattles || 0) + 1,
         wins: Number(profile.wins || 0) + (won ? 1 : 0),
         losses: Number(profile.losses || 0) + (won ? 0 : 1),
@@ -1500,6 +1511,8 @@ async function createBattleRoom(mode = "friend") {
     winnerUid: "",
     winnerName: "",
     finishDeadlineMs: 0,
+    ratingApplied: false,
+    ratingChanges: {},
     round: 1,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -1641,6 +1654,8 @@ async function startRankedBattle() {
     winnerUid: "",
     winnerName: "",
     finishDeadlineMs: 0,
+    ratingApplied: false,
+    ratingChanges: {},
     round: 1,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
