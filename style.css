@@ -410,6 +410,54 @@ body.battle-mode #cubeContainer {
   height: min(50vw, 760px);
 }
 
+.opponent-cube-panel {
+  display: none;
+}
+
+body.battle-mode .opponent-cube-panel {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 18px);
+  display: block;
+  width: 210px;
+  padding: 10px;
+  border: 2px solid #8a4e25;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.78);
+  text-align: center;
+  transform: translateY(-50%);
+}
+
+.opponent-cube-panel h2 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+#opponentCubeContainer {
+  width: 186px;
+  height: 186px;
+  margin: 0 auto;
+  pointer-events: none;
+}
+
+#opponentCubeContainer canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#opponentCubeStatus {
+  min-height: 20px;
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: bold;
+  overflow-wrap: anywhere;
+}
+
+body.battle-mode .opponent-cube-panel.opponent-unavailable {
+  opacity: 0.45;
+}
+
 .battle-heading {
   display: flex;
   align-items: center;
@@ -826,6 +874,11 @@ body.dark .battle-player-card.opponent {
   border-color: #e9ae82;
 }
 
+body.dark.battle-mode .opponent-cube-panel {
+  border-color: #e9ae82;
+  background: #183747;
+}
+
 body.dark .battle-player-title,
 body.dark .battle-notice {
   color: #a8dfff;
@@ -981,6 +1034,13 @@ body.solving .timer {
   body.battle-mode #cubeContainer {
     width: min(96vw, 55vh);
     height: min(96vw, 55vh);
+  }
+
+  body.battle-mode .opponent-cube-panel {
+    position: static;
+    width: min(92vw, 300px);
+    margin: 14px auto 0;
+    transform: none;
   }
 
   .battle-heading,

@@ -55,6 +55,7 @@ let solveStartedAt = 0;
 let battleInputState = "inactive";
 let battleInspectionInterval = null;
 let battleInspectionRound = 0;
+let battleMoveSequence = 0;
 let normalInspectionInterval = null;
 let normalInspectionActive = false;
 let normalSolveState = "idle";
@@ -158,6 +159,10 @@ function performMove(move) {
     recordSolveMove(move, !isRotationMove);
   }
 
+  if (isBattleModeActive()) {
+    broadcastBattleMove(move);
+  }
+
   executeMove(move);
 }
 
@@ -235,14 +240,17 @@ function recordSolveMove(move, counted) {
     t: relativeTime,
     counted
   });
+}
 
-  if (typeof window.notifyBattleMove === "function") {
-    window.notifyBattleMove({
-      move: displayMove(move),
-      elapsedMs: relativeTime,
-      index: solveMoves.length
-    });
-  }
+function broadcastBattleMove(move) {
+  if (typeof window.notifyBattleMove !== "function") return;
+
+  battleMoveSequence++;
+  window.notifyBattleMove({
+    move: displayMove(move),
+    elapsedMs: solveStartedAt ? Date.now() - solveStartedAt : 0,
+    index: battleMoveSequence
+  });
 }
 
 function setupMoveInput() {
@@ -379,6 +387,7 @@ function prepareBattleCube(scrambleText, round = 1) {
   firstTurnDone = false;
   battleInputState = "joined";
   battleInspectionRound = round;
+  battleMoveSequence = 0;
   setBattleInspectionOverlay(false);
   document.body.classList.add("battle-locked");
 }
@@ -400,6 +409,7 @@ function startBattleInspection(scrambleText, inspectionStartMs = Date.now(), rou
   firstTurnDone = false;
   battleInputState = "inspecting";
   battleInspectionRound = round;
+  battleMoveSequence = 0;
   document.body.classList.remove("battle-locked");
   applyScramble(scramble);
 

@@ -63,6 +63,8 @@ const battleScramble = document.getElementById("battleScramble");
 const battleNotice = document.getElementById("battleNotice");
 const battleResult = document.getElementById("battleResult");
 const battleResultBadge = document.getElementById("battleResultBadge");
+const opponentCubePanel = document.getElementById("opponentCubePanel");
+const opponentCubeStatus = document.getElementById("opponentCubeStatus");
 const battleModeLabel = document.getElementById("battleModeLabel");
 const battleRematchPanel = document.getElementById("battleRematchPanel");
 const battleRematchYou = document.getElementById("battleRematchYou");
@@ -786,7 +788,7 @@ function renderBattlePlayer(prefix, player, role) {
   setBattleText(`${prefix}Tps`, isDnf ? "-" : (Number.isFinite(player?.tps) ? player.tps.toFixed(2) : "-"));
   setBattleText(`${prefix}MoveCount`, isDnf || !player ? "-" : String(visibleMoveCount || 0));
   setBattleText(`${prefix}LastMove`, player?.lastMove || moves.at(-1)?.move || "-");
-  setBattleText(`${prefix}MoveLog`, moves.length ? moves.map(move => move.move).join(" ") : "-");
+  setBattleText(`${prefix}MoveLog`, moves.length ? moves.slice(-20).map(move => move.move).join(" ") : "-");
 }
 
 function renderBattleNotice() {
@@ -880,6 +882,7 @@ function renderBattleUi() {
   battleScramble.textContent = activeRoom.scramble || "";
   renderBattlePlayer("battleYou", you, activeRoomRole);
   renderBattlePlayer("battleOpponent", opponent, getOpponentRole());
+  renderOpponentCube(opponent);
   renderBattleNotice();
   renderBattleResult();
   renderBattleReadyButton(you, opponent);
@@ -934,15 +937,16 @@ function watchPlayer(roomId, role, uid) {
 
   const movesQuery = query(
     collection(db, BATTLE_ROOMS_COLLECTION, roomId, "players", uid, "moves"),
-    orderBy("moveIndex", "desc"),
-    limit(20)
+    orderBy("moveIndex", "asc")
   );
 
   activeMoveUnsubscribes.push(onSnapshot(movesQuery, snapshot => {
     battleMovesByRole[role] = snapshot.docs
       .map(move => move.data())
-      .filter(move => !move.round || move.round === activeRound)
-      .reverse();
+      .filter(move => !move.round || move.round === activeRound);
+    if (role !== activeRoomRole) {
+      window.opponentCube?.applyMoves(battleMovesByRole[role]);
+    }
     renderBattleUi();
   }));
 }
@@ -968,6 +972,7 @@ function watchRoom(roomId) {
     const previousRound = activeRound;
     activeRoom = room;
     activeRound = Number(room.round) || 1;
+    window.opponentCube?.setScramble(room.scramble || "", activeRound);
 
     if (room.hostUid !== previousHostUid || room.guestUid !== previousGuestUid) {
       activePlayerUnsubscribes.forEach(unsubscribe => unsubscribe());
@@ -1418,6 +1423,7 @@ function leaveBattleMode() {
   }
 
   clearBattleListeners();
+  window.opponentCube?.clear();
   clearFriendLobby();
   clearMatchmakingListeners();
   activeRoom = null;
@@ -1454,6 +1460,16 @@ async function loginAsGuest() {
 
   const credential = await signInAnonymously(auth);
   await updateProfile(credential.user, { displayName: name });
+}
+
+function renderOpponentCube(opponent) {
+  if (!opponentCubePanel || !opponentCubeStatus) return;
+
+  const disconnected = isPlayerDisconnected(opponent);
+  opponentCubePanel.classList.toggle("opponent-unavailable", !opponent || disconnected);
+  opponentCubeStatus.textContent = !opponent
+    ? "Waiting for opponent..."
+    : (disconnected ? "Opponent left" : `Opponent: ${(opponent.status || "joined").toUpperCase()}`);
 }
 
 function setupModalUi() {
