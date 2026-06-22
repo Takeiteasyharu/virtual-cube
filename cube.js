@@ -2,6 +2,8 @@ let scene, camera, renderer;
 let moveQueue = [];
 let cubies = [];
 let isAnimating = false;
+let inputMoveHistory = [];
+let currentInputTPS = 0;
 
 const CUBE_SIZE = 0.95;
 const GAP = 0.32;
@@ -174,15 +176,28 @@ function resetCube() {
 }
 
 function rotateMove(move) {
-  if (isAnimating) {
-    moveQueue.push(move);
-    return;
-  }
+  queueCubeMove(move);
+}
 
-  const parsed = parseMove(move);
-  if (!parsed) return;
+function queueCubeMove(move) {
+  if (!parseMove(move)) return;
+  inputMoveHistory.push(Date.now());
+  updateInputTPS();
+  moveQueue.push(move);
+  runNextMove();
+}
 
-  rotateLayer(parsed.axis, parsed.layers, parsed.angle);
+function updateInputTPS() {
+  const cutoff = Date.now() - 1000;
+  inputMoveHistory = inputMoveHistory.filter(timestamp => timestamp >= cutoff);
+  currentInputTPS = inputMoveHistory.length;
+}
+
+function getRotationMode(pendingMoves = moveQueue.length + (isAnimating ? 1 : 0)) {
+  updateInputTPS();
+  if (pendingMoves >= 5 || currentInputTPS >= 12) return "instant";
+  if (pendingMoves >= 2 || currentInputTPS >= 8) return "fast";
+  return "smooth";
 }
 
 function parseMove(move) {
@@ -226,13 +241,24 @@ function parseMove(move) {
     "Dw'": { axis: "y", layers: [-1, 0], angle: -q },
 
     "Fw":  { axis: "z", layers: [1, 0], angle: -q },
-    "Fw'": { axis: "z", layers: [1, 0], angle: q }
+    "Fw'": { axis: "z", layers: [1, 0], angle: q },
+
+    "x":  { axis: "x", layers: [-1, 0, 1], angle: -q },
+    "x'": { axis: "x", layers: [-1, 0, 1], angle: q },
+    "y":  { axis: "y", layers: [-1, 0, 1], angle: -q },
+    "y'": { axis: "y", layers: [-1, 0, 1], angle: q },
+    "z":  { axis: "z", layers: [-1, 0, 1], angle: -q },
+    "z'": { axis: "z", layers: [-1, 0, 1], angle: q },
+    "yRotation": { axis: "y", layers: [-1, 0, 1], angle: -q },
+    "yRotation'": { axis: "y", layers: [-1, 0, 1], angle: q },
+    "zRotation": { axis: "z", layers: [-1, 0, 1], angle: -q },
+    "zRotation'": { axis: "z", layers: [-1, 0, 1], angle: q }
   };
 
   return map[move] || null;
 }
 
-function rotateLayer(axis, layers, angle) {
+function rotateLayer(axis, layers, angle, frames = 10) {
   isAnimating = true;
 
   const group = new THREE.Group();
@@ -247,7 +273,6 @@ function rotateLayer(axis, layers, angle) {
   });
 
   let current = 0;
-  const frames = 12;
   const step = angle / frames;
 
   function animate() {
@@ -391,7 +416,10 @@ function isCubeSolved() {
 function applyMoveInstant(move) {
   const parsed = parseMove(move);
   if (!parsed) return;
+  applyParsedMoveInstant(parsed);
+}
 
+function applyParsedMoveInstant(parsed) {
   const { axis, layers, angle } = parsed;
 
   const group = new THREE.Group();
@@ -433,6 +461,21 @@ function runNextMove() {
   if (isAnimating) return;
   if (moveQueue.length === 0) return;
 
+  const pendingMoves = moveQueue.length;
   const nextMove = moveQueue.shift();
-  rotateMove(nextMove);
+  const parsed = parseMove(nextMove);
+  if (!parsed) {
+    runNextMove();
+    return;
+  }
+
+  const mode = getRotationMode(pendingMoves);
+  if (mode === "instant") {
+    applyParsedMoveInstant(parsed);
+    callAfterMoveCallback();
+    requestAnimationFrame(runNextMove);
+    return;
+  }
+
+  rotateLayer(parsed.axis, parsed.layers, parsed.angle, mode === "fast" ? 3 : 10);
 }

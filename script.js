@@ -494,37 +494,7 @@ function getCurrentSolveStats(timeSeconds = null) {
 }
 
 function executeMove(move) {
-  if (move === "x") {
-    rotateWholeCube("x", -Math.PI / 2);
-    return;
-  }
-
-  if (move === "x'") {
-    rotateWholeCube("x", Math.PI / 2);
-    return;
-  }
-
-  if (move === "yRotation") {
-    rotateWholeCube("y", -Math.PI / 2);
-    return;
-  }
-
-  if (move === "yRotation'") {
-    rotateWholeCube("y", Math.PI / 2);
-    return;
-  }
-
-  if (move === "zRotation") {
-    rotateWholeCube("z", -Math.PI / 2);
-    return;
-  }
-
-  if (move === "zRotation'") {
-    rotateWholeCube("z", Math.PI / 2);
-    return;
-  }
-
-  rotateMove(move);
+  queueCubeMove(move);
 }
 
 function displayMove(move) {
