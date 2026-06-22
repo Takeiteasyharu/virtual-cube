@@ -4,6 +4,7 @@ let elapsedTime = 0;
 let timerInterval = null;
 
 let currentScramble = "";
+let expandedSolveIndex = null;
 
 function startTimer() {
   if (timerRunning) return;
@@ -98,6 +99,9 @@ function saveSolve(time, scramble, solveStats = {}) {
     time,
     tps: Number.isFinite(solveStats.tps) ? solveStats.tps : null,
     moveCount: Number.isFinite(solveStats.moveCount) ? solveStats.moveCount : 0,
+    moves: Array.isArray(solveStats.moves)
+      ? solveStats.moves.map(move => typeof move === "string" ? move : move?.move).filter(Boolean)
+      : [],
     scramble,
     date: new Date().toLocaleString()
   });
@@ -107,6 +111,7 @@ function saveSolve(time, scramble, solveStats = {}) {
 
 function clearTimes() {
   localStorage.removeItem("cubeSolves");
+  expandedSolveIndex = null;
   renderStats();
 }
 
@@ -124,9 +129,8 @@ function renderTimes() {
   list.innerHTML = "";
 
   solves.forEach((solve, index) => {
-    const li = document.createElement("li");
     const tpsText = Number.isFinite(solve.tps) ? ` TPS: ${solve.tps.toFixed(2)}` : "";
-    li.textContent = `${index + 1}. ${solve.time.toFixed(2)}${tpsText}`;
+    const li = createHistoryItem(solve, index, `${index + 1}. ${solve.time.toFixed(2)}${tpsText}`);
     list.appendChild(li);
   });
 }
@@ -138,10 +142,55 @@ function renderScrambleHistory() {
   list.innerHTML = "";
 
   solves.forEach((solve, index) => {
-    const li = document.createElement("li");
-    li.textContent = `${index + 1}. ${solve.scramble}`;
+    const li = createHistoryItem(solve, index, `${index + 1}. ${solve.scramble || "-"}`);
     list.appendChild(li);
   });
+}
+
+function createHistoryItem(solve, index, summary) {
+  const li = document.createElement("li");
+  li.className = "history-item";
+  const row = document.createElement("div");
+  row.className = "history-row";
+  const text = document.createElement("span");
+  text.textContent = summary;
+  const menu = document.createElement("button");
+  menu.className = "history-menu-button";
+  menu.type = "button";
+  menu.textContent = "⋮";
+  menu.title = "Show solve details";
+  menu.setAttribute("aria-label", "Show solve details");
+  menu.addEventListener("click", () => {
+    expandedSolveIndex = expandedSolveIndex === index ? null : index;
+    renderStats();
+  });
+  row.append(text, menu);
+  li.appendChild(row);
+
+  if (expandedSolveIndex === index) {
+    const details = document.createElement("div");
+    details.className = "solve-details";
+    const moves = Array.isArray(solve.moves) && solve.moves.length ? solve.moves.join(" ") : "No move data";
+    details.append(
+      createDetailLine("Time", Number(solve.time).toFixed(2)),
+      createDetailLine("Scramble", solve.scramble || "-"),
+      createDetailLine("Moves", moves),
+      createDetailLine("TPS", Number.isFinite(solve.tps) ? solve.tps.toFixed(2) : "-"),
+      createDetailLine("Move count", String(Number(solve.moveCount) || 0)),
+      createDetailLine("Date", solve.date || "-")
+    );
+    li.appendChild(details);
+  }
+
+  return li;
+}
+
+function createDetailLine(label, value) {
+  const line = document.createElement("div");
+  const title = document.createElement("strong");
+  title.textContent = `${label}: `;
+  line.append(title, document.createTextNode(value));
+  return line;
 }
 
 function renderPB() {

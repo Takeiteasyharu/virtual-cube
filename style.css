@@ -166,6 +166,42 @@ h2 {
   overflow-y: auto;
 }
 
+.history-item {
+  margin: 6px 0;
+}
+
+.history-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.history-row > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.history-menu-button {
+  flex: 0 0 auto;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 2px 8px;
+  border-radius: 5px;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.solve-details {
+  margin: 6px 0 8px;
+  padding: 8px;
+  border-left: 3px solid #1e5f8b;
+  background: rgba(255, 255, 255, 0.55);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 footer {
   text-align: center;
   padding: 12px;
@@ -211,6 +247,12 @@ footer {
   font-size: 18px;
   font-weight: bold;
   opacity: 0.9;
+}
+
+.account-rating {
+  margin-top: 4px;
+  font-size: 15px;
+  font-weight: bold;
 }
 
 .login-panel,
@@ -906,6 +948,11 @@ body.dark .opponent .battle-player-title {
 
 body.dark .battle-move-log {
   background: rgba(255, 255, 255, 0.1);
+}
+
+body.dark .solve-details {
+  border-color: #78c5ef;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 body.solving header,

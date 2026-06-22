@@ -35,6 +35,8 @@ const battleRatingList = document.getElementById("battleRatingList");
 const authStatus = document.getElementById("authStatus");
 const accountGreeting = document.getElementById("accountGreeting");
 const accountRank = document.getElementById("accountRank");
+const accountRating = document.getElementById("accountRating");
+const accountBattleRank = document.getElementById("accountBattleRank");
 const nameInput = document.getElementById("playerNameInput");
 const googleLoginBtn = document.getElementById("googleLoginBtn");
 const guestLoginBtn = document.getElementById("guestLoginBtn");
@@ -102,7 +104,9 @@ let matchmakingUnsubscribe = null;
 let randomRoomUnsubscribe = null;
 let matchmakingTimeout = null;
 let friendLobbyUnsubscribe = null;
+let opponentExitTimeout = null;
 const savedBattleResultKeys = new Set();
+const refreshedBattleRatingKeys = new Set();
 
 function isConfigured() {
   return Boolean(config.apiKey && !config.apiKey.startsWith("YOUR_"));
@@ -205,6 +209,8 @@ function updateAccountSummary(user, rank = null) {
   if (!user) {
     accountGreeting.textContent = "Log in to join the rankings.";
     accountRank.textContent = "Current world rank: -";
+    accountRating.textContent = "Rating: -";
+    accountBattleRank.textContent = "World Rank: -";
     return;
   }
 
@@ -257,6 +263,9 @@ function queuePendingSolve(time, scramble, ao5, solveStats = {}) {
     ao5: Number.isFinite(ao5) ? ao5 : null,
     tps: Number.isFinite(solveStats.tps) ? solveStats.tps : null,
     moveCount: Number.isFinite(solveStats.moveCount) ? solveStats.moveCount : 0,
+    moves: Array.isArray(solveStats.moves)
+      ? solveStats.moves.map(move => typeof move === "string" ? move : move?.move).filter(Boolean)
+      : [],
     scramble,
     solvedAt: new Date().toISOString()
   });
@@ -280,6 +289,9 @@ async function addRankingEntry(rankingType, time, scramble, solvedAt = new Date(
     scramble,
     tps: Number.isFinite(solveStats.tps) ? solveStats.tps : null,
     moveCount: Number.isFinite(solveStats.moveCount) ? solveStats.moveCount : 0,
+    moves: Array.isArray(solveStats.moves)
+      ? solveStats.moves.map(move => typeof move === "string" ? move : move?.move).filter(Boolean)
+      : [],
     name: getPlayerName(),
     uid: currentUser.uid,
     dayKey: keys.today,
@@ -312,7 +324,8 @@ async function submitPendingSolves() {
 
     await addOnlineSolve(solve.time, solve.scramble, solve.ao5, solve.solvedAt, {
       tps: solve.tps,
-      moveCount: solve.moveCount
+      moveCount: solve.moveCount,
+      moves: solve.moves
     });
     pending.shift();
     savePendingSolves(pending);
@@ -380,6 +393,31 @@ async function refreshBattleRatingRanking() {
     const item = document.createElement("li");
     item.textContent = "Battle rating ranking could not be loaded.";
     battleRatingList.appendChild(item);
+    console.error(error);
+  }
+}
+
+async function refreshBattleAccountRating() {
+  if (!currentUser || currentUser.isAnonymous) {
+    accountRating.textContent = "Rating: -";
+    accountBattleRank.textContent = "World Rank: -";
+    return;
+  }
+
+  try {
+    const [profileSnapshot, rankingSnapshot] = await Promise.all([
+      getDoc(userRef()),
+      getDocs(query(collection(db, USERS_COLLECTION), orderBy("rating", "desc")))
+    ]);
+    const profile = profileSnapshot.data() || {};
+    const rankedUsers = rankingSnapshot.docs
+      .filter(entryDoc => Number(entryDoc.data().rankedBattles || 0) > 0);
+    const rankIndex = rankedUsers.findIndex(entryDoc => entryDoc.id === currentUser.uid);
+    accountRating.textContent = "Rating: " + Math.round(Number(profile.rating) || INITIAL_RATING);
+    accountBattleRank.textContent = rankIndex >= 0 ? "World Rank: #" + (rankIndex + 1) : "World Rank: -";
+  } catch (error) {
+    accountRating.textContent = "Rating: -";
+    accountBattleRank.textContent = "World Rank: -";
     console.error(error);
   }
 }
@@ -564,8 +602,8 @@ async function showProfile() {
     title.textContent = "Battle Stats";
     profileBody.appendChild(title);
     profileBody.appendChild(createProfileGrid([
-      ["Current rating", String(Math.round(Number(profileStats.rating) || INITIAL_RATING))],
-      ["Current battle rank", battleRank ? `#${battleRank}` : "-"],
+      ["Current rating", currentUser.isAnonymous ? "-" : String(Math.round(Number(profileStats.rating) || INITIAL_RATING))],
+      ["Current battle rank", currentUser.isAnonymous ? "-" : (battleRank ? `#${battleRank}` : "-")],
       ["Ranked battles", String(profileStats.rankedBattles || 0)],
       ["Friend battles", String(profileStats.friendBattles || 0)],
       ["Ranked wins", String(profileStats.rankedWins || 0)],
@@ -900,6 +938,10 @@ function renderBattlePlayer(prefix, player, role) {
 
 function renderBattleNotice() {
   if (!activeRoom) return;
+  if (opponentExitTimeout) {
+    battleNotice.textContent = "Opponent left the room.";
+    return;
+  }
 
   if (activeRoom.status === "finishing") {
     const remaining = Math.max(0, Math.ceil((Number(activeRoom.finishDeadlineMs) - Date.now()) / 1000));
@@ -1000,17 +1042,32 @@ function renderBattleUi() {
   renderBattlePlayer("battleOpponent", opponent, getOpponentRole());
   renderOpponentCube(opponent);
   renderBattleNotice();
+  returnToNormalAfterOpponentExit(opponent);
   renderBattleResult();
   renderBattleReadyButton(you, opponent);
   renderRematchPanel(you, opponent);
 
   if (activeRoom.status === "finished") {
     saveBattleResultForCurrentUser().catch(console.error);
+    refreshRatingAfterBattle();
   }
 
   if (activeRoom.status === "finishing" && Date.now() >= Number(activeRoom.finishDeadlineMs)) {
     finalizeBattle().catch(console.error);
   }
+}
+
+function refreshRatingAfterBattle() {
+  const key = activeRoomId + "_" + activeRound;
+  if (refreshedBattleRatingKeys.has(key)) return;
+  refreshedBattleRatingKeys.add(key);
+  Promise.all([
+    refreshBattleRatingRanking(),
+    refreshBattleAccountRating()
+  ]).catch(error => {
+    refreshedBattleRatingKeys.delete(key);
+    console.error(error);
+  });
 }
 
 function getInspectionStartMs(player) {
@@ -1619,6 +1676,7 @@ async function finalizeBattle() {
     });
   });
   refreshBattleRatingRanking().catch(console.error);
+  refreshBattleAccountRating().catch(console.error);
 }
 
 function renderBattleLocalTimer(seconds) {
@@ -1627,6 +1685,10 @@ function renderBattleLocalTimer(seconds) {
 }
 
 function leaveBattleMode() {
+  if (opponentExitTimeout) {
+    window.clearTimeout(opponentExitTimeout);
+    opponentExitTimeout = null;
+  }
   if (currentUser && activeRoomId && document.body.classList.contains("battle-mode")) {
     updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
       status: "returned",
@@ -1682,6 +1744,18 @@ function renderOpponentCube(opponent) {
   opponentCubeStatus.textContent = !opponent
     ? "Waiting for opponent..."
     : (disconnected ? "Opponent left" : `Opponent: ${(opponent.status || "joined").toUpperCase()}`);
+}
+
+function returnToNormalAfterOpponentExit(opponent) {
+  if (!activeRoom || !document.body.classList.contains("battle-mode")) return;
+  if (["finished", "finishing"].includes(activeRoom.status)) return;
+  if (!isPlayerDisconnected(opponent) || opponentExitTimeout) return;
+
+  battleNotice.textContent = "Opponent left the room.";
+  opponentExitTimeout = window.setTimeout(() => {
+    opponentExitTimeout = null;
+    leaveBattleMode();
+  }, 1000);
 }
 
 function setupModalUi() {
@@ -1838,6 +1912,7 @@ if (isConfigured()) {
         .then(refreshBattleRatingRanking)
         .catch(console.error);
       refreshAccountRank();
+      refreshBattleAccountRating();
       submitPendingSolves().catch(error => {
         setStatus("Pending times could not be submitted.");
         console.error(error);
