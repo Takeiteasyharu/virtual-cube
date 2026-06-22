@@ -31,6 +31,11 @@ function stopTimer() {
 
   saveSolve(finalTime, currentScramble, solveStats);
   updateTpsDisplay(solveStats.tps);
+  window.trackCubeEvent?.("solve_complete", {
+    time: finalTime,
+    tps: Number.isFinite(solveStats.tps) ? solveStats.tps : 0,
+    moves: Number.isFinite(solveStats.moveCount) ? solveStats.moveCount : 0
+  });
 
   if (typeof window.submitOnlineSolve === "function") {
     window.submitOnlineSolve(finalTime, currentScramble, getCurrentAo5(), solveStats);

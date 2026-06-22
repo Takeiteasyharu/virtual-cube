@@ -892,6 +892,9 @@ async function saveBattleResultForCurrentUser() {
       opponentName: opponent?.name || "Player",
       createdAt: serverTimestamp()
     });
+    window.trackCubeEvent?.("battle_finish", {
+      result: result === "loss" ? "lose" : result
+    });
     await recordOwnBattleStats(result, activeRoom.mode);
   } catch (error) {
     savedBattleResultKeys.delete(resultId);
@@ -1536,6 +1539,13 @@ async function notifyBattleSolveStarted() {
     status: "solving",
     updatedAt: serverTimestamp()
   }).catch(console.error);
+
+  window.trackCubeEvent?.("battle_start");
+  if (activeRoom?.mode === "ranked") {
+    window.trackCubeEvent?.("ranked_battle_start");
+  } else if (activeRoom?.mode === "friend") {
+    window.trackCubeEvent?.("friend_battle_start");
+  }
 }
 
 async function notifyBattleMove(move) {
@@ -1668,6 +1678,7 @@ function leaveBattleMode() {
 async function loginWithGoogle() {
   const provider = new GoogleAuthProvider();
   await signInWithPopup(auth, provider);
+  window.trackCubeEvent?.("login", { method: "google" });
 }
 
 async function loginAsGuest() {
@@ -1680,6 +1691,7 @@ async function loginAsGuest() {
 
   const credential = await signInAnonymously(auth);
   await updateProfile(credential.user, { displayName: name });
+  window.trackCubeEvent?.("login", { method: "guest" });
 }
 
 function renderOpponentCube(opponent) {

@@ -26,6 +26,9 @@
     gtag('js', new Date());
 
     gtag('config', 'G-XCVPT8BQ5W');
+    window.trackCubeEvent = (eventName, parameters) => {
+      gtag('event', eventName, parameters);
+    };
   </script>
 </head>
 <body>
