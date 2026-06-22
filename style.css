@@ -33,6 +33,13 @@ header {
   font-size: 14px;
 }
 
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
 h1 {
   margin: 0 0 12px;
   font-size: 28px;
@@ -398,6 +405,92 @@ body.dark .page-return a {
 .profile-button {
   width: 100%;
   margin-top: 10px;
+}
+
+.feature-modal {
+  z-index: 30;
+}
+
+.feature-content {
+  width: min(980px, 100%);
+  max-height: min(88vh, 900px);
+}
+
+.feature-content #onlineRankingList,
+.feature-content #battleRatingList {
+  max-height: none;
+}
+
+.feature-content #onlineRankingList {
+  min-height: 120px;
+}
+
+.settings-section {
+  margin-top: 24px;
+}
+
+.settings-section h3 {
+  margin: 0 0 10px;
+}
+
+.settings-section label,
+.settings-hint {
+  display: block;
+  margin: 0 0 8px;
+  font-size: 14px;
+  opacity: 0.82;
+}
+
+#animationSpeedSelect {
+  width: min(100%, 340px);
+  border: 2px solid #111;
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: #fff;
+  color: #111;
+  font-size: 16px;
+}
+
+.key-bindings-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.key-binding-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 7px 8px;
+  border: 1px solid #b7cbd6;
+  border-radius: 5px;
+  background: #fff;
+  font-family: "Courier New", monospace;
+}
+
+.key-binding-key {
+  min-width: 34px;
+  padding: 4px 7px;
+  border-radius: 4px;
+  background: #e5eef4;
+  text-align: center;
+  font-weight: bold;
+}
+
+.key-binding-change {
+  padding: 7px 9px;
+  font-size: 13px;
+}
+
+.key-binding-change.is-listening {
+  background: #1e5f8b;
+  color: #fff;
+}
+
+.settings-section > .secondary-action {
+  margin-top: 12px;
 }
 
 .app-modal[hidden] {
@@ -977,6 +1070,21 @@ body.dark .modal-content {
   color: #f5f5f5;
 }
 
+body.dark #animationSpeedSelect {
+  border-color: #f5f5f5;
+  background: #10212c;
+  color: #f5f5f5;
+}
+
+body.dark .key-binding-row {
+  border-color: #4d7184;
+  background: #10212c;
+}
+
+body.dark .key-binding-key {
+  background: #29475a;
+}
+
 body.dark .modal-heading {
   border-color: #4d7184;
 }
@@ -1246,6 +1354,42 @@ body.solving .timer {
 
   .key-map {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .header-actions {
+    gap: 6px;
+  }
+
+  .header-action {
+    flex: 1 1 42%;
+    min-height: 42px;
+  }
+
+  .feature-modal {
+    padding: 0;
+    place-items: stretch;
+  }
+
+  .feature-content {
+    width: 100%;
+    max-height: 100vh;
+    min-height: 100vh;
+    border: 0;
+    border-radius: 0;
+    padding: 18px 16px 32px;
+  }
+
+  .feature-content .modal-close {
+    min-width: 84px;
+    min-height: 44px;
+  }
+
+  .key-bindings-list {
+    grid-template-columns: 1fr;
+  }
+
+  .key-binding-change {
+    display: none;
   }
 
   .profile-grid {

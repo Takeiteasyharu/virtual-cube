@@ -1,4 +1,4 @@
-const keyMap = {
+const DEFAULT_KEY_MAP = Object.freeze({
   "i": "R",
   "k": "R'",
 
@@ -45,7 +45,46 @@ const keyMap = {
 
   "p": "zRotation",
   "q": "zRotation'"
-};
+});
+
+const ANIMATION_SPEED_KEY = "cubeAnimationSpeed";
+const KEY_BINDINGS_KEY = "cubeKeyBindings";
+let keyMap = { ...DEFAULT_KEY_MAP };
+let selectedBindingKey = "";
+
+function normalizeBindingKey(key) {
+  return typeof key === "string" && key.length === 1 ? key.toLowerCase() : key;
+}
+
+function loadKeyBindings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(KEY_BINDINGS_KEY));
+    if (!saved || typeof saved !== "object" || Array.isArray(saved)) return;
+
+    const entries = Object.entries(saved).filter(([key, move]) =>
+      typeof key === "string" && key.length === 1 && Object.values(DEFAULT_KEY_MAP).includes(move)
+    );
+    if (entries.length) keyMap = Object.fromEntries(entries);
+  } catch (error) {
+    keyMap = { ...DEFAULT_KEY_MAP };
+  }
+}
+
+function saveKeyBindings() {
+  localStorage.setItem(KEY_BINDINGS_KEY, JSON.stringify(keyMap));
+}
+
+function getAnimationSpeed() {
+  const value = localStorage.getItem(ANIMATION_SPEED_KEY);
+  return value === "infinity" || ["20", "10", "5", "3", "2", "1"].includes(value) ? value : "10";
+}
+
+function setAnimationSpeed(value) {
+  const normalized = value === "infinity" || ["20", "10", "5", "3", "2", "1"].includes(value) ? value : "10";
+  localStorage.setItem(ANIMATION_SPEED_KEY, normalized);
+}
+
+window.getCubeAnimationSpeed = getAnimationSpeed;
 
 let readyToSolve = false;
 let firstTurnDone = false;
@@ -65,10 +104,14 @@ let normalActiveScramble = "";
 const ROTATION_MOVES = ["x", "x'", "yRotation", "yRotation'", "zRotation", "zRotation'"];
 
 document.addEventListener("DOMContentLoaded", () => {
+  loadKeyBindings();
+  if (!localStorage.getItem(KEY_BINDINGS_KEY)) saveKeyBindings();
   initCube();
   renderStats();
   loadTheme();
   setupMoveInput();
+  setupSettingsUi();
+  setupFeaturePanelUi();
 
   setAfterMoveCallback(() => {
     checkSolvedAndStopTimer();
@@ -92,6 +135,14 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 document.addEventListener("keydown", event => {
+  const openModal = document.querySelector(".app-modal:not([hidden])");
+  if (openModal) {
+    if (event.code === "Escape") {
+      event.preventDefault();
+      openModal.hidden = true;
+    }
+    return;
+  }
   if (isTypingInForm(event.target)) return;
 
   const key = event.key;
@@ -112,7 +163,7 @@ document.addEventListener("keydown", event => {
     return;
   }
 
-  const move = keyMap[key];
+  const move = getMoveFromKey(key);
   if (!move) return;
 
   performMove(move);
@@ -124,7 +175,7 @@ function isTypingInForm(target) {
 }
 
 function getMoveFromKey(key) {
-  return keyMap[key] || keyMap[key.toLowerCase()] || null;
+  return keyMap[normalizeBindingKey(key)] || null;
 }
 
 function performMove(move) {
@@ -531,6 +582,136 @@ window.loadBattleScramble = loadBattleScramble;
 window.prepareBattleCube = prepareBattleCube;
 window.startBattleInspection = startBattleInspection;
 window.cancelCurrentSolve = cancelCurrentSolve;
+
+function formatBindingKey(key) {
+  if (key === ".") return ".";
+  if (key === "/") return "/";
+  return key.length === 1 ? key.toUpperCase() : key;
+}
+
+function setKeyBindingStatus(message) {
+  const status = document.getElementById("keyBindingStatus");
+  if (status) status.textContent = message;
+}
+
+function renderKeyBindings() {
+  const list = document.getElementById("keyBindingsList");
+  if (!list) return;
+
+  list.replaceChildren();
+  Object.entries(keyMap)
+    .sort(([, moveA], [, moveB]) => displayMove(moveA).localeCompare(displayMove(moveB)))
+    .forEach(([key, move]) => {
+      const row = document.createElement("div");
+      row.className = "key-binding-row";
+
+      const moveLabel = document.createElement("strong");
+      moveLabel.textContent = displayMove(move);
+      const keyLabel = document.createElement("span");
+      keyLabel.className = "key-binding-key";
+      keyLabel.textContent = formatBindingKey(key);
+      const change = document.createElement("button");
+      change.type = "button";
+      change.className = "key-binding-change";
+      change.textContent = selectedBindingKey === key ? "Press a key..." : "Change";
+      change.classList.toggle("is-listening", selectedBindingKey === key);
+      change.addEventListener("click", () => {
+        if (window.matchMedia("(max-width: 900px)").matches) return;
+        if (isBattleModeActive()) {
+          setKeyBindingStatus("Key bindings cannot be changed during a battle.");
+          return;
+        }
+        selectedBindingKey = selectedBindingKey === key ? "" : key;
+        setKeyBindingStatus(selectedBindingKey ? "Press a key..." : "Choose Change, then press a key.");
+        renderKeyBindings();
+      });
+      row.append(moveLabel, keyLabel, change);
+      list.appendChild(row);
+    });
+}
+
+function setupSettingsUi() {
+  const speedSelect = document.getElementById("animationSpeedSelect");
+  const resetButton = document.getElementById("resetKeyBindingsBtn");
+  if (!speedSelect) return;
+
+  speedSelect.value = getAnimationSpeed();
+  setAnimationSpeed(speedSelect.value);
+  speedSelect.addEventListener("change", () => setAnimationSpeed(speedSelect.value));
+  resetButton?.addEventListener("click", () => {
+    if (isBattleModeActive()) {
+      setKeyBindingStatus("Key bindings cannot be changed during a battle.");
+      return;
+    }
+    keyMap = { ...DEFAULT_KEY_MAP };
+    selectedBindingKey = "";
+    saveKeyBindings();
+    setKeyBindingStatus("Default key bindings restored.");
+    renderKeyBindings();
+  });
+
+  document.addEventListener("keydown", event => {
+    if (!selectedBindingKey || document.getElementById("settingsModal")?.hidden) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    if (event.code === "Escape") {
+      selectedBindingKey = "";
+      setKeyBindingStatus("Key binding change cancelled.");
+      renderKeyBindings();
+      return;
+    }
+
+    const key = normalizeBindingKey(event.key);
+    if (!key || key.length !== 1 || /\s/.test(key)) {
+      setKeyBindingStatus("Choose a non-space keyboard key.");
+      return;
+    }
+    if (isBattleModeActive()) {
+      selectedBindingKey = "";
+      setKeyBindingStatus("Key bindings cannot be changed during a battle.");
+      renderKeyBindings();
+      return;
+    }
+    const conflictMove = keyMap[key];
+    if (conflictMove && key !== selectedBindingKey) {
+      setKeyBindingStatus(`${formatBindingKey(key)} is already assigned to ${displayMove(conflictMove)}.`);
+      return;
+    }
+
+    const move = keyMap[selectedBindingKey];
+    delete keyMap[selectedBindingKey];
+    keyMap[key] = move;
+    selectedBindingKey = "";
+    saveKeyBindings();
+    setKeyBindingStatus("Key binding saved.");
+    renderKeyBindings();
+  }, true);
+
+  renderKeyBindings();
+}
+
+function setupFeaturePanelUi() {
+  const panels = [
+    ["openRankingBtn", "rankingModal"],
+    ["openBattleBtn", "battleModal"],
+    ["openSettingsBtn", "settingsModal"]
+  ];
+
+  panels.forEach(([buttonId, panelId]) => {
+    document.getElementById(buttonId)?.addEventListener("click", () => {
+      const panel = document.getElementById(panelId);
+      if (panel) panel.hidden = false;
+    });
+  });
+
+  ["rankingModal", "battleModal", "settingsModal"].forEach(panelId => {
+    const panel = document.getElementById(panelId);
+    panel?.addEventListener("click", event => {
+      if (event.target === panel) panel.hidden = true;
+    });
+  });
+}
 
 function toggleTheme() {
   document.body.classList.toggle("dark");

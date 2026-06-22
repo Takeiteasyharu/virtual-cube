@@ -871,6 +871,10 @@ function clearBattleListeners() {
 
 function setBattleMode(enabled) {
   document.body.classList.toggle("battle-mode", enabled);
+  if (enabled) {
+    const battleModal = document.getElementById("battleModal");
+    if (battleModal) battleModal.hidden = true;
+  }
 
   if (enabled && !battleClockInterval) {
     battleClockInterval = window.setInterval(renderBattleUi, 100);

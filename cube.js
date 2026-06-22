@@ -2,8 +2,6 @@ let scene, camera, renderer;
 let moveQueue = [];
 let cubies = [];
 let isAnimating = false;
-let inputMoveHistory = [];
-let currentInputTPS = 0;
 
 const CUBE_SIZE = 0.95;
 const GAP = 0.32;
@@ -181,23 +179,18 @@ function rotateMove(move) {
 
 function queueCubeMove(move) {
   if (!parseMove(move)) return;
-  inputMoveHistory.push(Date.now());
-  updateInputTPS();
   moveQueue.push(move);
   runNextMove();
 }
 
-function updateInputTPS() {
-  const cutoff = Date.now() - 1000;
-  inputMoveHistory = inputMoveHistory.filter(timestamp => timestamp >= cutoff);
-  currentInputTPS = inputMoveHistory.length;
-}
+function getRotationDuration() {
+  const speed = typeof window.getCubeAnimationSpeed === "function"
+    ? window.getCubeAnimationSpeed()
+    : "10";
+  if (speed === "infinity") return 0;
 
-function getRotationMode(pendingMoves = moveQueue.length + (isAnimating ? 1 : 0)) {
-  updateInputTPS();
-  if (pendingMoves >= 5 || currentInputTPS >= 12) return "instant";
-  if (pendingMoves >= 2 || currentInputTPS >= 8) return "fast";
-  return "smooth";
+  const tps = Number(speed);
+  return Number.isFinite(tps) && tps > 0 ? 1000 / tps : 100;
 }
 
 function parseMove(move) {
@@ -258,7 +251,7 @@ function parseMove(move) {
   return map[move] || null;
 }
 
-function rotateLayer(axis, layers, angle, frames = 10) {
+function rotateLayer(axis, layers, angle, durationMs = 100) {
   isAnimating = true;
 
   const group = new THREE.Group();
@@ -272,15 +265,14 @@ function rotateLayer(axis, layers, angle, frames = 10) {
     group.attach(cubie);
   });
 
-  let current = 0;
-  const step = angle / frames;
+  let startedAt = 0;
 
-  function animate() {
-    current++;
+  function animate(now) {
+    if (!startedAt) startedAt = now;
+    const progress = Math.min(1, (now - startedAt) / durationMs);
+    group.rotation[axis] = angle * progress;
 
-    group.rotation[axis] += step;
-
-    if (current < frames) {
+    if (progress < 1) {
       requestAnimationFrame(animate);
     } else {
       selected.forEach(cubie => {
@@ -461,7 +453,6 @@ function runNextMove() {
   if (isAnimating) return;
   if (moveQueue.length === 0) return;
 
-  const pendingMoves = moveQueue.length;
   const nextMove = moveQueue.shift();
   const parsed = parseMove(nextMove);
   if (!parsed) {
@@ -469,13 +460,13 @@ function runNextMove() {
     return;
   }
 
-  const mode = getRotationMode(pendingMoves);
-  if (mode === "instant") {
+  const durationMs = getRotationDuration();
+  if (durationMs === 0) {
     applyParsedMoveInstant(parsed);
     callAfterMoveCallback();
     requestAnimationFrame(runNextMove);
     return;
   }
 
-  rotateLayer(parsed.axis, parsed.layers, parsed.angle, mode === "fast" ? 3 : 10);
+  rotateLayer(parsed.axis, parsed.layers, parsed.angle, durationMs);
 }

@@ -37,7 +37,12 @@
     <header>
       <h1>Virtual Cube Timer</h1>
       <div class="scramble" id="scrambleText">Scramble will appear here</div>
-      <button id="howToPlayBtn" class="header-action">How to Play</button>
+      <div class="header-actions" aria-label="Main actions">
+        <button id="howToPlayBtn" class="header-action">How to Play</button>
+        <button id="openRankingBtn" class="header-action">Online Ranking</button>
+        <button id="openBattleBtn" class="header-action">Battle</button>
+        <button id="openSettingsBtn" class="header-action">Settings</button>
+      </div>
     </header>
 
     <section class="battle-screen" aria-label="Real-time battle">
@@ -117,52 +122,6 @@
           <button id="profileBtn" class="profile-button">Profile</button>
         </section>
 
-        <section class="online-ranking-panel" aria-label="Online Ranking">
-          <h2>Online Ranking</h2>
-          <div class="ranking-type-tabs">
-            <button class="ranking-type-tab active" data-ranking-type="single">Single</button>
-            <button class="ranking-type-tab" data-ranking-type="ao5">Ao5</button>
-          </div>
-          <div class="ranking-tabs">
-            <button class="ranking-tab active" data-period="today">Today</button>
-            <button class="ranking-tab" data-period="week">Week</button>
-            <button class="ranking-tab" data-period="month">Month</button>
-            <button class="ranking-tab" data-period="all">All</button>
-          </div>
-          <ol id="onlineRankingList"></ol>
-        </section>
-
-        <section class="battle-panel" aria-label="Battle selection">
-          <h2>Battle</h2>
-          <div class="battle-choice-tabs" role="tablist">
-            <button class="battle-choice-tab active" data-battle-choice="friend">Friend Battle</button>
-            <button class="battle-choice-tab" data-battle-choice="ranked">Ranked Battle</button>
-          </div>
-          <div id="friendBattleControls">
-            <div class="buttons battle-buttons">
-              <button id="createRoomBtn">Create Friend Room</button>
-            </div>
-            <input id="roomIdInput" type="text" maxlength="12" placeholder="Room ID" />
-            <div class="buttons battle-buttons">
-              <button id="joinRoomBtn">Join Friend Room</button>
-              <button id="copyInviteBtn">Copy Invite Link</button>
-            </div>
-            <input id="roomUrlOutput" type="text" readonly placeholder="Invite URL" />
-          </div>
-          <div id="randomBattleControls" hidden>
-            <div class="buttons battle-buttons">
-              <button id="randomBattleBtn">Find Ranked Match</button>
-              <button id="cancelMatchBtn">Cancel</button>
-            </div>
-            <div class="random-status" id="randomStatus"></div>
-          </div>
-          <div class="battle-status" id="battleStatus">Log in to start a battle.</div>
-        </section>
-
-        <section class="battle-rating-panel" aria-label="Battle Rating Ranking">
-          <h2>Battle Rating Ranking</h2>
-          <ol id="battleRatingList"></ol>
-        </section>
       </section>
 
       <div class="cube-area">
@@ -192,8 +151,6 @@
       </div>
 
       <section class="panel">
-        <button id="themeToggleBtn" class="theme-toggle">Dark</button>
-
         <div class="timer" id="timerDisplay">0.00</div>
         <div class="tps-display" id="tpsDisplay">TPS: -</div>
         <div class="moves-display" id="movesDisplay">Moves: -</div>
@@ -223,8 +180,8 @@
     </main>
 
     <footer>
-      <p>Space: start / stop Esc: reset timer</p>
-      <p>R:i R':k L:e L':d U:j U':f D:s D':l F:h F':g B:w B':o</p>
+      <p>Space: scramble and inspect. Esc: abort solve.</p>
+      <p>Keyboard controls can be customized in Settings.</p>
       <nav class="footer-nav" aria-label="Site information">
         <a href="about.html">About</a>
         <a href="privacy.html">Privacy Policy</a>
@@ -259,6 +216,81 @@
     <section class="modal-content profile-content">
       <div class="modal-heading"><h2 id="profileTitle">Profile</h2><button class="modal-close" data-close-modal="profileModal" aria-label="Close">Close</button></div>
       <div id="profileBody">Please log in to view your profile.</div>
+    </section>
+  </div>
+
+  <div class="app-modal feature-modal" id="rankingModal" hidden role="dialog" aria-modal="true" aria-labelledby="rankingTitle">
+    <section class="modal-content feature-content">
+      <div class="modal-heading"><h2 id="rankingTitle">Online Ranking</h2><button class="modal-close" data-close-modal="rankingModal" aria-label="Close Online Ranking">Close</button></div>
+      <div class="ranking-type-tabs">
+        <button class="ranking-type-tab active" data-ranking-type="single">Single</button>
+        <button class="ranking-type-tab" data-ranking-type="ao5">Ao5</button>
+      </div>
+      <div class="ranking-tabs">
+        <button class="ranking-tab active" data-period="today">Today</button>
+        <button class="ranking-tab" data-period="week">Week</button>
+        <button class="ranking-tab" data-period="month">Month</button>
+        <button class="ranking-tab" data-period="all">All</button>
+      </div>
+      <ol id="onlineRankingList"></ol>
+      <h3>Battle Rating Ranking</h3>
+      <ol id="battleRatingList"></ol>
+    </section>
+  </div>
+
+  <div class="app-modal feature-modal" id="battleModal" hidden role="dialog" aria-modal="true" aria-labelledby="battleTitle">
+    <section class="modal-content feature-content battle-panel" aria-label="Battle selection">
+      <div class="modal-heading"><h2 id="battleTitle">Battle</h2><button class="modal-close" data-close-modal="battleModal" aria-label="Close Battle">Close</button></div>
+      <div class="battle-choice-tabs" role="tablist">
+        <button class="battle-choice-tab active" data-battle-choice="friend">Friend Battle</button>
+        <button class="battle-choice-tab" data-battle-choice="ranked">Ranked Battle</button>
+      </div>
+      <div id="friendBattleControls">
+        <div class="buttons battle-buttons"><button id="createRoomBtn">Create Friend Room</button></div>
+        <input id="roomIdInput" type="text" maxlength="12" placeholder="Room ID" />
+        <div class="buttons battle-buttons">
+          <button id="joinRoomBtn">Join Friend Room</button>
+          <button id="copyInviteBtn">Copy Invite Link</button>
+        </div>
+        <input id="roomUrlOutput" type="text" readonly placeholder="Invite URL" />
+      </div>
+      <div id="randomBattleControls" hidden>
+        <div class="buttons battle-buttons">
+          <button id="randomBattleBtn">Find Ranked Match</button>
+          <button id="cancelMatchBtn">Cancel</button>
+        </div>
+        <div class="random-status" id="randomStatus"></div>
+      </div>
+      <div class="battle-status" id="battleStatus">Log in to start a battle.</div>
+    </section>
+  </div>
+
+  <div class="app-modal feature-modal" id="settingsModal" hidden role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <section class="modal-content feature-content settings-content">
+      <div class="modal-heading"><h2 id="settingsTitle">Settings</h2><button class="modal-close" data-close-modal="settingsModal" aria-label="Close Settings">Close</button></div>
+      <section class="settings-section">
+        <h3>Animation Speed</h3>
+        <label for="animationSpeedSelect">Rotation speed</label>
+        <select id="animationSpeedSelect">
+          <option value="infinity">TPS: &infin;</option>
+          <option value="20">TPS: 20</option>
+          <option value="10">TPS: 10</option>
+          <option value="5">TPS: 5</option>
+          <option value="3">TPS: 3</option>
+          <option value="2">TPS: 2</option>
+          <option value="1">TPS: 1</option>
+        </select>
+      </section>
+      <section class="settings-section">
+        <h3>Key Bindings</h3>
+        <p class="settings-hint" id="keyBindingStatus">Choose Change, then press a key.</p>
+        <div id="keyBindingsList" class="key-bindings-list" aria-label="Key bindings"></div>
+        <button id="resetKeyBindingsBtn" class="secondary-action key-binding-change">Reset to Default</button>
+      </section>
+      <section class="settings-section">
+        <h3>Theme</h3>
+        <button id="themeToggleBtn" class="theme-toggle">Dark</button>
+      </section>
     </section>
   </div>
 
