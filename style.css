@@ -770,6 +770,10 @@ body.battle-mode.battle-locked #cubeContainer {
   opacity: 0.35;
 }
 
+body.battle-mode #cubeContainer.ready-waiting {
+  opacity: 0.35;
+}
+
 .battle-inspection-overlay {
   position: absolute;
   z-index: 3;
@@ -906,6 +910,14 @@ body.battle-mode.battle-locked #cubeContainer {
   font-size: 24px;
   font-weight: bold;
   overflow-wrap: anywhere;
+}
+
+.battle-opponent-rating {
+  min-height: 20px;
+  margin-top: 4px;
+  font-size: 14px;
+  font-weight: bold;
+  opacity: 0.82;
 }
 
 .battle-player-state {

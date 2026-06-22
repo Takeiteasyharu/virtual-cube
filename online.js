@@ -82,6 +82,7 @@ const USERS_COLLECTION = "users";
 const STATS_COLLECTION = "stats";
 const GLOBAL_STATS_DOCUMENT = "global";
 const INITIAL_RATING = 1200;
+const ELO_K_FACTOR = 32;
 
 let auth = null;
 let db = null;
@@ -104,12 +105,17 @@ let localBattleTimerSeconds = 0;
 let matchmakingUnsubscribe = null;
 let randomRoomUnsubscribe = null;
 let matchmakingTimeout = null;
+let rankedMatchExpansionTimeouts = [];
+let rankedMatchAttempting = false;
 let rankedSearchInterval = null;
 let rankedSearchStartedAt = 0;
 let friendLobbyUnsubscribe = null;
 let opponentExitTimeout = null;
+let displayedOpponentRatingUid = "";
+let readyInspectionStarting = false;
 const savedBattleResultKeys = new Set();
 const refreshedBattleRatingKeys = new Set();
+const appliedRankedRatingKeys = new Set();
 
 function isConfigured() {
   return Boolean(config.apiKey && !config.apiKey.startsWith("YOUR_"));
@@ -138,6 +144,25 @@ function defaultUserStats() {
     rankedLosses: 0,
     friendWins: 0,
     friendLosses: 0
+  };
+}
+
+function getRating(profile) {
+  const rating = Number(profile?.rating);
+  return Number.isFinite(rating) ? rating : INITIAL_RATING;
+}
+
+function calculateEloChanges(hostProfile, guestProfile, winnerUid, hostUid, guestUid) {
+  const hostBefore = getRating(hostProfile);
+  const guestBefore = getRating(guestProfile);
+  const hostExpected = 1 / (1 + Math.pow(10, (guestBefore - hostBefore) / 400));
+  const hostScore = winnerUid === hostUid ? 1 : 0;
+  const hostChange = Math.round(ELO_K_FACTOR * (hostScore - hostExpected));
+  const guestChange = -hostChange;
+
+  return {
+    [hostUid]: { before: hostBefore, after: hostBefore + hostChange, change: hostChange },
+    [guestUid]: { before: guestBefore, after: guestBefore + guestChange, change: guestChange }
   };
 }
 
@@ -806,9 +831,12 @@ function clearMatchmakingListeners() {
   if (matchmakingUnsubscribe) matchmakingUnsubscribe();
   if (randomRoomUnsubscribe) randomRoomUnsubscribe();
   if (matchmakingTimeout) window.clearTimeout(matchmakingTimeout);
+  rankedMatchExpansionTimeouts.forEach(timeout => window.clearTimeout(timeout));
   matchmakingUnsubscribe = null;
   randomRoomUnsubscribe = null;
   matchmakingTimeout = null;
+  rankedMatchExpansionTimeouts = [];
+  rankedMatchAttempting = false;
   stopRankedSearchTimer();
 }
 
@@ -930,6 +958,46 @@ function isCountedBattleMove(move) {
   return !["x", "x'", "y", "y'", "z", "z'"].includes(move?.move);
 }
 
+async function applyOwnRankedRating() {
+  if (!currentUser || !activeRoom || activeRoom.mode !== "ranked" || !activeRoom.ratingApplied) return;
+
+  const key = `${activeRoomId}_${activeRound}_${currentUser.uid}`;
+  if (appliedRankedRatingKeys.has(key)) return;
+  const change = activeRoom.ratingChanges?.[currentUser.uid];
+  if (!change || !Number.isFinite(change.after)) return;
+  appliedRankedRatingKeys.add(key);
+
+  try {
+    await runTransaction(db, async transaction => {
+      const profileRef = userRef();
+      const profileSnapshot = await transaction.get(profileRef);
+      const profile = profileSnapshot.data() || defaultUserStats();
+      if (
+        profile.lastRatedRoomId === activeRoomId &&
+        Number(profile.lastRatedRound) === activeRound
+      ) return;
+
+      const won = activeRoom.winnerUid === currentUser.uid;
+      transaction.update(profileRef, {
+        rating: Number(change.after),
+        rankedBattles: Number(profile.rankedBattles || 0) + 1,
+        wins: Number(profile.wins || 0) + (won ? 1 : 0),
+        losses: Number(profile.losses || 0) + (won ? 0 : 1),
+        rankedWins: Number(profile.rankedWins || 0) + (won ? 1 : 0),
+        rankedLosses: Number(profile.rankedLosses || 0) + (won ? 0 : 1),
+        lastRatedRoomId: activeRoomId,
+        lastRatedRound: activeRound,
+        updatedAt: serverTimestamp()
+      });
+    });
+    await Promise.all([refreshBattleRatingRanking(), refreshBattleAccountRating()]);
+    if (!profileModal.hidden) await showProfile();
+  } catch (error) {
+    appliedRankedRatingKeys.delete(key);
+    console.error("Rating could not be applied.", error);
+  }
+}
+
 async function saveBattleResultForCurrentUser() {
   if (!currentUser || !activeRoom || activeRoom.status !== "finished") return;
 
@@ -974,7 +1042,9 @@ async function saveBattleResultForCurrentUser() {
     window.trackCubeEvent?.("battle_finish", {
       result: result === "loss" ? "lose" : result
     });
-    await recordOwnBattleStats(result, activeRoom.mode);
+    if (activeRoom.mode !== "ranked" || !activeRoom.ratingApplied) {
+      await recordOwnBattleStats(result, activeRoom.mode);
+    }
   } catch (error) {
     savedBattleResultKeys.delete(resultId);
     throw error;
@@ -1041,6 +1111,32 @@ function renderBattlePlayer(prefix, player, role) {
   setBattleText(`${prefix}MoveCount`, isDnf || !player ? "-" : String(visibleMoveCount || 0));
   setBattleText(`${prefix}LastMove`, player?.lastMove || moves.at(-1)?.move || "-");
   setBattleText(`${prefix}MoveLog`, moves.length ? moves.slice(-20).map(move => move.move).join(" ") : "-");
+}
+
+async function loadOpponentRating(opponent) {
+  const display = document.getElementById("battleOpponentRating");
+  if (!display) return;
+
+  if (!opponent?.uid) {
+    displayedOpponentRatingUid = "";
+    display.textContent = "-";
+    return;
+  }
+  if (displayedOpponentRatingUid === opponent.uid) return;
+
+  displayedOpponentRatingUid = opponent.uid;
+  display.textContent = "Loading...";
+  try {
+    const snapshot = await getDoc(userRef(opponent.uid));
+    if (displayedOpponentRatingUid !== opponent.uid) return;
+    const profile = snapshot.data();
+    display.textContent = !profile || profile.loginType === "guest"
+      ? "-"
+      : String(Math.round(getRating(profile)));
+  } catch (error) {
+    if (displayedOpponentRatingUid === opponent.uid) display.textContent = "-";
+    console.error(error);
+  }
 }
 
 function renderBattleNotice() {
@@ -1110,8 +1206,9 @@ function renderBattleReadyButton(you, opponent) {
   battleReadyBtn.hidden = battleEnded || !you || ["inspecting", "solving"].includes(you.status);
   if (battleReadyBtn.hidden) return;
 
-  battleReadyBtn.disabled = false;
-  battleReadyBtn.textContent = "Ready";
+  const isReady = you.status === "ready";
+  battleReadyBtn.disabled = isReady;
+  battleReadyBtn.textContent = isReady ? "Waiting for scramble..." : "Ready";
 }
 
 function renderRematchPanel(you, opponent) {
@@ -1144,9 +1241,11 @@ function renderBattleUi() {
     : `Room: ${activeRoomId} | Players: ${count}/2`;
   battleModeLabel.textContent = activeRoom.mode === "ranked" ? "Ranked Battle" : "Friend Battle";
   copyRoomUrlBtn.hidden = activeRoom.mode === "ranked";
-  battleScramble.textContent = activeRoom.scramble || "";
+  const canSeeScramble = ["inspecting", "solving", "finished", "dnf"].includes(you?.status);
+  battleScramble.textContent = canSeeScramble ? (activeRoom.scramble || "") : "";
   renderBattlePlayer("battleYou", you, activeRoomRole);
   renderBattlePlayer("battleOpponent", opponent, getOpponentRole());
+  loadOpponentRating(opponent);
   renderOpponentCube(opponent);
   renderBattleNotice();
   returnToNormalAfterOpponentExit(opponent);
@@ -1155,6 +1254,7 @@ function renderBattleUi() {
   renderRematchPanel(you, opponent);
 
   if (activeRoom.status === "finished") {
+    applyOwnRankedRating().catch(console.error);
     saveBattleResultForCurrentUser().catch(console.error);
     refreshRatingAfterBattle();
   }
@@ -1175,6 +1275,7 @@ function refreshRatingAfterBattle() {
     refreshedBattleRatingKeys.delete(key);
     console.error(error);
   });
+  if (!profileModal.hidden) showProfile().catch(console.error);
 }
 
 function getInspectionStartMs(player) {
@@ -1189,11 +1290,35 @@ function syncLocalBattleState(player) {
   }
 
   if (player.status === "inspecting") {
+    if (activeRoom.scramble) window.opponentCube?.setScramble(activeRoom.scramble, activeRound);
     window.startBattleInspection?.(
       activeRoom.scramble,
       getInspectionStartMs(player),
       activeRound
     );
+  }
+}
+
+async function startInspectionForReadyPlayer() {
+  if (readyInspectionStarting || !currentUser || !activeRoomId || !activeRoom?.scramble) return;
+  readyInspectionStarting = true;
+
+  try {
+    const playerRef = doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid);
+    const snapshot = await getDoc(playerRef);
+    if (!snapshot.exists() || snapshot.data().status !== "ready") return;
+
+    const inspectionStartTimeMs = Date.now();
+    await updateDoc(playerRef, {
+      status: "inspecting",
+      round: activeRound,
+      inspectionStartTime: serverTimestamp(),
+      inspectionStartTimeMs,
+      updatedAt: serverTimestamp()
+    });
+    window.startBattleInspection?.(activeRoom.scramble, inspectionStartTimeMs, activeRound);
+  } finally {
+    readyInspectionStarting = false;
   }
 }
 
@@ -1206,6 +1331,9 @@ function watchPlayer(roomId, role, uid) {
 
     if (role === activeRoomRole && snapshot.exists()) {
       syncLocalBattleState(snapshot.data());
+      if (snapshot.data().status === "ready" && activeRoom?.scramble) {
+        startInspectionForReadyPlayer().catch(console.error);
+      }
     }
 
     const host = getDisplayPlayer("host");
@@ -1252,7 +1380,13 @@ function watchRoom(roomId) {
     const previousRound = activeRound;
     activeRoom = room;
     activeRound = Number(room.round) || 1;
-    window.opponentCube?.setScramble(room.scramble || "", activeRound);
+    const localPlayer = getDisplayPlayer(activeRoomRole);
+    const localCanSeeScramble = ["inspecting", "solving", "finished", "dnf"].includes(localPlayer?.status);
+    if (localCanSeeScramble && room.scramble) {
+      window.opponentCube?.setScramble(room.scramble, activeRound);
+    } else {
+      window.opponentCube?.clear();
+    }
 
     if (room.hostUid !== previousHostUid || room.guestUid !== previousGuestUid) {
       activePlayerUnsubscribes.forEach(unsubscribe => unsubscribe());
@@ -1268,6 +1402,9 @@ function watchRoom(roomId) {
     }
 
     renderBattleUi();
+    if (localPlayer?.status === "ready" && room.scramble) {
+      startInspectionForReadyPlayer().catch(console.error);
+    }
     setBattleStatus(`Room ${roomId}: ${activeRoomRole}`);
   });
 }
@@ -1314,12 +1451,9 @@ async function startRematchIfBothReady() {
     if (isPlayerDisconnected(host) || isPlayerDisconnected(guest)) return;
     if (!host?.rematchReady || !guest?.rematchReady) return;
 
-    const scramble = getBattleScramble();
-    if (!scramble) return;
-
     transaction.update(roomRef, {
       status: "waiting",
-      scramble,
+      scramble: "",
       round: (Number(room.round) || 1) + 1,
       winnerUid: "",
       winnerName: "",
@@ -1356,16 +1490,10 @@ async function createBattleRoom(mode = "friend") {
   }
 
   const roomId = createRoomId();
-  const scrambleText = getBattleScramble();
-  if (!scrambleText) {
-    setBattleStatus("Scramble generator is not ready.");
-    return;
-  }
-
   const room = {
     roomId,
     mode,
-    scramble: scrambleText,
+    scramble: "",
     status: "waiting",
     hostUid: currentUser.uid,
     guestUid: "",
@@ -1398,6 +1526,71 @@ async function createBattleRoom(mode = "friend") {
   }
 }
 
+function getRankedMatchRange(waitMs) {
+  if (waitMs < 10000) return 50;
+  if (waitMs < 20000) return 100;
+  if (waitMs < 30000) return 200;
+  return Infinity;
+}
+
+function selectRankedCandidate(queueDocs, myRating, myStartedAtMs = Date.now()) {
+  const now = Date.now();
+  const myRange = getRankedMatchRange(now - myStartedAtMs);
+  return queueDocs
+    .filter(queueDoc => queueDoc.id !== currentUser?.uid && queueDoc.data().roomId && queueDoc.data().mode === "ranked")
+    .map(queueDoc => {
+      const entry = queueDoc.data();
+      const difference = Math.abs(myRating - getRating(entry));
+      const candidateStartedAtMs = Number(entry.startedAtMs) || now;
+      const allowedRange = Math.max(myRange, getRankedMatchRange(now - candidateStartedAtMs));
+      return { queueDoc, difference, allowedRange, startedAtMs: candidateStartedAtMs };
+    })
+    .filter(candidate => candidate.difference <= candidate.allowedRange)
+    .sort((a, b) => a.difference - b.difference || a.startedAtMs - b.startedAtMs)[0]?.queueDoc || null;
+}
+
+async function attemptRankedMatch() {
+  if (rankedMatchAttempting || !currentUser || !activeRoomId || document.body.classList.contains("battle-mode")) return;
+  rankedMatchAttempting = true;
+  try {
+    const ownQueue = await getDoc(doc(db, MATCHMAKING_COLLECTION, currentUser.uid));
+    if (!ownQueue.exists() || ownQueue.data().status !== "waiting") return;
+
+    const ownEntry = ownQueue.data();
+    const waitingSnapshot = await getDocs(query(
+      collection(db, MATCHMAKING_COLLECTION),
+      where("status", "==", "waiting"),
+      orderBy("createdAt", "asc"),
+      limit(50)
+    ));
+    const candidate = selectRankedCandidate(
+      waitingSnapshot.docs,
+      getRating(ownEntry),
+      Number(ownEntry.startedAtMs) || Date.now()
+    );
+    if (!candidate) return;
+
+    await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId), {
+      status: "cancelled",
+      updatedAt: serverTimestamp()
+    }).catch(() => {});
+    clearMatchmakingListeners();
+    await clearMyMatchmakingEntry();
+    activeRoomId = "";
+    activeRoomRole = "";
+    setRandomStatus("Matched!");
+    await joinBattleRoom(candidate.data().roomId, true);
+  } finally {
+    rankedMatchAttempting = false;
+  }
+}
+
+function scheduleRankedMatchExpansion() {
+  rankedMatchExpansionTimeouts = [10000, 20000, 30000].map(delay => window.setTimeout(() => {
+    attemptRankedMatch().catch(console.error);
+  }, delay));
+}
+
 async function startRankedBattle() {
   const eligibility = await getRankedBattleEligibility();
   if (!eligibility.eligible) {
@@ -1418,18 +1611,17 @@ async function startRankedBattle() {
 
   startRankedSearchTimer();
   await clearMyMatchmakingEntry();
+  const profileSnapshot = await getDoc(userRef());
+  const myRating = getRating(profileSnapshot.data());
+  const startedAtMs = Date.now();
   const waitingQuery = query(
     collection(db, MATCHMAKING_COLLECTION),
     where("status", "==", "waiting"),
     orderBy("createdAt", "asc"),
-    limit(10)
+    limit(50)
   );
   const waitingSnapshot = await getDocs(waitingQuery);
-  const candidate = waitingSnapshot.docs.find(queueDoc =>
-    queueDoc.id !== currentUser.uid
-      && queueDoc.data().roomId
-      && queueDoc.data().mode === "ranked"
-  );
+  const candidate = selectRankedCandidate(waitingSnapshot.docs, myRating, startedAtMs);
 
   if (candidate) {
     stopRankedSearchTimer();
@@ -1439,17 +1631,10 @@ async function startRankedBattle() {
   }
 
   const roomId = createRoomId();
-  const scramble = getBattleScramble();
-  if (!scramble) {
-    stopRankedSearchTimer();
-    setRandomStatus("Scramble generator is not ready.");
-    return;
-  }
-
   const room = {
     roomId,
     mode: "ranked",
-    scramble,
+    scramble: "",
     status: "waiting",
     hostUid: currentUser.uid,
     guestUid: "",
@@ -1469,6 +1654,8 @@ async function startRankedBattle() {
     mode: "ranked",
     status: "waiting",
     roomId,
+    rating: myRating,
+    startedAtMs,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
   });
@@ -1491,6 +1678,7 @@ async function startRankedBattle() {
     if (entry?.status === "matched" && entry.roomId) enterMatchedRankedRoom(entry.roomId);
   });
   watchForRankedRoom();
+  scheduleRankedMatchExpansion();
   matchmakingTimeout = window.setTimeout(() => {
     cancelRandomMatch("No opponent found. Matchmaking cancelled.");
   }, 60000);
@@ -1586,7 +1774,12 @@ async function readyBattleRoom() {
   }
 
   if (!scramble) {
-    setBattleStatus("Waiting for the room scramble.");
+    await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
+      status: "ready",
+      round: activeRound,
+      updatedAt: serverTimestamp()
+    });
+    setBattleStatus("Ready. Waiting for the room scramble.");
     return;
   }
 
@@ -1698,19 +1891,35 @@ async function finalizeBattle() {
     const guest = guestRef ? (await transaction.get(guestRef)).data() : null;
     const completed = [host, guest].filter(isPlayerFinished).sort((a, b) => a.finalTime - b.finalTime);
     const winner = completed[0] || null;
-
-    transaction.update(roomRef, {
+    const roomUpdate = {
       status: "finished",
       finishedAt: serverTimestamp(),
       winnerUid: winner?.uid || "",
       winnerName: winner?.name || "",
       ratingApplied: false,
-      ratingNotice: room.mode === "ranked"
-        ? "Rating updates require server validation."
-        : "Friend Battle: no rating change",
+      ratingNotice: "Friend Battle: no rating change",
       ratingChanges: {},
       updatedAt: serverTimestamp()
-    });
+    };
+
+    if (room.mode === "ranked" && winner && host?.uid && guest?.uid) {
+      const hostUserRef = doc(db, USERS_COLLECTION, host.uid);
+      const guestUserRef = doc(db, USERS_COLLECTION, guest.uid);
+      const hostProfile = await transaction.get(hostUserRef);
+      const guestProfile = await transaction.get(guestUserRef);
+      const ratingChanges = calculateEloChanges(
+        hostProfile.data(),
+        guestProfile.data(),
+        winner.uid,
+        host.uid,
+        guest.uid
+      );
+      roomUpdate.ratingApplied = true;
+      roomUpdate.ratingNotice = "";
+      roomUpdate.ratingChanges = ratingChanges;
+    }
+
+    transaction.update(roomRef, roomUpdate);
   });
   refreshBattleRatingRanking().catch(console.error);
   refreshBattleAccountRating().catch(console.error);
@@ -1722,6 +1931,10 @@ function renderBattleLocalTimer(seconds) {
 }
 
 function leaveBattleMode() {
+  if (activeRoom?.status === "finishing") {
+    battleNotice.textContent = "Finalizing battle result...";
+    return;
+  }
   if (opponentExitTimeout) {
     window.clearTimeout(opponentExitTimeout);
     opponentExitTimeout = null;
@@ -1741,6 +1954,7 @@ function leaveBattleMode() {
   activeRoomId = "";
   activeRoomRole = "";
   activeRound = 1;
+  displayedOpponentRatingUid = "";
   localBattleTimerSeconds = 0;
   battleReadyBtn.hidden = true;
   battleRematchPanel.hidden = true;
@@ -1779,10 +1993,15 @@ function renderOpponentCube(opponent) {
   if (!opponentCubePanel || !opponentCubeStatus) return;
 
   const disconnected = isPlayerDisconnected(opponent);
-  opponentCubePanel.classList.toggle("opponent-unavailable", !opponent || disconnected);
-  opponentCubeStatus.textContent = !opponent
+  const you = getDisplayPlayer(activeRoomRole);
+  const waitingForReady = !["inspecting", "solving", "finished", "dnf"].includes(you?.status);
+  opponentCubePanel.classList.toggle("opponent-unavailable", !opponent || disconnected || waitingForReady);
+  opponentCubePanel.classList.toggle("ready-waiting", waitingForReady);
+  opponentCubeStatus.textContent = waitingForReady
+    ? "Opponent cube locked until you are ready."
+    : (!opponent
     ? "Waiting for opponent..."
-    : (disconnected ? "Opponent left" : `Opponent: ${(opponent.status || "joined").toUpperCase()}`);
+    : (disconnected ? "Opponent left" : `Opponent: ${(opponent.status || "joined").toUpperCase()}`));
 }
 
 function returnToNormalAfterOpponentExit(opponent) {

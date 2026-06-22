@@ -431,7 +431,7 @@ function prepareBattleCube(scrambleText, round = 1) {
   resetTimer();
   resetSolveStats();
   setSolvingMode(false);
-  document.getElementById("scrambleText").textContent = scrambleText || "";
+  document.getElementById("scrambleText").textContent = "";
   document.getElementById("lastMove").textContent = "-";
   setCurrentScramble(scrambleText || "");
   readyToSolve = false;
@@ -441,6 +441,7 @@ function prepareBattleCube(scrambleText, round = 1) {
   battleMoveSequence = 0;
   setBattleInspectionOverlay(false);
   document.body.classList.add("battle-locked");
+  document.getElementById("cubeContainer")?.classList.add("ready-waiting");
 }
 
 function startBattleInspection(scrambleText, inspectionStartMs = Date.now(), round = 1) {
@@ -462,6 +463,7 @@ function startBattleInspection(scrambleText, inspectionStartMs = Date.now(), rou
   battleInspectionRound = round;
   battleMoveSequence = 0;
   document.body.classList.remove("battle-locked");
+  document.getElementById("cubeContainer")?.classList.remove("ready-waiting");
   applyScramble(scramble);
 
   const updateInspection = () => {
@@ -529,6 +531,7 @@ function cancelCurrentSolve() {
   setSolvingMode(false);
   battleInputState = "inactive";
   document.body.classList.remove("battle-locked");
+  document.getElementById("cubeContainer")?.classList.remove("ready-waiting");
   setBattleInspectionOverlay(false);
   document.getElementById("lastMove").textContent = "-";
 }
