@@ -756,6 +756,22 @@ body.battle-mode.battle-locked #cubeContainer {
   font-size: 14px;
 }
 
+.battle-rating-panel {
+  margin-top: 18px;
+}
+
+#battleRatingList {
+  max-height: 220px;
+  margin: 0;
+  padding-left: 24px;
+  overflow-y: auto;
+}
+
+#battleRatingList li {
+  margin: 4px 0;
+  font-size: 14px;
+}
+
 #scrambleHistoryList {
   padding-left: 20px;
   max-height: 160px;

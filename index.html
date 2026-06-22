@@ -120,27 +120,32 @@
           <h2>Battle</h2>
           <div class="battle-choice-tabs" role="tablist">
             <button class="battle-choice-tab active" data-battle-choice="friend">Friend Battle</button>
-            <button class="battle-choice-tab" data-battle-choice="random">Random Battle</button>
+            <button class="battle-choice-tab" data-battle-choice="ranked">Ranked Battle</button>
           </div>
           <div id="friendBattleControls">
             <div class="buttons battle-buttons">
-              <button id="createRoomBtn">Create Room</button>
+              <button id="createRoomBtn">Create Friend Room</button>
             </div>
             <input id="roomIdInput" type="text" maxlength="12" placeholder="Room ID" />
             <div class="buttons battle-buttons">
-              <button id="joinRoomBtn">Join Room</button>
+              <button id="joinRoomBtn">Join Friend Room</button>
               <button id="copyInviteBtn">Copy Invite Link</button>
             </div>
             <input id="roomUrlOutput" type="text" readonly placeholder="Invite URL" />
           </div>
           <div id="randomBattleControls" hidden>
             <div class="buttons battle-buttons">
-              <button id="randomBattleBtn">Random Battle</button>
+              <button id="randomBattleBtn">Find Ranked Match</button>
               <button id="cancelMatchBtn">Cancel</button>
             </div>
             <div class="random-status" id="randomStatus"></div>
           </div>
           <div class="battle-status" id="battleStatus">Log in to start a battle.</div>
+        </section>
+
+        <section class="battle-rating-panel" aria-label="Battle Rating Ranking">
+          <h2>Battle Rating Ranking</h2>
+          <ol id="battleRatingList"></ol>
         </section>
       </section>
 
@@ -216,7 +221,7 @@
       <h3>Ranking Rules</h3>
       <p>Only valid solves are submitted. Suspicious solves are excluded. Log in to join the online rankings.</p>
       <h3>Battle Mode</h3>
-      <p>Friend Battle uses invite links. Random Battle matches another player. Both players solve the same scramble, and a battle ends shortly after one player finishes.</p>
+      <p>Friend Battle uses invite links. Ranked Battle matches another player automatically. Both players solve the same scramble, and a battle ends shortly after one player finishes.</p>
       <h3>Keyboard Map</h3>
       <div class="key-map" aria-label="Keyboard map">
         <span>R <b>I</b></span><span>R' <b>K</b></span><span>L <b>D</b></span><span>L' <b>E</b></span>

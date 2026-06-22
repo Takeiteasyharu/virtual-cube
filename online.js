@@ -31,6 +31,7 @@ const config = window.CUBE_FIREBASE_CONFIG || {};
 const periodButtons = document.querySelectorAll(".ranking-tab");
 const rankingTypeButtons = document.querySelectorAll(".ranking-type-tab");
 const rankingList = document.getElementById("onlineRankingList");
+const battleRatingList = document.getElementById("battleRatingList");
 const authStatus = document.getElementById("authStatus");
 const accountGreeting = document.getElementById("accountGreeting");
 const accountRank = document.getElementById("accountRank");
@@ -74,6 +75,10 @@ const rematchReturnBtn = document.getElementById("rematchReturnBtn");
 const PENDING_SOLVES_KEY = "pendingOnlineSolves";
 const BATTLE_ROOMS_COLLECTION = "battleRooms";
 const MATCHMAKING_COLLECTION = "matchmaking";
+const USERS_COLLECTION = "users";
+const INITIAL_RATING = 1200;
+const RATING_K = 32;
+const SAME_OPPONENT_RANKED_LIMIT = 5;
 
 let auth = null;
 let db = null;
@@ -105,6 +110,57 @@ function isConfigured() {
 
 function setStatus(message) {
   authStatus.textContent = message;
+}
+
+function userRef(uid = currentUser?.uid) {
+  return uid ? doc(db, USERS_COLLECTION, uid) : null;
+}
+
+function defaultUserStats() {
+  return {
+    rating: INITIAL_RATING,
+    rankedBattles: 0,
+    friendBattles: 0,
+    wins: 0,
+    losses: 0,
+    rankedWins: 0,
+    rankedLosses: 0,
+    friendWins: 0,
+    friendLosses: 0
+  };
+}
+
+async function ensureUserProfile() {
+  if (!currentUser || !db) return;
+
+  const reference = userRef();
+  const snapshot = await getDoc(reference);
+  const profile = {
+    uid: currentUser.uid,
+    name: getPlayerName(),
+    loginType: currentUser.isAnonymous ? "guest" : "google",
+    updatedAt: serverTimestamp()
+  };
+  if (!snapshot.exists()) Object.assign(profile, defaultUserStats());
+  await setDoc(reference, profile, { merge: true });
+}
+
+async function getRankedBattleEligibility() {
+  if (!currentUser || currentUser.isAnonymous) {
+    return { eligible: false, message: "Ranked Battle requires Google Login." };
+  }
+
+  const solvesSnapshot = await getDocs(query(
+    collection(db, "solves"),
+    where("uid", "==", currentUser.uid)
+  ));
+  const hasValidSolve = solvesSnapshot.docs
+    .map(entryDoc => entryDoc.data())
+    .some(solve => (!solve.rankingType || solve.rankingType === "single") && isValidRankingEntry(solve));
+
+  return hasValidSolve
+    ? { eligible: true, message: "" }
+    : { eligible: false, message: "Complete one valid solve to unlock Ranked Battle." };
 }
 
 function setRankingMessage(message) {
@@ -297,6 +353,37 @@ async function refreshRanking() {
   }
 }
 
+async function refreshBattleRatingRanking() {
+  if (!battleRatingList || !isConfigured()) return;
+
+  battleRatingList.innerHTML = "";
+  try {
+    const snapshot = await getDocs(query(
+      collection(db, USERS_COLLECTION),
+      orderBy("rating", "desc")
+    ));
+    snapshot.docs
+      .filter(entryDoc => Number(entryDoc.data().rankedBattles || 0) > 0)
+      .slice(0, 50)
+      .forEach((entryDoc, index) => {
+      const user = entryDoc.data();
+      const item = document.createElement("li");
+      item.textContent = `${index + 1}. ${user.name || "Player"} - ${Math.round(Number(user.rating) || INITIAL_RATING)}`;
+      battleRatingList.appendChild(item);
+    });
+    if (battleRatingList.children.length === 0) {
+      const item = document.createElement("li");
+      item.textContent = "-";
+      battleRatingList.appendChild(item);
+    }
+  } catch (error) {
+    const item = document.createElement("li");
+    item.textContent = "Battle rating ranking could not be loaded.";
+    battleRatingList.appendChild(item);
+    console.error(error);
+  }
+}
+
 async function getRankingEntries(rankingType, period) {
   const solvesRef = collection(db, "solves");
   let rankingQuery;
@@ -433,6 +520,15 @@ async function showProfile() {
     const battleSnapshot = await getDocs(query(collection(db, "battleResults"), where("uid", "==", currentUser.uid)));
     const battleResults = battleSnapshot.docs.map(entryDoc => entryDoc.data());
     const rank = await calculateMyRankingRank();
+    const [profileSnapshot, ratingSnapshot] = await Promise.all([
+      getDoc(userRef()),
+      getDocs(query(collection(db, USERS_COLLECTION), orderBy("rating", "desc")))
+    ]);
+    const profileStats = { ...defaultUserStats(), ...(profileSnapshot.data() || {}) };
+    const battleRankIndex = ratingSnapshot.docs
+      .filter(entryDoc => Number(entryDoc.data().rankedBattles || 0) > 0)
+      .findIndex(entryDoc => entryDoc.id === currentUser.uid);
+    const battleRank = battleRankIndex >= 0 ? battleRankIndex + 1 : null;
 
     const times = validSolves.map(solve => Number(solve.time));
     const tpsValues = validSolves.map(solve => Number(solve.tps)).filter(Number.isFinite);
@@ -468,16 +564,24 @@ async function showProfile() {
     title.textContent = "Battle Stats";
     profileBody.appendChild(title);
     profileBody.appendChild(createProfileGrid([
-      ["Total battles", String(battleResults.length)],
-      ["Wins", String(wins)],
-      ["Losses", String(losses)],
+      ["Current rating", String(Math.round(Number(profileStats.rating) || INITIAL_RATING))],
+      ["Current battle rank", battleRank ? `#${battleRank}` : "-"],
+      ["Ranked battles", String(profileStats.rankedBattles || 0)],
+      ["Friend battles", String(profileStats.friendBattles || 0)],
+      ["Ranked wins", String(profileStats.rankedWins || 0)],
+      ["Ranked losses", String(profileStats.rankedLosses || 0)],
+      ["Friend wins", String(profileStats.friendWins || 0)],
+      ["Friend losses", String(profileStats.friendLosses || 0)],
+      ["Total battles", String(battleResults.length || (Number(profileStats.rankedBattles || 0) + Number(profileStats.friendBattles || 0)))],
+      ["Wins", String(profileStats.wins || wins)],
+      ["Losses", String(profileStats.losses || losses)],
       ["DNFs", String(dnfs)],
       ["Win rate", battleResults.length ? `${((wins / battleResults.length) * 100).toFixed(1)}%` : "-"],
       ["Best battle time", battleTimes.length ? Math.min(...battleTimes).toFixed(2) : "-"],
       ["Average battle time", battleTimes.length ? (battleTimes.reduce((sum, value) => sum + value, 0) / battleTimes.length).toFixed(2) : "-"],
       ["Current battle streak", String(streak)],
-      ["Random battle wins", String(battleResults.filter(result => result.mode === "random" && result.result === "win").length)],
-      ["Friend battle wins", String(battleResults.filter(result => result.mode === "friend" && result.result === "win").length)]
+      ["Ranked battle wins", String(profileStats.rankedWins || 0)],
+      ["Friend battle wins", String(profileStats.friendWins || 0)]
     ]));
   } catch (error) {
     profileBody.textContent = "Profile could not be loaded.";
@@ -580,7 +684,7 @@ function setBattleChoice(choice) {
     button.classList.toggle("active", button.dataset.battleChoice === choice);
   });
   friendBattleControls.hidden = choice !== "friend";
-  randomBattleControls.hidden = choice !== "random";
+  randomBattleControls.hidden = choice !== "ranked";
 }
 
 function clearFriendLobby() {
@@ -602,18 +706,18 @@ async function clearMyMatchmakingEntry() {
   await deleteDoc(doc(db, MATCHMAKING_COLLECTION, currentUser.uid)).catch(() => {});
 }
 
-function enterMatchedRandomRoom(roomId) {
+function enterMatchedRankedRoom(roomId) {
   if (!roomId || activeRoomId) return;
   clearMatchmakingListeners();
   clearMyMatchmakingEntry();
   setRandomStatus("Matched!");
-  joinBattleRoom(roomId).catch(error => {
+  joinBattleRoom(roomId, true).catch(error => {
     setRandomStatus("Match could not be opened.");
     console.error(error);
   });
 }
 
-function watchForRandomRoom() {
+function watchForRankedRoom() {
   if (!currentUser || randomRoomUnsubscribe) return;
 
   const roomQuery = query(
@@ -624,9 +728,9 @@ function watchForRandomRoom() {
   randomRoomUnsubscribe = onSnapshot(roomQuery, snapshot => {
     const room = snapshot.docs
       .map(roomDoc => ({ id: roomDoc.id, ...roomDoc.data() }))
-      .find(room => room.mode === "random" && ["waiting", "ready", "solving"].includes(room.status));
+      .find(room => room.mode === "ranked" && ["waiting", "ready", "solving"].includes(room.status));
 
-    if (room) enterMatchedRandomRoom(room.id);
+    if (room) enterMatchedRankedRoom(room.id);
   });
 }
 
@@ -734,14 +838,17 @@ async function saveBattleResultForCurrentUser() {
     const result = finished
       ? (activeRoom.winnerUid === currentUser.uid ? "win" : "loss")
       : "dnf";
+    const ratingChange = activeRoom.ratingChanges?.[currentUser.uid]?.change || 0;
 
     await setDoc(resultRef, {
       uid: currentUser.uid,
       name: getPlayerName(),
       roomId: activeRoomId,
       round: activeRound,
-      mode: activeRoom.mode === "random" ? "random" : "friend",
+      mode: activeRoom.mode === "ranked" ? "ranked" : "friend",
       result,
+      ratingChange,
+      ratingApplied: Boolean(activeRoom.ratingApplied),
       finalTime: finished ? Number(you.finalTime) : null,
       tps: finished && Number.isFinite(you.tps) ? Number(you.tps) : null,
       moveCount: finished && Number.isFinite(you.moveCount) ? Number(you.moveCount) : 0,
@@ -836,7 +943,13 @@ function renderBattleResult() {
   };
   const hostResult = formatResultPlayer(host);
   const guestResult = formatResultPlayer(guest);
-  battleResult.textContent = `Winner: ${winner} | ${hostResult} | ${guestResult}`;
+  const myRating = activeRoom.ratingChanges?.[currentUser?.uid];
+  const ratingMessage = activeRoom.mode === "ranked"
+    ? (activeRoom.ratingApplied && myRating
+      ? `Rating: ${myRating.before} → ${myRating.after} (${myRating.change >= 0 ? "+" : ""}${myRating.change})`
+      : (activeRoom.ratingNotice || "No rating change."))
+    : "Friend Battle: no rating change";
+  battleResult.textContent = `Winner: ${winner} | ${hostResult} | ${guestResult} | ${ratingMessage}`;
 
   const iWon = activeRoom.winnerUid === currentUser?.uid;
   battleResultBadge.textContent = iWon ? "WINNER" : "LOSER";
@@ -877,8 +990,11 @@ function renderBattleUi() {
 
   roomIdInput.value = activeRoomId;
   roomUrlOutput.value = getRoomUrl(activeRoomId);
-  battleRoomMeta.textContent = `Room: ${activeRoomId} | Players: ${count}/2`;
-  battleModeLabel.textContent = activeRoom.mode === "random" ? "Random Battle" : "Friend Battle";
+  battleRoomMeta.textContent = activeRoom.mode === "ranked"
+    ? `Ranked match | Players: ${count}/2`
+    : `Room: ${activeRoomId} | Players: ${count}/2`;
+  battleModeLabel.textContent = activeRoom.mode === "ranked" ? "Ranked Battle" : "Friend Battle";
+  copyRoomUrlBtn.hidden = activeRoom.mode === "ranked";
   battleScramble.textContent = activeRoom.scramble || "";
   renderBattlePlayer("battleYou", you, activeRoomRole);
   renderBattlePlayer("battleOpponent", opponent, getOpponentRole());
@@ -1046,6 +1162,9 @@ async function startRematchIfBothReady() {
       firstFinisherUid: "",
       finishDeadlineMs: 0,
       finishedAt: null,
+      ratingApplied: false,
+      ratingNotice: "",
+      ratingChanges: {},
       updatedAt: serverTimestamp()
     });
   });
@@ -1115,9 +1234,10 @@ async function createBattleRoom(mode = "friend") {
   }
 }
 
-async function startRandomBattle() {
-  if (!currentUser) {
-    setRandomStatus("Log in or use Guest Login to find an opponent.");
+async function startRankedBattle() {
+  const eligibility = await getRankedBattleEligibility();
+  if (!eligibility.eligible) {
+    setRandomStatus(eligibility.message);
     return;
   }
 
@@ -1141,12 +1261,14 @@ async function startRandomBattle() {
   );
   const waitingSnapshot = await getDocs(waitingQuery);
   const candidate = waitingSnapshot.docs.find(queueDoc =>
-    queueDoc.id !== currentUser.uid && queueDoc.data().roomId
+    queueDoc.id !== currentUser.uid
+      && queueDoc.data().roomId
+      && queueDoc.data().mode === "ranked"
   );
 
   if (candidate) {
     setRandomStatus("Matched!");
-    await joinBattleRoom(candidate.data().roomId);
+    await joinBattleRoom(candidate.data().roomId, true);
     return;
   }
 
@@ -1159,7 +1281,7 @@ async function startRandomBattle() {
 
   const room = {
     roomId,
-    mode: "random",
+    mode: "ranked",
     scramble,
     status: "waiting",
     hostUid: currentUser.uid,
@@ -1177,6 +1299,7 @@ async function startRandomBattle() {
   await setDoc(doc(db, MATCHMAKING_COLLECTION, currentUser.uid), {
     uid: currentUser.uid,
     name: getPlayerName(),
+    mode: "ranked",
     status: "waiting",
     roomId,
     createdAt: serverTimestamp(),
@@ -1199,15 +1322,15 @@ async function startRandomBattle() {
   });
   matchmakingUnsubscribe = onSnapshot(doc(db, MATCHMAKING_COLLECTION, currentUser.uid), snapshot => {
     const entry = snapshot.data();
-    if (entry?.status === "matched" && entry.roomId) enterMatchedRandomRoom(entry.roomId);
+    if (entry?.status === "matched" && entry.roomId) enterMatchedRankedRoom(entry.roomId);
   });
-  watchForRandomRoom();
+  watchForRankedRoom();
   matchmakingTimeout = window.setTimeout(() => {
     cancelRandomMatch("No opponent found. Matchmaking cancelled.");
   }, 60000);
 }
 
-async function joinBattleRoom(roomId) {
+async function joinBattleRoom(roomId, allowRankedMatch = false) {
   if (!currentUser) {
     setBattleStatus("Log in or use Guest Login to join a room.");
     return;
@@ -1227,6 +1350,10 @@ async function joinBattleRoom(roomId) {
   let room = snapshot.data();
   if (room.status === "cancelled" || room.status === "finished") {
     setBattleStatus("This room is no longer available.");
+    return;
+  }
+  if (room.mode === "ranked" && !allowRankedMatch) {
+    setBattleStatus("Ranked Battle is available through matchmaking only.");
     return;
   }
 
@@ -1398,15 +1525,100 @@ async function finalizeBattle() {
     const guest = guestRef ? (await transaction.get(guestRef)).data() : null;
     const completed = [host, guest].filter(isPlayerFinished).sort((a, b) => a.finalTime - b.finalTime);
     const winner = completed[0] || null;
+    const mode = room.mode === "ranked" ? "ranked" : "friend";
+    const hostUserRef = host?.uid ? doc(db, USERS_COLLECTION, host.uid) : null;
+    const guestUserRef = guest?.uid ? doc(db, USERS_COLLECTION, guest.uid) : null;
+    const hostUserSnapshot = hostUserRef ? await transaction.get(hostUserRef) : null;
+    const guestUserSnapshot = guestUserRef ? await transaction.get(guestUserRef) : null;
+    const hostStats = { ...defaultUserStats(), ...(hostUserSnapshot?.data() || {}) };
+    const guestStats = { ...defaultUserStats(), ...(guestUserSnapshot?.data() || {}) };
+    const hostWon = Boolean(winner?.uid && winner.uid === host?.uid);
+    const guestWon = Boolean(winner?.uid && winner.uid === guest?.uid);
+
+    const updateStats = (stats, won) => {
+      const prefix = mode === "ranked" ? "ranked" : "friend";
+      return {
+        wins: Number(stats.wins || 0) + (won ? 1 : 0),
+        losses: Number(stats.losses || 0) + (won ? 0 : 1),
+        [`${prefix}Battles`]: Number(stats[`${prefix}Battles`] || 0) + 1,
+        [`${prefix}Wins`]: Number(stats[`${prefix}Wins`] || 0) + (won ? 1 : 0),
+        [`${prefix}Losses`]: Number(stats[`${prefix}Losses`] || 0) + (won ? 0 : 1)
+      };
+    };
+
+    const hostUpdate = updateStats(hostStats, hostWon);
+    const guestUpdate = updateStats(guestStats, guestWon);
+    let ratingApplied = false;
+    let ratingNotice = "Friend Battle: no rating change";
+    const ratingChanges = {};
+
+    if (mode === "ranked" && host?.uid && guest?.uid) {
+      const hostOpponentRef = doc(db, USERS_COLLECTION, host.uid, "opponents", guest.uid);
+      const guestOpponentRef = doc(db, USERS_COLLECTION, guest.uid, "opponents", host.uid);
+      const hostOpponent = (await transaction.get(hostOpponentRef)).data() || {};
+      const guestOpponent = (await transaction.get(guestOpponentRef)).data() || {};
+      const previousMeetings = Math.max(
+        Number(hostOpponent.rankedBattleCount || 0),
+        Number(guestOpponent.rankedBattleCount || 0)
+      );
+      const hostRating = Number(hostStats.rating) || INITIAL_RATING;
+      const guestRating = Number(guestStats.rating) || INITIAL_RATING;
+
+      if (previousMeetings < SAME_OPPONENT_RANKED_LIMIT) {
+        const hostExpected = 1 / (1 + 10 ** ((guestRating - hostRating) / 400));
+        const hostChange = Math.round(RATING_K * ((hostWon ? 1 : 0) - hostExpected));
+        const guestChange = -hostChange;
+        hostUpdate.rating = hostRating + hostChange;
+        guestUpdate.rating = guestRating + guestChange;
+        ratingChanges[host.uid] = { before: hostRating, after: hostRating + hostChange, change: hostChange };
+        ratingChanges[guest.uid] = { before: guestRating, after: guestRating + guestChange, change: guestChange };
+        ratingApplied = true;
+        ratingNotice = "";
+      } else {
+        ratingChanges[host.uid] = { before: hostRating, after: hostRating, change: 0 };
+        ratingChanges[guest.uid] = { before: guestRating, after: guestRating, change: 0 };
+        ratingNotice = "No rating change: same opponent limit reached.";
+      }
+
+      transaction.set(hostOpponentRef, {
+        rankedBattleCount: previousMeetings + 1,
+        lastRankedBattleAt: serverTimestamp()
+      }, { merge: true });
+      transaction.set(guestOpponentRef, {
+        rankedBattleCount: previousMeetings + 1,
+        lastRankedBattleAt: serverTimestamp()
+      }, { merge: true });
+    }
+
+    if (hostUserRef) {
+      transaction.set(hostUserRef, {
+        uid: host.uid,
+        name: host.name || "Player",
+        ...hostUpdate,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    }
+    if (guestUserRef) {
+      transaction.set(guestUserRef, {
+        uid: guest.uid,
+        name: guest.name || "Player",
+        ...guestUpdate,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    }
 
     transaction.update(roomRef, {
       status: "finished",
       finishedAt: serverTimestamp(),
       winnerUid: winner?.uid || "",
       winnerName: winner?.name || "",
+      ratingApplied,
+      ratingNotice,
+      ratingChanges,
       updatedAt: serverTimestamp()
     });
   });
+  refreshBattleRatingRanking().catch(console.error);
 }
 
 function renderBattleLocalTimer(seconds) {
@@ -1545,7 +1757,7 @@ function setupAuthUi() {
   });
 
   randomBattleBtn.addEventListener("click", () => {
-    startRandomBattle().catch(error => {
+    startRankedBattle().catch(error => {
       setRandomStatus("Matchmaking could not start.");
       console.error(error);
     });
@@ -1622,6 +1834,9 @@ if (isConfigured()) {
 
     if (user) {
       setStatus(`Logged in as ${user.displayName || "Guest"}`);
+      ensureUserProfile()
+        .then(refreshBattleRatingRanking)
+        .catch(console.error);
       refreshAccountRank();
       submitPendingSolves().catch(error => {
         setStatus("Pending times could not be submitted.");
@@ -1643,6 +1858,7 @@ if (isConfigured()) {
   });
 
   refreshRanking();
+  refreshBattleRatingRanking();
 } else {
   setStatus("Set firebase-config.js to enable login and online ranking.");
   setRankingMessage("Firebase config is required.");
