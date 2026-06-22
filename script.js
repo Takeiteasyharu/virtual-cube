@@ -76,11 +76,11 @@ function saveKeyBindings() {
 
 function getAnimationSpeed() {
   const value = localStorage.getItem(ANIMATION_SPEED_KEY);
-  return value === "infinity" || ["20", "10", "5", "3", "2", "1"].includes(value) ? value : "10";
+  return value === "infinity" || ["20", "18", "16", "14", "12", "10", "5", "3", "2", "1"].includes(value) ? value : "10";
 }
 
 function setAnimationSpeed(value) {
-  const normalized = value === "infinity" || ["20", "10", "5", "3", "2", "1"].includes(value) ? value : "10";
+  const normalized = value === "infinity" || ["20", "18", "16", "14", "12", "10", "5", "3", "2", "1"].includes(value) ? value : "10";
   localStorage.setItem(ANIMATION_SPEED_KEY, normalized);
 }
 
