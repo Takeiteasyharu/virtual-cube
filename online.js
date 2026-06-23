@@ -442,6 +442,13 @@ async function refreshBattleRatingRanking() {
   if (!battleRatingList || !isConfigured()) return;
 
   battleRatingList.innerHTML = "";
+  if (!currentUser) {
+    const item = document.createElement("li");
+    item.textContent = "Log in to view battle ratings.";
+    battleRatingList.appendChild(item);
+    return;
+  }
+
   try {
     const snapshot = await getDocs(query(
       collection(db, USERS_COLLECTION),
