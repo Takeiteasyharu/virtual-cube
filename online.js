@@ -115,7 +115,6 @@ let displayedOpponentRatingUid = "";
 let readyInspectionStarting = false;
 const savedBattleResultKeys = new Set();
 const refreshedBattleRatingKeys = new Set();
-const appliedRankedRatingKeys = new Set();
 
 function isConfigured() {
   return Boolean(config.apiKey && !config.apiKey.startsWith("YOUR_"));
@@ -965,57 +964,6 @@ function isCountedBattleMove(move) {
   return !["x", "x'", "y", "y'", "z", "z'"].includes(move?.move);
 }
 
-async function applyOwnRankedRating() {
-  if (!currentUser || !activeRoom || activeRoom.mode !== "ranked" || !activeRoom.ratingApplied) return;
-
-  const key = `${activeRoomId}_${activeRound}_${currentUser.uid}`;
-  if (appliedRankedRatingKeys.has(key)) return;
-  const change = activeRoom.ratingChanges?.[currentUser.uid];
-  if (!change || !Number.isFinite(change.after)) return;
-  appliedRankedRatingKeys.add(key);
-
-  try {
-    await runTransaction(db, async transaction => {
-      const roomRef = doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId);
-      const profileRef = userRef();
-      const roomSnapshot = await transaction.get(roomRef);
-      const profileSnapshot = await transaction.get(profileRef);
-      const room = roomSnapshot.data();
-      const profile = profileSnapshot.data() || defaultUserStats();
-      const confirmedChange = room?.ratingChanges?.[currentUser.uid];
-      if (
-        room?.mode !== "ranked" ||
-        room?.status !== "finished" ||
-        !room?.ratingApplied ||
-        Number(room.round) !== activeRound ||
-        !Number.isFinite(confirmedChange?.after)
-      ) return;
-      if (
-        profile.lastRatedRoomId === activeRoomId &&
-        Number(profile.lastRatedRound) === activeRound
-      ) return;
-
-      const won = room.winnerUid === currentUser.uid;
-      transaction.update(profileRef, {
-        rating: Number(confirmedChange.after),
-        rankedBattles: Number(profile.rankedBattles || 0) + 1,
-        wins: Number(profile.wins || 0) + (won ? 1 : 0),
-        losses: Number(profile.losses || 0) + (won ? 0 : 1),
-        rankedWins: Number(profile.rankedWins || 0) + (won ? 1 : 0),
-        rankedLosses: Number(profile.rankedLosses || 0) + (won ? 0 : 1),
-        lastRatedRoomId: activeRoomId,
-        lastRatedRound: activeRound,
-        updatedAt: serverTimestamp()
-      });
-    });
-    await Promise.all([refreshBattleRatingRanking(), refreshBattleAccountRating()]);
-    if (!profileModal.hidden) await showProfile();
-  } catch (error) {
-    appliedRankedRatingKeys.delete(key);
-    console.error("Rating could not be applied.", error);
-  }
-}
-
 async function saveBattleResultForCurrentUser() {
   if (!currentUser || !activeRoom || activeRoom.status !== "finished") return;
 
@@ -1040,6 +988,8 @@ async function saveBattleResultForCurrentUser() {
       ? (activeRoom.winnerUid === currentUser.uid ? "win" : "loss")
       : "dnf";
     const ratingChange = activeRoom.ratingChanges?.[currentUser.uid]?.change || 0;
+    const ratingBefore = activeRoom.ratingChanges?.[currentUser.uid]?.before ?? null;
+    const ratingAfter = activeRoom.ratingChanges?.[currentUser.uid]?.after ?? null;
 
     await setDoc(resultRef, {
       uid: currentUser.uid,
@@ -1049,6 +999,8 @@ async function saveBattleResultForCurrentUser() {
       mode: activeRoom.mode === "ranked" ? "ranked" : "friend",
       result,
       ratingChange,
+      ratingBefore,
+      ratingAfter,
       ratingApplied: Boolean(activeRoom.ratingApplied),
       finalTime: finished ? Number(you.finalTime) : null,
       tps: finished && Number.isFinite(you.tps) ? Number(you.tps) : null,
@@ -1272,9 +1224,13 @@ function renderBattleUi() {
   renderRematchPanel(you, opponent);
 
   if (activeRoom.status === "finished") {
-    applyOwnRankedRating().catch(console.error);
-    saveBattleResultForCurrentUser().catch(console.error);
-    refreshRatingAfterBattle();
+    if (activeRoom.mode === "ranked" && !activeRoom.ratingUpdated) {
+      applyRankedBattleResultAsHost().catch(console.error);
+    }
+    if (activeRoom.mode !== "ranked" || activeRoom.ratingUpdated) {
+      saveBattleResultForCurrentUser().catch(console.error);
+      refreshRatingAfterBattle();
+    }
   }
 
   if (activeRoom.status === "finishing" && Date.now() >= Number(activeRoom.finishDeadlineMs)) {
@@ -1479,6 +1435,7 @@ async function startRematchIfBothReady() {
       finishDeadlineMs: 0,
       finishedAt: null,
       ratingApplied: false,
+      ratingUpdated: false,
       ratingNotice: "",
       ratingChanges: {},
       updatedAt: serverTimestamp()
@@ -1519,6 +1476,7 @@ async function createBattleRoom(mode = "friend") {
     winnerName: "",
     finishDeadlineMs: 0,
     ratingApplied: false,
+    ratingUpdated: false,
     ratingChanges: {},
     round: 1,
     createdAt: serverTimestamp(),
@@ -1662,6 +1620,7 @@ async function startRankedBattle() {
     winnerName: "",
     finishDeadlineMs: 0,
     ratingApplied: false,
+    ratingUpdated: false,
     ratingChanges: {},
     round: 1,
     createdAt: serverTimestamp(),
@@ -1913,38 +1872,121 @@ async function finalizeBattle() {
     const guest = guestRef ? (await transaction.get(guestRef)).data() : null;
     const completed = [host, guest].filter(isPlayerFinished).sort((a, b) => a.finalTime - b.finalTime);
     const winner = completed[0] || null;
-    const roomUpdate = {
+    const loserUid = winner?.uid === host?.uid ? guest?.uid || "" : host?.uid || "";
+    transaction.update(roomRef, {
       status: "finished",
       finishedAt: serverTimestamp(),
       winnerUid: winner?.uid || "",
       winnerName: winner?.name || "",
+      loserUid,
       ratingApplied: false,
-      ratingNotice: "Friend Battle: no rating change",
+      ratingUpdated: false,
+      ratingNotice: room.mode === "ranked"
+        ? "Waiting for rating update."
+        : "Friend Battle: no rating change",
       ratingChanges: {},
       updatedAt: serverTimestamp()
-    };
-
-    if (room.mode === "ranked" && winner && host?.uid && guest?.uid) {
-      const hostUserRef = doc(db, USERS_COLLECTION, host.uid);
-      const guestUserRef = doc(db, USERS_COLLECTION, guest.uid);
-      const hostProfile = await transaction.get(hostUserRef);
-      const guestProfile = await transaction.get(guestUserRef);
-      const ratingChanges = calculateEloChanges(
-        hostProfile.data(),
-        guestProfile.data(),
-        winner.uid,
-        host.uid,
-        guest.uid
-      );
-      roomUpdate.ratingApplied = true;
-      roomUpdate.ratingNotice = "";
-      roomUpdate.ratingChanges = ratingChanges;
-    }
-
-    transaction.update(roomRef, roomUpdate);
+    });
   });
   refreshBattleRatingRanking().catch(console.error);
   refreshBattleAccountRating().catch(console.error);
+}
+
+async function applyRankedBattleResultAsHost() {
+  if (
+    !currentUser ||
+    !activeRoomId ||
+    !activeRoom ||
+    activeRoom.mode !== "ranked" ||
+    activeRoomRole !== "host" ||
+    activeRoom.ratingUpdated
+  ) return;
+
+  const roomId = activeRoomId;
+  const round = activeRound;
+  const roomRef = doc(db, BATTLE_ROOMS_COLLECTION, roomId);
+  try {
+    await runTransaction(db, async transaction => {
+      const roomSnapshot = await transaction.get(roomRef);
+      if (!roomSnapshot.exists()) return;
+      const room = roomSnapshot.data();
+      if (
+        room.mode !== "ranked" ||
+        room.status !== "finished" ||
+        room.ratingUpdated ||
+        !room.winnerUid ||
+        !room.hostUid ||
+        !room.guestUid
+      ) return;
+
+      const winnerUid = room.winnerUid;
+      const loserUid = winnerUid === room.hostUid ? room.guestUid : room.hostUid;
+      const winnerRef = doc(db, USERS_COLLECTION, winnerUid);
+      const loserRef = doc(db, USERS_COLLECTION, loserUid);
+      const winnerSnapshot = await transaction.get(winnerRef);
+      const loserSnapshot = await transaction.get(loserRef);
+      const ratingChanges = calculateEloChanges(
+        winnerUid === room.hostUid ? winnerSnapshot.data() : loserSnapshot.data(),
+        winnerUid === room.hostUid ? loserSnapshot.data() : winnerSnapshot.data(),
+        winnerUid,
+        room.hostUid,
+        room.guestUid
+      );
+      const winnerChange = ratingChanges[winnerUid];
+      const loserChange = ratingChanges[loserUid];
+      const winnerProfile = winnerSnapshot.data() || defaultUserStats();
+      const loserProfile = loserSnapshot.data() || defaultUserStats();
+
+      console.log("Ranked rating update", {
+        roomId,
+        winnerUid,
+        loserUid,
+        currentUserUid: currentUser.uid,
+        winnerBefore: winnerChange.before,
+        winnerAfter: winnerChange.after,
+        loserBefore: loserChange.before,
+        loserAfter: loserChange.after
+      });
+
+      transaction.update(winnerRef, {
+        rating: winnerChange.after,
+        wins: Number(winnerProfile.wins || 0) + 1,
+        rankedWins: Number(winnerProfile.rankedWins || 0) + 1,
+        rankedBattles: Number(winnerProfile.rankedBattles || 0) + 1,
+        lastRatedRoomId: roomId,
+        lastRatedRound: round,
+        updatedAt: serverTimestamp()
+      });
+      transaction.update(loserRef, {
+        rating: loserChange.after,
+        losses: Number(loserProfile.losses || 0) + 1,
+        rankedLosses: Number(loserProfile.rankedLosses || 0) + 1,
+        rankedBattles: Number(loserProfile.rankedBattles || 0) + 1,
+        lastRatedRoomId: roomId,
+        lastRatedRound: round,
+        updatedAt: serverTimestamp()
+      });
+      transaction.update(roomRef, {
+        ratingApplied: true,
+        ratingUpdated: true,
+        ratingUpdatedAt: serverTimestamp(),
+        loserUid,
+        winnerRatingBefore: winnerChange.before,
+        winnerRatingAfter: winnerChange.after,
+        loserRatingBefore: loserChange.before,
+        loserRatingAfter: loserChange.after,
+        ratingChanges,
+        ratingNotice: "",
+        updatedAt: serverTimestamp()
+      });
+    });
+    console.log("Ranked rating transaction succeeded", roomId);
+    await Promise.all([refreshBattleRatingRanking(), refreshBattleAccountRating()]);
+    if (!profileModal.hidden) await showProfile();
+  } catch (error) {
+    battleNotice.textContent = "Rating update failed. Check Firestore permissions.";
+    console.error("Ranked rating transaction failed", error);
+  }
 }
 
 function renderBattleLocalTimer(seconds) {
