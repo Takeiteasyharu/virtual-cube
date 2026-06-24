@@ -167,6 +167,27 @@ function calculateEloChanges(hostProfile, guestProfile, winnerUid, hostUid, gues
   };
 }
 
+function createRankedPairId(uidA, uidB) {
+  return [uidA, uidB].sort().join("_");
+}
+
+function getRepeatedOpponentMultiplier(battleNumber) {
+  if (battleNumber <= 5) return 1;
+  if (battleNumber <= 10) return 0.5;
+  return 0;
+}
+
+function applyRatingMultiplier(ratingChanges, hostUid, guestUid, multiplier) {
+  const host = ratingChanges[hostUid];
+  const guest = ratingChanges[guestUid];
+  const hostChange = Math.round(host.change * multiplier);
+  const guestChange = -hostChange;
+  return {
+    [hostUid]: { before: host.before, after: host.before + hostChange, change: hostChange },
+    [guestUid]: { before: guest.before, after: guest.before + guestChange, change: guestChange }
+  };
+}
+
 async function ensureUserProfile() {
   if (!currentUser || !db) return;
 
@@ -1030,6 +1051,8 @@ async function saveBattleResultForCurrentUser() {
       ratingChange,
       ratingBefore,
       ratingAfter,
+      repeatedOpponentBattleCount: Number(activeRoom.repeatedOpponentBattleCount || 0),
+      ratingMultiplier: Number(activeRoom.ratingMultiplier ?? 1),
       ratingApplied: Boolean(activeRoom.ratingApplied),
       finalTime: finished ? Number(you.finalTime) : null,
       tps: finished && Number.isFinite(you.tps) ? Number(you.tps) : null,
@@ -1197,10 +1220,13 @@ function renderBattleResult() {
       ? `Rating: ${myRating.before} → ${myRating.after} (${myRating.change >= 0 ? "+" : ""}${myRating.change})`
       : (activeRoom.ratingNotice || "No rating change."))
     : "Friend Battle: no rating change";
+  const repeatedOpponentMessage = activeRoom.mode === "ranked" && activeRoom.repeatedOpponent
+    ? ` | ${activeRoom.ratingNotice}`
+    : "";
   if (activeRoom.timeLimitReached) {
-    battleResult.textContent = `Time limit reached | Completion Score: ${host?.name || "Host"} ${host?.maxCompletionScore || 0} / 54, ${guest?.name || "Guest"} ${guest?.maxCompletionScore || 0} / 54 | ${activeRoom.isDraw ? "Draw" : `Winner: ${winner}`} | ${ratingMessage}`;
+    battleResult.textContent = `Time limit reached | Completion Score: ${host?.name || "Host"} ${host?.maxCompletionScore || 0} / 54, ${guest?.name || "Guest"} ${guest?.maxCompletionScore || 0} / 54 | ${activeRoom.isDraw ? "Draw" : `Winner: ${winner}`} | ${ratingMessage}${repeatedOpponentMessage}`;
   } else {
-    battleResult.textContent = `Winner: ${winner} | ${hostResult} | ${guestResult} | ${ratingMessage}`;
+    battleResult.textContent = `Winner: ${winner} | ${hostResult} | ${guestResult} | ${ratingMessage}${repeatedOpponentMessage}`;
   }
 
   const iWon = activeRoom.winnerUid === currentUser?.uid;
@@ -2041,15 +2067,28 @@ async function applyRankedBattleResultAsHost() {
       if (!isDraw && !room.winnerUid) return;
       const hostUserRef = doc(db, USERS_COLLECTION, room.hostUid);
       const guestUserRef = doc(db, USERS_COLLECTION, room.guestUid);
+      const pairId = createRankedPairId(room.hostUid, room.guestUid);
+      const pairRef = doc(db, "rankedPairs", pairId);
       const hostSnapshot = await transaction.get(hostUserRef);
       const guestSnapshot = await transaction.get(guestUserRef);
-      const ratingChanges = calculateEloChanges(
+      const pairSnapshot = await transaction.get(pairRef);
+      const pair = pairSnapshot.data() || {};
+      if (pair.lastRoomId === roomId) return;
+      const battleNumber = Number(pair.battleCount || 0) + 1;
+      const ratingMultiplier = getRepeatedOpponentMultiplier(battleNumber);
+      const normalRatingChanges = calculateEloChanges(
         hostSnapshot.data(),
         guestSnapshot.data(),
         room.winnerUid,
         room.hostUid,
         room.guestUid,
         isDraw
+      );
+      const ratingChanges = applyRatingMultiplier(
+        normalRatingChanges,
+        room.hostUid,
+        room.guestUid,
+        ratingMultiplier
       );
       const hostChange = ratingChanges[room.hostUid];
       const guestChange = ratingChanges[room.guestUid];
@@ -2066,7 +2105,10 @@ async function applyRankedBattleResultAsHost() {
         hostBefore: hostChange.before,
         hostAfter: hostChange.after,
         guestBefore: guestChange.before,
-        guestAfter: guestChange.after
+        guestAfter: guestChange.after,
+        pairId,
+        battleNumber,
+        ratingMultiplier
       });
 
       transaction.update(hostUserRef, {
@@ -2102,9 +2144,21 @@ async function applyRankedBattleResultAsHost() {
         loserRatingBefore: room.loserUid ? ratingChanges[room.loserUid].before : null,
         loserRatingAfter: room.loserUid ? ratingChanges[room.loserUid].after : null,
         ratingChanges,
-        ratingNotice: "",
+        repeatedOpponent: battleNumber > 5,
+        repeatedOpponentBattleCount: battleNumber,
+        ratingMultiplier,
+        ratingNotice: ratingMultiplier === 0
+          ? "Repeated Opponent: Rating change disabled."
+          : (ratingMultiplier === 0.5 ? "Repeated Opponent: Rating change reduced to 50%." : ""),
         updatedAt: serverTimestamp()
       });
+      transaction.set(pairRef, {
+        playerA: [room.hostUid, room.guestUid].sort()[0],
+        playerB: [room.hostUid, room.guestUid].sort()[1],
+        battleCount: battleNumber,
+        lastBattleAt: serverTimestamp(),
+        lastRoomId: roomId
+      }, { merge: true });
     });
     console.log("Ranked rating transaction succeeded", roomId);
     await Promise.all([refreshBattleRatingRanking(), refreshBattleAccountRating()]);
