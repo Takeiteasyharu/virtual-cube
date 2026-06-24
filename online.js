@@ -64,6 +64,7 @@ const copyRoomUrlBtn = document.getElementById("copyRoomUrlBtn");
 const leaveBattleBtn = document.getElementById("leaveBattleBtn");
 const battleRoomMeta = document.getElementById("battleRoomMeta");
 const battleScramble = document.getElementById("battleScramble");
+const rankedTimeLimitDisplay = document.getElementById("rankedTimeLimitDisplay");
 const battleNotice = document.getElementById("battleNotice");
 const battleResult = document.getElementById("battleResult");
 const battleResultBadge = document.getElementById("battleResultBadge");
@@ -141,6 +142,7 @@ function defaultUserStats() {
     losses: 0,
     rankedWins: 0,
     rankedLosses: 0,
+    rankedDraws: 0,
     friendWins: 0,
     friendLosses: 0
   };
@@ -151,11 +153,11 @@ function getRating(profile) {
   return Number.isFinite(rating) ? rating : INITIAL_RATING;
 }
 
-function calculateEloChanges(hostProfile, guestProfile, winnerUid, hostUid, guestUid) {
+function calculateEloChanges(hostProfile, guestProfile, winnerUid, hostUid, guestUid, isDraw = false) {
   const hostBefore = getRating(hostProfile);
   const guestBefore = getRating(guestProfile);
   const hostExpected = 1 / (1 + Math.pow(10, (guestBefore - hostBefore) / 400));
-  const hostScore = winnerUid === hostUid ? 1 : 0;
+  const hostScore = isDraw ? 0.5 : (winnerUid === hostUid ? 1 : 0);
   const hostChange = Math.round(ELO_K_FACTOR * (hostScore - hostExpected));
   const guestChange = -hostChange;
 
@@ -770,6 +772,9 @@ function createPlayer(role) {
     finalTime: null,
     tps: null,
     moveCount: 0,
+    currentCompletionScore: 0,
+    maxCompletionScore: 0,
+    timeLimitReached: false,
     lastMove: "",
     round: 1,
     rematchReady: false,
@@ -964,6 +969,27 @@ function isCountedBattleMove(move) {
   return !["x", "x'", "y", "y'", "z", "z'"].includes(move?.move);
 }
 
+function getBattlePlayerSeconds(player, role) {
+  return role === activeRoomRole
+    ? localBattleTimerSeconds
+    : getPlayerElapsedSeconds(player);
+}
+
+function renderRankedTimeLimit(you) {
+  if (!rankedTimeLimitDisplay) return;
+  const isRanked = activeRoom?.mode === "ranked";
+  rankedTimeLimitDisplay.hidden = !isRanked;
+  if (!isRanked) return;
+
+  const elapsed = getBattlePlayerSeconds(you, activeRoomRole);
+  const remaining = Math.max(0, 120 - elapsed);
+  const minutes = Math.floor(remaining / 60);
+  const seconds = String(Math.floor(remaining % 60)).padStart(2, "0");
+  rankedTimeLimitDisplay.textContent = you?.timeLimitReached
+    ? `Time limit reached | Completion Score: ${you.maxCompletionScore || 0} / 54`
+    : `Time limit: 2:00 | Remaining: ${minutes}:${seconds}`;
+}
+
 async function saveBattleResultForCurrentUser() {
   if (!currentUser || !activeRoom || activeRoom.status !== "finished") return;
 
@@ -984,9 +1010,12 @@ async function saveBattleResultForCurrentUser() {
     if (existing.exists()) return;
 
     const finished = isPlayerFinished(you);
-    const result = finished
-      ? (activeRoom.winnerUid === currentUser.uid ? "win" : "loss")
-      : "dnf";
+    const timeLimitReached = Boolean(activeRoom.timeLimitReached);
+    const result = activeRoom.isDraw
+      ? "draw"
+      : (timeLimitReached || finished)
+        ? (activeRoom.winnerUid === currentUser.uid ? "win" : "loss")
+        : "dnf";
     const ratingChange = activeRoom.ratingChanges?.[currentUser.uid]?.change || 0;
     const ratingBefore = activeRoom.ratingChanges?.[currentUser.uid]?.before ?? null;
     const ratingAfter = activeRoom.ratingChanges?.[currentUser.uid]?.after ?? null;
@@ -1007,6 +1036,11 @@ async function saveBattleResultForCurrentUser() {
       moveCount: finished && Number.isFinite(you.moveCount) ? Number(you.moveCount) : 0,
       opponentUid: opponent?.uid || "",
       opponentName: opponent?.name || "Player",
+      opponentRatingBefore: activeRoom.ratingChanges?.[opponent?.uid]?.before ?? null,
+      opponentRatingAfter: activeRoom.ratingChanges?.[opponent?.uid]?.after ?? null,
+      maxCompletionScore: Number(you.maxCompletionScore) || 0,
+      opponentMaxCompletionScore: Number(opponent?.maxCompletionScore) || 0,
+      timeLimitReached,
       createdAt: serverTimestamp()
     });
     window.trackCubeEvent?.("battle_finish", {
@@ -1062,12 +1096,10 @@ function setBattleText(id, value) {
 
 function renderBattlePlayer(prefix, player, role) {
   const isFinished = isPlayerFinished(player);
-  const isDnf = activeRoom?.status === "finished" && player && !isFinished;
+  const isDnf = activeRoom?.status === "finished" && !activeRoom?.timeLimitReached && player && !isFinished;
   const isDisconnected = isPlayerDisconnected(player);
   const moves = battleMovesByRole[role] || [];
-  const currentTimer = role === activeRoomRole
-    ? localBattleTimerSeconds
-    : getPlayerElapsedSeconds(player);
+  const currentTimer = getBattlePlayerSeconds(player, role);
 
   setBattleText(`${prefix}Name`, player?.name || (prefix === "battleOpponent" ? "Waiting for player..." : "-"));
   const visibleMoveCount = isFinished
@@ -1079,6 +1111,7 @@ function renderBattlePlayer(prefix, player, role) {
   setBattleText(`${prefix}Final`, isDnf ? "DNF" : formatBattleTime(player?.finalTime));
   setBattleText(`${prefix}Tps`, isDnf ? "-" : (Number.isFinite(player?.tps) ? player.tps.toFixed(2) : "-"));
   setBattleText(`${prefix}MoveCount`, isDnf || !player ? "-" : String(visibleMoveCount || 0));
+  setBattleText(`${prefix}CompletionScore`, player ? `${player.maxCompletionScore || 0} / 54` : "-");
   setBattleText(`${prefix}LastMove`, player?.lastMove || moves.at(-1)?.move || "-");
   setBattleText(`${prefix}MoveLog`, moves.length ? moves.slice(-20).map(move => move.move).join(" ") : "-");
 }
@@ -1164,11 +1197,15 @@ function renderBattleResult() {
       ? `Rating: ${myRating.before} → ${myRating.after} (${myRating.change >= 0 ? "+" : ""}${myRating.change})`
       : (activeRoom.ratingNotice || "No rating change."))
     : "Friend Battle: no rating change";
-  battleResult.textContent = `Winner: ${winner} | ${hostResult} | ${guestResult} | ${ratingMessage}`;
+  if (activeRoom.timeLimitReached) {
+    battleResult.textContent = `Time limit reached | Completion Score: ${host?.name || "Host"} ${host?.maxCompletionScore || 0} / 54, ${guest?.name || "Guest"} ${guest?.maxCompletionScore || 0} / 54 | ${activeRoom.isDraw ? "Draw" : `Winner: ${winner}`} | ${ratingMessage}`;
+  } else {
+    battleResult.textContent = `Winner: ${winner} | ${hostResult} | ${guestResult} | ${ratingMessage}`;
+  }
 
   const iWon = activeRoom.winnerUid === currentUser?.uid;
-  battleResultBadge.textContent = iWon ? "WINNER" : "LOSER";
-  battleResultBadge.className = `battle-result-badge ${iWon ? "winner" : "loser"}`;
+  battleResultBadge.textContent = activeRoom.isDraw ? "DRAW" : (iWon ? "WINNER" : "LOSER");
+  battleResultBadge.className = `battle-result-badge ${activeRoom.isDraw ? "" : (iWon ? "winner" : "loser")}`;
 }
 
 function renderBattleReadyButton(you, opponent) {
@@ -1217,6 +1254,7 @@ function renderBattleUi() {
   renderBattlePlayer("battleOpponent", opponent, getOpponentRole());
   loadOpponentRating(opponent);
   renderOpponentCube(opponent);
+  renderRankedTimeLimit(you);
   renderBattleNotice();
   returnToNormalAfterOpponentExit(opponent);
   renderBattleResult();
@@ -1235,6 +1273,10 @@ function renderBattleUi() {
 
   if (activeRoom.status === "finishing" && Date.now() >= Number(activeRoom.finishDeadlineMs)) {
     finalizeBattle().catch(console.error);
+  }
+
+  if (activeRoom.mode === "ranked" && you?.timeLimitReached && opponent?.timeLimitReached) {
+    finalizeRankedTimeLimit().catch(console.error);
   }
 }
 
@@ -1398,6 +1440,9 @@ async function beginNextBattleRound(room) {
     finalTime: null,
     tps: null,
     moveCount: 0,
+    currentCompletionScore: 0,
+    maxCompletionScore: 0,
+    timeLimitReached: false,
     lastMove: "",
     rematchReady: false,
     round: activeRound,
@@ -1438,6 +1483,9 @@ async function startRematchIfBothReady() {
       ratingUpdated: false,
       ratingNotice: "",
       ratingChanges: {},
+      timeLimitReached: false,
+      isDraw: false,
+      playerMaxCompletionScores: {},
       updatedAt: serverTimestamp()
     });
   });
@@ -1478,6 +1526,10 @@ async function createBattleRoom(mode = "friend") {
     ratingApplied: false,
     ratingUpdated: false,
     ratingChanges: {},
+    timeLimitSeconds: 120,
+    timeLimitReached: false,
+    isDraw: false,
+    playerMaxCompletionScores: {},
     round: 1,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
@@ -1622,6 +1674,10 @@ async function startRankedBattle() {
     ratingApplied: false,
     ratingUpdated: false,
     ratingChanges: {},
+    timeLimitSeconds: 120,
+    timeLimitReached: false,
+    isDraw: false,
+    playerMaxCompletionScores: {},
     round: 1,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp()
@@ -1821,6 +1877,67 @@ async function notifyBattleMove(move) {
   ]).catch(console.error);
 }
 
+async function notifyBattleCompletionScore(scores) {
+  if (!currentUser || !activeRoomId || !document.body.classList.contains("battle-mode")) return;
+  await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
+    currentCompletionScore: Math.max(0, Math.min(54, Math.floor(Number(scores.currentCompletionScore) || 0))),
+    maxCompletionScore: Math.max(0, Math.min(54, Math.floor(Number(scores.maxCompletionScore) || 0))),
+    updatedAt: serverTimestamp()
+  }).catch(console.error);
+}
+
+async function notifyRankedBattleTimeLimit(scores) {
+  if (!currentUser || !activeRoomId || activeRoom?.mode !== "ranked") return;
+  const maxCompletionScore = Math.max(0, Math.min(54, Math.floor(Number(scores.maxCompletionScore) || 0)));
+  await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
+    status: "time_limit",
+    timeLimitReached: true,
+    currentCompletionScore: Math.max(0, Math.min(54, Math.floor(Number(scores.currentCompletionScore) || 0))),
+    maxCompletionScore,
+    updatedAt: serverTimestamp()
+  });
+  finalizeRankedTimeLimit().catch(console.error);
+}
+
+async function finalizeRankedTimeLimit() {
+  if (!activeRoomId || activeRoom?.mode !== "ranked") return;
+  const roomRef = doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId);
+  const hostRef = doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", activeRoom.hostUid);
+  const guestRef = doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", activeRoom.guestUid);
+
+  await runTransaction(db, async transaction => {
+    const roomSnapshot = await transaction.get(roomRef);
+    if (!roomSnapshot.exists()) return;
+    const room = roomSnapshot.data();
+    if (room.mode !== "ranked" || room.status === "finished" || room.status === "finishing") return;
+
+    const host = (await transaction.get(hostRef)).data();
+    const guest = (await transaction.get(guestRef)).data();
+    if (!host?.timeLimitReached || !guest?.timeLimitReached) return;
+
+    const hostScore = Number(host.maxCompletionScore) || 0;
+    const guestScore = Number(guest.maxCompletionScore) || 0;
+    const isDraw = hostScore === guestScore;
+    const winnerUid = isDraw ? "" : (hostScore > guestScore ? room.hostUid : room.guestUid);
+    const loserUid = isDraw ? "" : (winnerUid === room.hostUid ? room.guestUid : room.hostUid);
+    transaction.update(roomRef, {
+      status: "finished",
+      finishedAt: serverTimestamp(),
+      timeLimitReached: true,
+      isDraw,
+      winnerUid,
+      winnerName: winnerUid === room.hostUid ? host.name : (winnerUid === room.guestUid ? guest.name : "Draw"),
+      loserUid,
+      playerMaxCompletionScores: { [room.hostUid]: hostScore, [room.guestUid]: guestScore },
+      ratingApplied: false,
+      ratingUpdated: false,
+      ratingChanges: {},
+      ratingNotice: "Time limit reached.",
+      updatedAt: serverTimestamp()
+    });
+  });
+}
+
 async function submitBattleSolve(time, scramble, solveStats = {}) {
   if (!currentUser || !activeRoomId || !document.body.classList.contains("battle-mode")) return;
   if (!Number.isFinite(time) || time < 3 || time >= 3600) return;
@@ -1840,6 +1957,8 @@ async function submitBattleSolve(time, scramble, solveStats = {}) {
       finalTime: time,
       tps: Number.isFinite(solveStats.tps) ? solveStats.tps : null,
       moveCount: Math.max(0, Number(solveStats.moveCount) || 0),
+      currentCompletionScore: Math.max(0, Math.min(54, Number(solveStats.currentCompletionScore) || 0)),
+      maxCompletionScore: Math.max(0, Math.min(54, Number(solveStats.maxCompletionScore) || 0)),
       updatedAt: serverTimestamp()
     });
 
@@ -1914,54 +2033,62 @@ async function applyRankedBattleResultAsHost() {
         room.mode !== "ranked" ||
         room.status !== "finished" ||
         room.ratingUpdated ||
-        !room.winnerUid ||
         !room.hostUid ||
         !room.guestUid
       ) return;
 
-      const winnerUid = room.winnerUid;
-      const loserUid = winnerUid === room.hostUid ? room.guestUid : room.hostUid;
-      const winnerRef = doc(db, USERS_COLLECTION, winnerUid);
-      const loserRef = doc(db, USERS_COLLECTION, loserUid);
-      const winnerSnapshot = await transaction.get(winnerRef);
-      const loserSnapshot = await transaction.get(loserRef);
+      const isDraw = Boolean(room.isDraw);
+      if (!isDraw && !room.winnerUid) return;
+      const hostUserRef = doc(db, USERS_COLLECTION, room.hostUid);
+      const guestUserRef = doc(db, USERS_COLLECTION, room.guestUid);
+      const hostSnapshot = await transaction.get(hostUserRef);
+      const guestSnapshot = await transaction.get(guestUserRef);
       const ratingChanges = calculateEloChanges(
-        winnerUid === room.hostUid ? winnerSnapshot.data() : loserSnapshot.data(),
-        winnerUid === room.hostUid ? loserSnapshot.data() : winnerSnapshot.data(),
-        winnerUid,
+        hostSnapshot.data(),
+        guestSnapshot.data(),
+        room.winnerUid,
         room.hostUid,
-        room.guestUid
+        room.guestUid,
+        isDraw
       );
-      const winnerChange = ratingChanges[winnerUid];
-      const loserChange = ratingChanges[loserUid];
-      const winnerProfile = winnerSnapshot.data() || defaultUserStats();
-      const loserProfile = loserSnapshot.data() || defaultUserStats();
+      const hostChange = ratingChanges[room.hostUid];
+      const guestChange = ratingChanges[room.guestUid];
+      const hostProfile = hostSnapshot.data() || defaultUserStats();
+      const guestProfile = guestSnapshot.data() || defaultUserStats();
+      const hostWon = room.winnerUid === room.hostUid;
+      const guestWon = room.winnerUid === room.guestUid;
 
       console.log("Ranked rating update", {
         roomId,
-        winnerUid,
-        loserUid,
+        winnerUid: room.winnerUid || "draw",
+        loserUid: room.loserUid || "",
         currentUserUid: currentUser.uid,
-        winnerBefore: winnerChange.before,
-        winnerAfter: winnerChange.after,
-        loserBefore: loserChange.before,
-        loserAfter: loserChange.after
+        hostBefore: hostChange.before,
+        hostAfter: hostChange.after,
+        guestBefore: guestChange.before,
+        guestAfter: guestChange.after
       });
 
-      transaction.update(winnerRef, {
-        rating: winnerChange.after,
-        wins: Number(winnerProfile.wins || 0) + 1,
-        rankedWins: Number(winnerProfile.rankedWins || 0) + 1,
-        rankedBattles: Number(winnerProfile.rankedBattles || 0) + 1,
+      transaction.update(hostUserRef, {
+        rating: hostChange.after,
+        wins: Number(hostProfile.wins || 0) + (hostWon ? 1 : 0),
+        losses: Number(hostProfile.losses || 0) + (guestWon ? 1 : 0),
+        rankedWins: Number(hostProfile.rankedWins || 0) + (hostWon ? 1 : 0),
+        rankedLosses: Number(hostProfile.rankedLosses || 0) + (guestWon ? 1 : 0),
+        rankedDraws: Number(hostProfile.rankedDraws || 0) + (isDraw ? 1 : 0),
+        rankedBattles: Number(hostProfile.rankedBattles || 0) + 1,
         lastRatedRoomId: roomId,
         lastRatedRound: round,
         updatedAt: serverTimestamp()
       });
-      transaction.update(loserRef, {
-        rating: loserChange.after,
-        losses: Number(loserProfile.losses || 0) + 1,
-        rankedLosses: Number(loserProfile.rankedLosses || 0) + 1,
-        rankedBattles: Number(loserProfile.rankedBattles || 0) + 1,
+      transaction.update(guestUserRef, {
+        rating: guestChange.after,
+        wins: Number(guestProfile.wins || 0) + (guestWon ? 1 : 0),
+        losses: Number(guestProfile.losses || 0) + (hostWon ? 1 : 0),
+        rankedWins: Number(guestProfile.rankedWins || 0) + (guestWon ? 1 : 0),
+        rankedLosses: Number(guestProfile.rankedLosses || 0) + (hostWon ? 1 : 0),
+        rankedDraws: Number(guestProfile.rankedDraws || 0) + (isDraw ? 1 : 0),
+        rankedBattles: Number(guestProfile.rankedBattles || 0) + 1,
         lastRatedRoomId: roomId,
         lastRatedRound: round,
         updatedAt: serverTimestamp()
@@ -1970,11 +2097,10 @@ async function applyRankedBattleResultAsHost() {
         ratingApplied: true,
         ratingUpdated: true,
         ratingUpdatedAt: serverTimestamp(),
-        loserUid,
-        winnerRatingBefore: winnerChange.before,
-        winnerRatingAfter: winnerChange.after,
-        loserRatingBefore: loserChange.before,
-        loserRatingAfter: loserChange.after,
+        winnerRatingBefore: room.winnerUid ? ratingChanges[room.winnerUid].before : null,
+        winnerRatingAfter: room.winnerUid ? ratingChanges[room.winnerUid].after : null,
+        loserRatingBefore: room.loserUid ? ratingChanges[room.loserUid].before : null,
+        loserRatingAfter: room.loserUid ? ratingChanges[room.loserUid].after : null,
         ratingChanges,
         ratingNotice: "",
         updatedAt: serverTimestamp()
@@ -2270,5 +2396,8 @@ window.submitOnlineSolve = submitOnlineSolve;
 window.notifyBattleSolveStarted = notifyBattleSolveStarted;
 window.submitBattleSolve = submitBattleSolve;
 window.notifyBattleMove = notifyBattleMove;
+window.notifyBattleCompletionScore = notifyBattleCompletionScore;
+window.notifyRankedBattleTimeLimit = notifyRankedBattleTimeLimit;
 window.renderBattleLocalTimer = renderBattleLocalTimer;
 window.isBattleMode = () => document.body.classList.contains("battle-mode");
+window.isRankedBattle = () => document.body.classList.contains("battle-mode") && activeRoom?.mode === "ranked";

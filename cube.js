@@ -411,6 +411,48 @@ function applyMoveInstant(move) {
   applyParsedMoveInstant(parsed);
 }
 
+function getCubeCompletionScore() {
+  const faces = {
+    x1: [], x_1: [], y1: [], y_1: [], z1: [], z_1: []
+  };
+  const centers = {};
+
+  cubies.forEach(cubie => {
+    cubie.updateMatrixWorld(true);
+    cubie.children.forEach(sticker => {
+      sticker.updateMatrixWorld(true);
+      const position = new THREE.Vector3();
+      sticker.getWorldPosition(position);
+      const color = sticker.material.color.getHex();
+      const ax = Math.abs(position.x);
+      const ay = Math.abs(position.y);
+      const az = Math.abs(position.z);
+      let face;
+      let isCenter = false;
+
+      if (ax > ay && ax > az) {
+        face = position.x > 0 ? "x1" : "x_1";
+        isCenter = Math.abs(position.y) < 0.2 && Math.abs(position.z) < 0.2;
+      } else if (ay > ax && ay > az) {
+        face = position.y > 0 ? "y1" : "y_1";
+        isCenter = Math.abs(position.x) < 0.2 && Math.abs(position.z) < 0.2;
+      } else {
+        face = position.z > 0 ? "z1" : "z_1";
+        isCenter = Math.abs(position.x) < 0.2 && Math.abs(position.y) < 0.2;
+      }
+
+      faces[face].push(color);
+      if (isCenter) centers[face] = color;
+    });
+  });
+
+  const score = Object.entries(faces).reduce((total, [face, colors]) => {
+    const centerColor = centers[face];
+    return total + colors.filter(color => color === centerColor).length;
+  }, 0);
+  return { score, total: 54 };
+}
+
 function applyParsedMoveInstant(parsed) {
   const { axis, layers, angle } = parsed;
 
@@ -470,3 +512,5 @@ function runNextMove() {
 
   rotateLayer(parsed.axis, parsed.layers, parsed.angle, durationMs);
 }
+
+window.getCubeCompletionScore = getCubeCompletionScore;

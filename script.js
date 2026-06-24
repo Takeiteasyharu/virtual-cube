@@ -100,6 +100,9 @@ let normalInspectionActive = false;
 let normalSolveState = "idle";
 let lockedScramble = "";
 let normalActiveScramble = "";
+let battleMaxCompletionScore = 0;
+let battleCurrentCompletionScore = 0;
+let rankedBattleTimeLimitTimeout = null;
 
 const ROTATION_MOVES = ["x", "x'", "yRotation", "yRotation'", "zRotation", "zRotation'"];
 
@@ -114,6 +117,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupFeaturePanelUi();
 
   setAfterMoveCallback(() => {
+    updateBattleCompletionScore();
     checkSolvedAndStopTimer();
   });
 
@@ -233,6 +237,28 @@ function resetSolveStats() {
   solveMoveCount = 0;
   solveMoves = [];
   solveStartedAt = 0;
+  battleMaxCompletionScore = 0;
+  battleCurrentCompletionScore = 0;
+}
+
+function clearRankedBattleTimeLimit() {
+  if (rankedBattleTimeLimitTimeout) {
+    window.clearTimeout(rankedBattleTimeLimitTimeout);
+    rankedBattleTimeLimitTimeout = null;
+  }
+}
+
+function updateBattleCompletionScore() {
+  if (!isBattleModeActive() || battleInputState !== "solving") return;
+  const result = window.getCubeCompletionScore?.();
+  if (!result) return;
+
+  battleCurrentCompletionScore = result.score;
+  battleMaxCompletionScore = Math.max(battleMaxCompletionScore, result.score);
+  window.notifyBattleCompletionScore?.({
+    currentCompletionScore: battleCurrentCompletionScore,
+    maxCompletionScore: battleMaxCompletionScore
+  });
 }
 
 function startNormalInspection() {
@@ -493,6 +519,19 @@ function startBattleSolve() {
   solveStartedAt = Date.now();
   startTimer();
 
+  if (window.isRankedBattle?.()) {
+    clearRankedBattleTimeLimit();
+    rankedBattleTimeLimitTimeout = window.setTimeout(() => {
+      updateBattleCompletionScore();
+      battleInputState = "time_limit";
+      stopTimerAtLimit(120);
+      window.notifyRankedBattleTimeLimit?.({
+        currentCompletionScore: battleCurrentCompletionScore,
+        maxCompletionScore: battleMaxCompletionScore
+      });
+    }, 120000);
+  }
+
   if (typeof window.notifyBattleSolveStarted === "function") {
     window.notifyBattleSolveStarted();
   }
@@ -521,6 +560,7 @@ function setSolvingMode(isSolving) {
 }
 
 function cancelCurrentSolve() {
+  clearRankedBattleTimeLimit();
   clearBattleInspection();
   clearNormalInspection();
   resetCube();
@@ -543,7 +583,9 @@ function getCurrentSolveStats(timeSeconds = null) {
   return {
     moveCount: solveMoveCount,
     moves: [...solveMoves],
-    tps: tps === null ? null : Number(tps.toFixed(2))
+    tps: tps === null ? null : Number(tps.toFixed(2)),
+    currentCompletionScore: battleCurrentCompletionScore,
+    maxCompletionScore: battleMaxCompletionScore
   };
 }
 
@@ -567,6 +609,7 @@ function checkSolvedAndStopTimer() {
     isCubeSolved()
   ) {
     stopTimer();
+    clearRankedBattleTimeLimit();
     readyToSolve = false;
     firstTurnDone = false;
     if (isBattleModeActive()) {

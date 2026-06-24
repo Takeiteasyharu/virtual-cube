@@ -50,6 +50,14 @@ function stopTimer() {
   renderStats();
 }
 
+function stopTimerAtLimit(seconds = 120) {
+  if (!timerRunning) return;
+  timerRunning = false;
+  clearInterval(timerInterval);
+  elapsedTime = Math.max(0, Number(seconds) || 0) * 1000;
+  updateTimerDisplay();
+}
+
 function resetTimer() {
   timerRunning = false;
   clearInterval(timerInterval);

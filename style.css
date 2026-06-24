@@ -724,6 +724,16 @@ body.battle-mode .opponent-cube-panel.opponent-unavailable {
   font-weight: bold;
 }
 
+.ranked-time-limit {
+  min-height: 24px;
+  margin: 8px 0;
+  color: #164c70;
+  text-align: center;
+  font-family: "Courier New", monospace;
+  font-size: 16px;
+  font-weight: bold;
+}
+
 .battle-mode-label {
   display: inline-block;
   margin-top: 6px;
@@ -1170,6 +1180,10 @@ body.dark.battle-mode .opponent-cube-panel {
 
 body.dark .battle-player-title,
 body.dark .battle-notice {
+  color: #a8dfff;
+}
+
+body.dark .ranked-time-limit {
   color: #a8dfff;
 }
 
