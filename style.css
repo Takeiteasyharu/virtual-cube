@@ -59,8 +59,9 @@ header {
 }
 
 h1 {
-  margin: 0 0 12px;
-  font-size: 28px;
+  margin: 0 0 16px;
+  font-size: 36px;
+  font-weight: 800;
 }
 
 .scramble {
@@ -113,7 +114,7 @@ body.dark.custom-background .battle-rematch {
   display: flex;
   flex-direction: column;
   align-items: center;
-  transform: none;
+  transform: translateY(-40px);
   z-index: 1;
 }
 
@@ -714,6 +715,10 @@ body.battle-mode .battle-screen {
 body.battle-mode main {
   min-height: 0;
   padding-top: 4px;
+}
+
+body.battle-mode .cube-area {
+  transform: none;
 }
 
 body.battle-mode #cubeContainer {
@@ -1333,7 +1338,8 @@ body.solving .timer {
   }
 
   h1 {
-    font-size: 24px;
+    margin-bottom: 14px;
+    font-size: 28px;
   }
 
   .scramble {
