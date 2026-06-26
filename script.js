@@ -49,6 +49,8 @@ const DEFAULT_KEY_MAP = Object.freeze({
 
 const ANIMATION_SPEED_KEY = "cubeAnimationSpeed";
 const KEY_BINDINGS_KEY = "cubeKeyBindings";
+const BACKGROUND_IMAGE_KEY = "cubeBackgroundImage";
+const BACKGROUND_IMAGE_MAX_BYTES = 3 * 1024 * 1024;
 let keyMap = { ...DEFAULT_KEY_MAP };
 let selectedBindingKey = "";
 
@@ -112,8 +114,10 @@ document.addEventListener("DOMContentLoaded", () => {
   initCube();
   renderStats();
   loadTheme();
+  loadCustomBackground();
   setupMoveInput();
   setupSettingsUi();
+  setupBackgroundSettingsUi();
   setupFeaturePanelUi();
 
   setAfterMoveCallback(() => {
@@ -735,6 +739,107 @@ function setupSettingsUi() {
   }, true);
 
   renderKeyBindings();
+}
+
+function setBackgroundStatus(message) {
+  const status = document.getElementById("backgroundStatus");
+  if (status) status.textContent = message;
+}
+
+function applyCustomBackground(dataUrl) {
+  if (dataUrl) {
+    document.body.style.backgroundImage = `url("${dataUrl}")`;
+    document.body.classList.add("custom-background");
+    setBackgroundStatus("Background image loaded.");
+    return;
+  }
+
+  document.body.style.backgroundImage = "";
+  document.body.classList.remove("custom-background");
+  setBackgroundStatus("");
+}
+
+function loadCustomBackground() {
+  applyCustomBackground(localStorage.getItem(BACKGROUND_IMAGE_KEY));
+}
+
+function readImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(reader.result));
+    reader.addEventListener("error", reject);
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImage(dataUrl) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.addEventListener("load", () => resolve(image));
+    image.addEventListener("error", reject);
+    image.src = dataUrl;
+  });
+}
+
+function dataUrlBytes(dataUrl) {
+  const base64 = String(dataUrl).split(",")[1] || "";
+  return Math.ceil((base64.length * 3) / 4);
+}
+
+async function compressBackgroundImage(file) {
+  const source = await readImageFile(file);
+  const image = await loadImage(source);
+  const maxSide = 1600;
+  const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+  const width = Math.max(1, Math.round(image.width * scale));
+  const height = Math.max(1, Math.round(image.height * scale));
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext("2d");
+  context.drawImage(image, 0, 0, width, height);
+
+  for (const quality of [0.85, 0.8, 0.75, 0.7, 0.65]) {
+    const dataUrl = canvas.toDataURL("image/jpeg", quality);
+    if (dataUrlBytes(dataUrl) <= BACKGROUND_IMAGE_MAX_BYTES) return dataUrl;
+  }
+
+  return null;
+}
+
+function setupBackgroundSettingsUi() {
+  const input = document.getElementById("backgroundImageInput");
+  const removeButton = document.getElementById("removeBackgroundBtn");
+
+  input?.addEventListener("change", async () => {
+    const file = input.files?.[0];
+    if (!file) return;
+
+    setBackgroundStatus("Processing image...");
+    try {
+      const dataUrl = await compressBackgroundImage(file);
+      if (!dataUrl) {
+        setBackgroundStatus("Image is too large. Please choose a smaller image.");
+        input.value = "";
+        return;
+      }
+
+      localStorage.setItem(BACKGROUND_IMAGE_KEY, dataUrl);
+      applyCustomBackground(dataUrl);
+      setBackgroundStatus("Background image saved on this device.");
+    } catch (error) {
+      setBackgroundStatus("Image could not be loaded.");
+      console.error(error);
+    } finally {
+      input.value = "";
+    }
+  });
+
+  removeButton?.addEventListener("click", () => {
+    localStorage.removeItem(BACKGROUND_IMAGE_KEY);
+    applyCustomBackground("");
+    setBackgroundStatus("Background image removed.");
+  });
 }
 
 function setupFeaturePanelUi() {

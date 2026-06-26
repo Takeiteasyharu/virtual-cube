@@ -332,6 +332,22 @@ function isValidRankingEntry(solve) {
   );
 }
 
+function isValidRankingTypeEntry(solve, rankingType) {
+  if (!isValidRankingEntry(solve) || solve.valid === false) return false;
+
+  if (rankingType === "tps") {
+    const tps = Number(solve.tps);
+    return Number.isFinite(tps) && tps > 0;
+  }
+
+  if (rankingType === "moves") {
+    const moveCount = Number(solve.moveCount);
+    return Number.isFinite(moveCount) && moveCount > 0;
+  }
+
+  return true;
+}
+
 function getPendingSolves() {
   try {
     return JSON.parse(localStorage.getItem(PENDING_SOLVES_KEY)) || [];
@@ -379,6 +395,7 @@ async function addRankingEntry(rankingType, time, scramble, solvedAt = new Date(
 
   await addDoc(collection(db, "solves"), {
     rankingType,
+    valid: true,
     time,
     scramble,
     tps: Number.isFinite(solveStats.tps) ? solveStats.tps : null,
@@ -450,14 +467,41 @@ async function refreshRanking() {
 
     entries.slice(0, 50).forEach((solve, index) => {
       const li = document.createElement("li");
-      const label = activeRankingType === "ao5" ? "Ao5" : "Single";
-      li.textContent = `#${index + 1} ${Number(solve.time).toFixed(2)} ${label} - ${solve.name || "Player"}`;
+      li.textContent = formatRankingEntry(solve, index, activeRankingType);
       rankingList.appendChild(li);
     });
   } catch (error) {
-    setRankingMessage("Ranking could not be loaded.");
+    if (isIndexError(error)) {
+      setRankingMessage(`Firestore index required: ${getRankingIndexHint(activeRankingType, activePeriod)}`);
+    } else {
+      setRankingMessage("Ranking could not be loaded.");
+    }
     console.error(error);
   }
+}
+
+function isIndexError(error) {
+  return error?.code === "failed-precondition" || String(error?.message || "").toLowerCase().includes("index");
+}
+
+function getRankingIndexHint(rankingType, period) {
+  const periodField = { today: "dayKey", week: "weekKey", month: "monthKey" }[period];
+
+  if (rankingType === "tps") {
+    return periodField
+      ? `solves: rankingType Asc, valid Asc, ${periodField} Asc, tps Desc`
+      : "solves: rankingType Asc, valid Asc, tps Desc";
+  }
+
+  if (rankingType === "moves") {
+    return periodField
+      ? `solves: rankingType Asc, valid Asc, ${periodField} Asc, moveCount Asc`
+      : "solves: rankingType Asc, valid Asc, moveCount Asc";
+  }
+
+  return periodField
+    ? `solves: rankingType Asc, ${periodField} Asc, time Asc`
+    : "solves: rankingType Asc, time Asc";
 }
 
 async function refreshBattleRatingRanking() {
@@ -498,6 +542,21 @@ async function refreshBattleRatingRanking() {
   }
 }
 
+function formatRankingEntry(solve, index, rankingType) {
+  const name = solve.name || "Player";
+
+  if (rankingType === "tps") {
+    return `#${index + 1} ${Number(solve.tps).toFixed(2)} TPS - ${name}`;
+  }
+
+  if (rankingType === "moves") {
+    return `#${index + 1} ${Math.round(Number(solve.moveCount))} moves - ${name}`;
+  }
+
+  const label = rankingType === "ao5" ? "Ao5" : "Single";
+  return `#${index + 1} ${Number(solve.time).toFixed(2)} ${label} - ${name}`;
+}
+
 async function refreshBattleAccountRating() {
   if (!currentUser || currentUser.isAnonymous) {
     accountRating.textContent = "Rating: -";
@@ -527,6 +586,43 @@ async function getRankingEntries(rankingType, period) {
   const solvesRef = collection(db, "solves");
   let rankingQuery;
   let legacyQuery = null;
+
+  if (rankingType === "tps" || rankingType === "moves") {
+    const metricField = rankingType === "tps" ? "tps" : "moveCount";
+    const direction = rankingType === "tps" ? "desc" : "asc";
+
+    if (period === "all") {
+      rankingQuery = query(
+        solvesRef,
+        where("rankingType", "==", "single"),
+        where("valid", "==", true),
+        orderBy(metricField, direction),
+        limit(50)
+      );
+    } else {
+      const keys = getPeriodKeys();
+      const fieldMap = { today: "dayKey", week: "weekKey", month: "monthKey" };
+      rankingQuery = query(
+        solvesRef,
+        where("rankingType", "==", "single"),
+        where("valid", "==", true),
+        where(fieldMap[period], "==", keys[period]),
+        orderBy(metricField, direction),
+        limit(50)
+      );
+    }
+
+    const snapshot = await getDocs(rankingQuery);
+    const entries = [];
+    snapshot.forEach(entryDoc => {
+      const solve = entryDoc.data();
+      if (isValidRankingTypeEntry(solve, rankingType)) entries.push(solve);
+    });
+
+    return entries.sort((a, b) => rankingType === "tps"
+      ? Number(b.tps) - Number(a.tps)
+      : Number(a.moveCount) - Number(b.moveCount));
+  }
 
   if (period === "all") {
     rankingQuery = query(
@@ -575,7 +671,7 @@ async function getRankingEntries(rankingType, period) {
         return;
       }
 
-      if (!isValidRankingEntry(solve)) return;
+      if (!isValidRankingTypeEntry(solve, rankingType)) return;
       seenIds.add(entryDoc.id);
       entries.push(solve);
     });

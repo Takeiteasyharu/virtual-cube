@@ -8,9 +8,27 @@ body {
   background: #eaffc9;
   color: #111;
   overflow-x: hidden;
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+
+body.custom-background::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: rgba(234, 255, 201, 0.72);
+  pointer-events: none;
+}
+
+body.dark.custom-background::before {
+  background: rgba(0, 0, 0, 0.62);
 }
 
 .app {
+  position: relative;
+  z-index: 1;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -70,6 +88,23 @@ main {
   overflow-y: auto;
   padding-right: 8px;
   z-index: 2;
+}
+
+body.custom-background .left-panel,
+body.custom-background .panel,
+body.custom-background .modal-content,
+body.custom-background .battle-player-card,
+body.custom-background .battle-rematch {
+  background: rgba(247, 255, 240, 0.84);
+  backdrop-filter: blur(2px);
+}
+
+body.dark.custom-background .left-panel,
+body.dark.custom-background .panel,
+body.dark.custom-background .modal-content,
+body.dark.custom-background .battle-player-card,
+body.dark.custom-background .battle-rematch {
+  background: rgba(24, 55, 71, 0.9);
 }
 
 .cube-area {
@@ -449,6 +484,17 @@ body.dark .page-return a {
   background: #fff;
   color: #111;
   font-size: 16px;
+}
+
+#backgroundImageInput {
+  display: block;
+  width: min(100%, 420px);
+  margin: 6px 0 12px;
+  font-size: 14px;
+}
+
+.background-remove {
+  margin-top: 4px;
 }
 
 .key-bindings-list {
@@ -997,7 +1043,7 @@ body.battle-mode #cubeContainer.ready-waiting {
 }
 
 .ranking-type-tabs {
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(4, 1fr);
 }
 
 .ranking-tabs {
@@ -1095,6 +1141,10 @@ body.dark .modal-content {
 body.dark #animationSpeedSelect {
   border-color: #f5f5f5;
   background: #10212c;
+  color: #f5f5f5;
+}
+
+body.dark #backgroundImageInput {
   color: #f5f5f5;
 }
 
@@ -1412,6 +1462,10 @@ body.solving .timer {
 
   .key-bindings-list {
     grid-template-columns: 1fr;
+  }
+
+  .ranking-type-tabs {
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .key-binding-change {

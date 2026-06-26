@@ -229,6 +229,8 @@
       <div class="ranking-type-tabs">
         <button class="ranking-type-tab active" data-ranking-type="single">Single</button>
         <button class="ranking-type-tab" data-ranking-type="ao5">Ao5</button>
+        <button class="ranking-type-tab" data-ranking-type="tps">TPS</button>
+        <button class="ranking-type-tab" data-ranking-type="moves">Moves</button>
       </div>
       <div class="ranking-tabs">
         <button class="ranking-tab active" data-period="today">Today</button>
@@ -298,6 +300,14 @@
       <section class="settings-section">
         <h3>Theme</h3>
         <button id="themeToggleBtn" class="theme-toggle">Dark</button>
+      </section>
+      <section class="settings-section">
+        <h3>Background</h3>
+        <p class="settings-hint">Your background image is stored only on this device.</p>
+        <label for="backgroundImageInput">Upload Background Image</label>
+        <input id="backgroundImageInput" type="file" accept="image/*" />
+        <button id="removeBackgroundBtn" class="secondary-action background-remove">Remove Background</button>
+        <p class="settings-hint" id="backgroundStatus"></p>
       </section>
     </section>
   </div>
