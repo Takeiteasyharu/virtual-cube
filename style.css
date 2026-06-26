@@ -114,7 +114,7 @@ body.dark.custom-background .battle-rematch {
   display: flex;
   flex-direction: column;
   align-items: center;
-  transform: translateY(-50px);
+  transform: translateY(-80px);
   z-index: 1;
 }
 
