@@ -86,7 +86,8 @@ main {
   width: clamp(280px, 22vw, 380px);
   max-height: calc(100vh - 180px);
   overflow-y: auto;
-  padding-right: 8px;
+  padding: 18px 20px 18px 18px;
+  scrollbar-gutter: stable;
   z-index: 2;
 }
 
@@ -152,7 +153,8 @@ body.dark.custom-background .battle-rematch {
   width: clamp(280px, 20vw, 360px);
   max-height: calc(100vh - 180px);
   overflow-y: auto;
-  padding-right: 8px;
+  padding: 18px 20px 18px 18px;
+  scrollbar-gutter: stable;
   z-index: 2;
 }
 
@@ -183,7 +185,12 @@ body.dark.custom-background .battle-rematch {
 .buttons {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  gap: 14px;
+}
+
+.buttons button {
+  width: 100%;
 }
 
 button {
@@ -201,30 +208,39 @@ button:hover {
 }
 
 .last-move {
-  margin-top: 16px;
+  margin-top: 18px;
   font-size: 16px;
+  text-align: left;
 }
 
 h2 {
   font-size: 20px;
-  margin-top: 20px;
+  margin: 22px 0 12px;
+}
+
+.left-panel h2,
+.panel h2 {
+  text-align: center;
 }
 
 #timeList {
-  padding-left: 20px;
+  padding: 0 10px 0 24px;
   max-height: 220px;
   overflow-y: auto;
+  margin: 0 0 18px;
+  scrollbar-gutter: stable;
 }
 
 .history-item {
-  margin: 6px 0;
+  margin: 8px 0;
+  padding-right: 4px;
 }
 
 .history-row {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 8px;
+  gap: 12px;
 }
 
 .history-row > span {
@@ -236,6 +252,7 @@ h2 {
   flex: 0 0 auto;
   min-width: 32px;
   min-height: 32px;
+  margin-right: 2px;
   padding: 2px 8px;
   border-radius: 5px;
   font-size: 22px;
@@ -366,10 +383,11 @@ body.dark .page-return a {
 .stats {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 6px;
-  margin-bottom: 16px;
+  gap: 9px;
+  margin: 0 0 18px;
   font-size: 18px;
   font-weight: bold;
+  text-align: left;
 }
 
 .theme-toggle {
@@ -379,7 +397,7 @@ body.dark .page-return a {
 }
 
 .account-summary {
-  margin-bottom: 22px;
+  margin-bottom: 24px;
 }
 
 .account-greeting {
@@ -396,9 +414,10 @@ body.dark .page-return a {
 }
 
 .account-rating {
-  margin-top: 4px;
+  margin-top: 6px;
   font-size: 15px;
   font-weight: bold;
+  text-align: left;
 }
 
 .login-panel,
@@ -421,7 +440,7 @@ body.dark .page-return a {
 }
 
 .auth-buttons {
-  margin-bottom: 10px;
+  margin-bottom: 14px;
 }
 
 .auth-status {
@@ -439,7 +458,7 @@ body.dark .page-return a {
 
 .profile-button {
   width: 100%;
-  margin-top: 10px;
+  margin-top: 14px;
 }
 
 .feature-modal {
@@ -1087,10 +1106,12 @@ body.battle-mode #cubeContainer.ready-waiting {
 }
 
 #scrambleHistoryList {
-  padding-left: 20px;
+  padding: 0 10px 0 24px;
   max-height: 160px;
   overflow-y: auto;
   font-size: 13px;
+  margin: 0;
+  scrollbar-gutter: stable;
 }
 
 body.dark {
@@ -1336,7 +1357,7 @@ body.solving .timer {
     width: 92vw;
     max-height: none;
     overflow-y: visible;
-    padding-right: 0;
+    padding: 18px 20px;
     margin: 12px auto 0;
     order: 2;
   }
@@ -1359,7 +1380,7 @@ body.solving .timer {
     margin: 12px auto 24px;
     max-height: none;
     overflow-y: visible;
-    padding-right: 0;
+    padding: 18px 20px;
   }
 
   .timer {
