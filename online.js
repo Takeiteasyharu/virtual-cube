@@ -1086,6 +1086,14 @@ function isCountedBattleMove(move) {
   return !["x", "x'", "y", "y'", "z", "z'"].includes(move?.move);
 }
 
+function calculateBattleMoveCount(moves) {
+  if (typeof window.calculateNormalizedMoveCount === "function") {
+    return window.calculateNormalizedMoveCount(moves);
+  }
+
+  return (Array.isArray(moves) ? moves : []).filter(isCountedBattleMove).length;
+}
+
 function getBattlePlayerSeconds(player, role) {
   return role === activeRoomRole
     ? localBattleTimerSeconds
@@ -1223,7 +1231,7 @@ function renderBattlePlayer(prefix, player, role) {
   setBattleText(`${prefix}Name`, player?.name || (prefix === "battleOpponent" ? "Waiting for player..." : "-"));
   const visibleMoveCount = isFinished
     ? player.moveCount
-    : moves.filter(isCountedBattleMove).length;
+    : calculateBattleMoveCount(moves);
 
   setBattleText(`${prefix}State`, isDisconnected ? "DISCONNECTED" : (isDnf ? "DNF" : (player?.status || "waiting").toUpperCase()));
   setBattleText(`${prefix}Timer`, isFinished ? formatBattleTime(player.finalTime) : formatBattleTime(currentTimer));

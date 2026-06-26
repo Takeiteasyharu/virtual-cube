@@ -107,6 +107,11 @@ let battleCurrentCompletionScore = 0;
 let rankedBattleTimeLimitTimeout = null;
 
 const ROTATION_MOVES = ["x", "x'", "yRotation", "yRotation'", "zRotation", "zRotation'"];
+const COUNTABLE_MOVE_FACES = new Set([
+  "R", "U", "F", "L", "D", "B",
+  "M", "E", "S",
+  "Rw", "Lw", "Uw", "Dw", "Fw", "Bw"
+]);
 
 document.addEventListener("DOMContentLoaded", () => {
   loadKeyBindings();
@@ -309,18 +314,67 @@ function clearNormalInspection() {
   document.body.classList.remove("inspection-active");
 }
 
+function normalizeMoveForCount(move) {
+  const rawMove = typeof move === "string" ? move : move?.move;
+  if (!rawMove) return "";
+  return displayMove(rawMove).trim();
+}
+
+function getMoveFaceForCount(move) {
+  const normalized = normalizeMoveForCount(move);
+  const face = normalized.replace(/2|'$/g, "");
+  return COUNTABLE_MOVE_FACES.has(face) ? face : "";
+}
+
+function getMoveTurnAmount(move) {
+  const normalized = normalizeMoveForCount(move);
+  if (!getMoveFaceForCount(normalized)) return 0;
+  if (normalized.endsWith("2")) return 2;
+  return normalized.endsWith("'") ? -1 : 1;
+}
+
+function calculateNormalizedMoveCount(moves) {
+  let count = 0;
+  let currentFace = "";
+  let currentAmount = 0;
+
+  const flush = () => {
+    if (!currentFace) return;
+    const normalizedAmount = ((currentAmount % 4) + 4) % 4;
+    if (normalizedAmount !== 0) count++;
+    currentFace = "";
+    currentAmount = 0;
+  };
+
+  (Array.isArray(moves) ? moves : []).forEach(entry => {
+    const face = getMoveFaceForCount(entry);
+    const amount = getMoveTurnAmount(entry);
+
+    if (!face || amount === 0) {
+      return;
+    }
+
+    if (currentFace && currentFace !== face) {
+      flush();
+    }
+
+    currentFace = face;
+    currentAmount += amount;
+  });
+
+  flush();
+  return count;
+}
+
 function recordSolveMove(move, counted) {
   const relativeTime = solveStartedAt ? Date.now() - solveStartedAt : 0;
-
-  if (counted) {
-    solveMoveCount++;
-  }
 
   solveMoves.push({
     move: displayMove(move),
     t: relativeTime,
     counted
   });
+  solveMoveCount = calculateNormalizedMoveCount(solveMoves);
 }
 
 function broadcastBattleMove(move) {
@@ -582,10 +636,12 @@ function cancelCurrentSolve() {
 
 function getCurrentSolveStats(timeSeconds = null) {
   const seconds = Number.isFinite(timeSeconds) ? timeSeconds : null;
-  const tps = seconds && seconds > 0 ? solveMoveCount / seconds : null;
+  const normalizedMoveCount = calculateNormalizedMoveCount(solveMoves);
+  solveMoveCount = normalizedMoveCount;
+  const tps = seconds && seconds > 0 ? normalizedMoveCount / seconds : null;
 
   return {
-    moveCount: solveMoveCount,
+    moveCount: normalizedMoveCount,
     moves: [...solveMoves],
     tps: tps === null ? null : Number(tps.toFixed(2)),
     currentCompletionScore: battleCurrentCompletionScore,
@@ -628,6 +684,10 @@ function checkSolvedAndStopTimer() {
 }
 
 window.getCurrentSolveStats = getCurrentSolveStats;
+window.calculateNormalizedMoveCount = calculateNormalizedMoveCount;
+window.normalizeMoveForCount = normalizeMoveForCount;
+window.getMoveFaceForCount = getMoveFaceForCount;
+window.getMoveTurnAmount = getMoveTurnAmount;
 window.loadBattleScramble = loadBattleScramble;
 window.prepareBattleCube = prepareBattleCube;
 window.startBattleInspection = startBattleInspection;
