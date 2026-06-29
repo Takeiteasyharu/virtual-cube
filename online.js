@@ -2989,6 +2989,7 @@ if (isConfigured()) {
 
     if (user) {
       setStatus(`Logged in as ${user.displayName || "Guest"}`);
+      updateAccountSummary(user, null);
       ensureUserProfile()
         .then(() => refreshTotalUsers())
         .catch(console.error);
