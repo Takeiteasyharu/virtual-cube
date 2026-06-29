@@ -106,6 +106,8 @@ let normalActiveScramble = "";
 let battleMaxCompletionScore = 0;
 let battleCurrentCompletionScore = 0;
 let rankedBattleTimeLimitTimeout = null;
+let realCubeSpaceArmed = false;
+let realCubeInspectionStarting = false;
 
 const ROTATION_MOVES = ["x", "x'", "yRotation", "yRotation'", "zRotation", "zRotation'"];
 const COUNTABLE_MOVE_FACES = new Set([
@@ -165,7 +167,10 @@ document.addEventListener("keydown", event => {
   if (event.code === "Space") {
     event.preventDefault();
     if (isBattleModeActive()) {
-      if (window.isRealCubeBattle?.()) handleRealCubeTimerAction();
+      if (window.isRealCubeBattle?.()) {
+        if (event.repeat) return;
+        handleRealCubeSpaceDown();
+      }
       return;
     }
     scrambleCube();
@@ -185,6 +190,14 @@ document.addEventListener("keydown", event => {
   if (!move) return;
 
   performMove(move);
+});
+
+document.addEventListener("keyup", event => {
+  if (event.code !== "Space" || !isBattleModeActive() || !window.isRealCubeBattle?.()) return;
+  event.preventDefault();
+  if (!realCubeSpaceArmed) return;
+  realCubeSpaceArmed = false;
+  if (battleInputState === "inspecting") startBattleSolve();
 });
 
 function isTypingInForm(target) {
@@ -241,6 +254,10 @@ function isBattleModeActive() {
 
 function handleRealCubeTimerAction() {
   if (!isBattleModeActive() || !window.isRealCubeBattle?.()) return;
+  if (["joined", "inactive", "finished"].includes(battleInputState)) {
+    beginRealCubeInspection();
+    return;
+  }
   if (battleInputState === "inspecting") {
     startBattleSolve();
     return;
@@ -252,6 +269,28 @@ function handleRealCubeTimerAction() {
     firstTurnDone = false;
     battleInputState = "finished";
     setSolvingMode(false);
+  }
+}
+
+function handleRealCubeSpaceDown() {
+  if (["joined", "inactive", "finished"].includes(battleInputState)) {
+    beginRealCubeInspection();
+    return;
+  }
+  if (battleInputState === "inspecting") {
+    realCubeSpaceArmed = true;
+    return;
+  }
+  if (battleInputState === "solving") handleRealCubeTimerAction();
+}
+
+async function beginRealCubeInspection() {
+  if (realCubeInspectionStarting || typeof window.beginRealCubeInspection !== "function") return;
+  realCubeInspectionStarting = true;
+  try {
+    await window.beginRealCubeInspection();
+  } finally {
+    realCubeInspectionStarting = false;
   }
 }
 
@@ -592,6 +631,7 @@ function startBattleSolve() {
   if (!isBattleModeActive() || battleInputState === "solving") return;
 
   clearBattleInspection();
+  realCubeSpaceArmed = false;
   setBattleInspectionOverlay(false);
   battleInputState = "solving";
   firstTurnDone = true;
@@ -650,6 +690,8 @@ function cancelCurrentSolve() {
   firstTurnDone = false;
   setSolvingMode(false);
   battleInputState = "inactive";
+  realCubeSpaceArmed = false;
+  realCubeInspectionStarting = false;
   document.body.classList.remove("battle-locked");
   document.getElementById("cubeContainer")?.classList.remove("ready-waiting");
   setBattleInspectionOverlay(false);

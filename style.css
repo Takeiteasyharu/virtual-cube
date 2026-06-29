@@ -899,6 +899,19 @@ body.battle-mode .opponent-cube-panel.opponent-unavailable {
   font-weight: 700;
 }
 
+.real-cube-instruction {
+  max-width: 520px;
+  margin: 12px auto 0;
+  padding: 12px 16px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.4;
+  background: rgba(255, 255, 255, 0.72);
+  border: 2px solid #286a96;
+  border-radius: 6px;
+}
+
 body.real-cube-battle #cubeContainer canvas,
 body.real-cube-battle .opponent-cube-panel,
 body.real-cube-battle .move-input {
@@ -907,8 +920,13 @@ body.real-cube-battle .move-input {
 
 body.real-cube-battle #cubeContainer {
   width: min(92vw, 620px);
-  height: 180px;
-  min-height: 180px;
+  height: 140px;
+  min-height: 140px;
+  background: transparent;
+}
+
+body.real-cube-battle .cube-area {
+  justify-content: flex-start;
 }
 
 body.spectator-mode #battleReadyBtn,
@@ -954,6 +972,12 @@ body.dark .multiplayer-roster {
 body.dark .multiplayer-roster-row,
 body.dark .settings-callout {
   background: rgba(255, 255, 255, 0.1);
+}
+
+body.dark .real-cube-instruction {
+  color: #f5f5f5;
+  background: rgba(16, 33, 44, 0.9);
+  border-color: #78c5ef;
 }
 
 body.dark .key-bindings-settings {

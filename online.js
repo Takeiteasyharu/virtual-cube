@@ -63,6 +63,7 @@ const battleStatus = document.getElementById("battleStatus");
 const battleReadyBtn = document.getElementById("battleReadyBtn");
 const hostStartBattleBtn = document.getElementById("hostStartBattleBtn");
 const realCubeTimerBtn = document.getElementById("realCubeTimerBtn");
+const realCubeInstruction = document.getElementById("realCubeInstruction");
 const multiplayerRoster = document.getElementById("multiplayerRoster");
 const multiplayerRosterList = document.getElementById("multiplayerRosterList");
 const copyRoomUrlBtn = document.getElementById("copyRoomUrlBtn");
@@ -969,6 +970,7 @@ function createPlayer(role) {
     startTime: null,
     startTimeMs: 0,
     endTime: null,
+    finishedAt: null,
     finalTime: null,
     tps: null,
     moveCount: 0,
@@ -1160,13 +1162,20 @@ function formatBattleTime(seconds) {
 }
 
 function getPlayerElapsedSeconds(player) {
+  if (player?.status === "finished" && Number.isFinite(Number(player.finalTime))) {
+    return Number(player.finalTime);
+  }
   if (!player || player.status !== "solving") return 0;
   const startMs = player.startTime?.toMillis?.() || player.startTimeMs || 0;
   return startMs ? Math.max(0, (Date.now() - startMs) / 1000) : 0;
 }
 
 function isPlayerFinished(player) {
-  return Boolean(player && Number.isFinite(player.finalTime));
+  return Boolean(
+    player &&
+    (player.status === "finished" || player.finishedAt) &&
+    Number.isFinite(Number(player.finalTime))
+  );
 }
 
 function isPlayerDisconnected(player) {
@@ -1190,6 +1199,9 @@ function calculateBattleMoveCount(moves) {
 }
 
 function getBattlePlayerSeconds(player, role) {
+  if (player?.status === "finished" && Number.isFinite(Number(player.finalTime))) {
+    return Number(player.finalTime);
+  }
   return role === activeRoomRole
     ? localBattleTimerSeconds
     : getPlayerElapsedSeconds(player);
@@ -1410,8 +1422,11 @@ function renderBattlePlayer(prefix, player, role) {
     : calculateBattleMoveCount(moves);
 
   setBattleText(`${prefix}State`, isDisconnected ? "DISCONNECTED" : (isDnf ? "DNF" : (player?.status || "waiting").toUpperCase()));
-  setBattleText(`${prefix}Timer`, isFinished ? formatBattleTime(player.finalTime) : formatBattleTime(currentTimer));
-  setBattleText(`${prefix}Final`, isDnf ? "DNF" : formatBattleTime(player?.finalTime));
+  setBattleText(`${prefix}Timer`, isFinished ? formatBattleTime(Number(player.finalTime)) : formatBattleTime(currentTimer));
+  const finalTimeText = player?.finalTime !== null && player?.finalTime !== undefined && Number.isFinite(Number(player.finalTime))
+    ? formatBattleTime(Number(player.finalTime))
+    : "-";
+  setBattleText(`${prefix}Final`, isDnf ? "DNF" : finalTimeText);
   setBattleText(`${prefix}Tps`, isDnf ? "-" : (Number.isFinite(player?.tps) ? player.tps.toFixed(2) : "-"));
   setBattleText(`${prefix}MoveCount`, isDnf || !player ? "-" : String(visibleMoveCount || 0));
   setBattleText(`${prefix}CompletionScore`, player ? `${player.maxCompletionScore || 0} / 54` : "-");
@@ -1461,6 +1476,12 @@ function renderBattleNotice() {
     if (activeRoom.status === "inspection") {
       battleNotice.textContent = (activeRoom.activePlayerUids || []).includes(currentUser?.uid)
         ? "Inspection in progress."
+        : "You are watching this round.";
+      return;
+    }
+    if (activeRoom.status === "ready" && activeRoom.cubeMode === "real") {
+      battleNotice.textContent = (activeRoom.activePlayerUids || []).includes(currentUser?.uid)
+        ? "Press Space to start inspection."
         : "You are watching this round.";
       return;
     }
@@ -1550,7 +1571,8 @@ function renderBattleResult() {
 
 function renderBattleReadyButton(you, opponent) {
   if (isMultiplayerFriendRoom()) {
-    const activeRoundRunning = ["inspection", "solving", "finishing"].includes(activeRoom?.status);
+    const activeRoundRunning = ["inspection", "solving", "finishing"].includes(activeRoom?.status) ||
+      (activeRoom?.status === "ready" && (activeRoom.activePlayerUids || []).length > 0);
     battleReadyBtn.hidden = isSpectatorMode || !you || activeRoundRunning;
     if (battleReadyBtn.hidden) return;
     battleReadyBtn.disabled = false;
@@ -1625,12 +1647,27 @@ function renderBattleUi() {
   hostStartBattleBtn.hidden = !hostCanStart;
   if (hostCanStart) {
     const readyCount = [...battlePlayersByUid.values()].filter(player => player.ready && player.status !== "returned").length;
-    hostStartBattleBtn.disabled = readyCount === 0;
-    hostStartBattleBtn.textContent = activeRoom.status === "finished" ? `Start Rematch (${readyCount} ready)` : `Start Game (${readyCount} ready)`;
+    const hostIsReady = Boolean(battlePlayersByUid.get(activeRoom.hostUid)?.ready);
+    hostStartBattleBtn.disabled = !hostIsReady || readyCount === 0;
+    hostStartBattleBtn.textContent = !hostIsReady
+      ? "Host must be Ready"
+      : (activeRoom.status === "finished" ? `Start Rematch (${readyCount} ready)` : `Start Game (${readyCount} ready)`);
   }
   const localIsActive = (activeRoom.activePlayerUids || []).includes(currentUser?.uid);
-  realCubeTimerBtn.hidden = activeRoom.cubeMode !== "real" || isSpectatorMode || !localIsActive || !["inspecting", "solving"].includes(you?.status);
-  if (!realCubeTimerBtn.hidden) realCubeTimerBtn.textContent = you?.status === "solving" ? "Stop Solve" : "Start Solve";
+  const realCubeActive = activeRoom.cubeMode === "real" && !isSpectatorMode && localIsActive && ["ready", "inspection", "solving"].includes(activeRoom.status);
+  const waitingForInspection = realCubeActive && you?.status === "ready";
+  realCubeInstruction.hidden = !realCubeActive || !["ready", "inspecting"].includes(you?.status);
+  if (!realCubeInstruction.hidden) {
+    realCubeInstruction.textContent = waitingForInspection
+      ? "Press Space to start inspection"
+      : "Press and release Space to start solve";
+  }
+  realCubeTimerBtn.hidden = !realCubeActive || !["ready", "inspecting", "solving"].includes(you?.status);
+  if (!realCubeTimerBtn.hidden) {
+    realCubeTimerBtn.textContent = waitingForInspection
+      ? "Start Inspection"
+      : (you?.status === "solving" ? "Stop Solve" : "Start Solve");
+  }
 
   if (activeRoom.status === "finished") {
     if (activeRoom.mode === "ranked" && !activeRoom.ratingUpdated) {
@@ -1709,6 +1746,7 @@ async function startInspectionForReadyPlayer() {
       startTime: null,
       startTimeMs: 0,
       endTime: null,
+      finishedAt: null,
       finalTime: null,
       tps: null,
       moveCount: 0,
@@ -1811,7 +1849,11 @@ function watchRoom(roomId) {
     }
 
     renderBattleUi();
-    if (localPlayer?.status === "ready" && room.scramble) {
+    if (
+      localPlayer?.status === "ready" &&
+      room.scramble &&
+      (!isMultiplayerFriendRoom() || room.status === "inspection")
+    ) {
       startInspectionForReadyPlayer().catch(console.error);
     }
     setBattleStatus(`Room ${roomId}: ${activeRoomRole}`);
@@ -2320,12 +2362,16 @@ async function notifyBattleSolveStarted() {
     status: "solving",
     startTime: serverTimestamp(),
     startTimeMs: Date.now(),
+    finishedAt: null,
+    finalTime: null,
     updatedAt: serverTimestamp()
   }).catch(console.error);
-  await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId), {
-    status: "solving",
-    updatedAt: serverTimestamp()
-  }).catch(console.error);
+  if (!isMultiplayerFriendRoom() || currentUser.uid === activeRoom.hostUid) {
+    await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId), {
+      status: "solving",
+      updatedAt: serverTimestamp()
+    }).catch(console.error);
+  }
 
   window.trackCubeEvent?.("battle_start");
   if (activeRoom?.mode === "ranked") {
@@ -2337,6 +2383,11 @@ async function notifyBattleSolveStarted() {
 
 async function startFriendMultiplayerGame() {
   if (!currentUser || !isMultiplayerFriendRoom() || currentUser.uid !== activeRoom.hostUid || isSpectatorMode) return;
+  const hostPlayer = battlePlayersByUid.get(activeRoom.hostUid);
+  if (!hostPlayer?.ready) {
+    setBattleStatus("The host must be Ready before starting.");
+    return;
+  }
   const readyPlayers = [...battlePlayersByUid.values()]
     .filter(player => player.ready && player.status !== "returned")
     .slice(0, Number(activeRoom.maxPlayers || 20));
@@ -2350,13 +2401,14 @@ async function startFriendMultiplayerGame() {
     return;
   }
   const nextRound = activeRoom.status === "finished" ? activeRound + 1 : activeRound;
-  const inspectionStartTimeMs = Date.now();
+  const isRealCube = activeRoom.cubeMode === "real";
+  const inspectionStartTimeMs = isRealCube ? 0 : Date.now();
   await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId), {
-    status: "inspection",
+    status: isRealCube ? "ready" : "inspection",
     scramble,
     round: nextRound,
     activePlayerUids: readyPlayers.map(player => player.uid),
-    inspectionStartTime: serverTimestamp(),
+    inspectionStartTime: isRealCube ? null : serverTimestamp(),
     inspectionStartTimeMs,
     winnerUid: "",
     winnerName: "",
@@ -2365,12 +2417,43 @@ async function startFriendMultiplayerGame() {
   });
 }
 
+async function beginRealCubeInspection() {
+  if (
+    !currentUser ||
+    !isMultiplayerFriendRoom() ||
+    activeRoom.cubeMode !== "real" ||
+    isSpectatorMode ||
+    !(activeRoom.activePlayerUids || []).includes(currentUser.uid)
+  ) return false;
+  const player = battlePlayersByUid.get(currentUser.uid);
+  if (player?.status !== "ready") return false;
+  const inspectionStartTimeMs = Date.now();
+  await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
+    status: "inspecting",
+    ready: false,
+    active: true,
+    round: activeRound,
+    inspectionStartTime: serverTimestamp(),
+    inspectionStartTimeMs,
+    startTime: null,
+    startTimeMs: 0,
+    endTime: null,
+    finishedAt: null,
+    finalTime: null,
+    tps: null,
+    moveCount: 0,
+    updatedAt: serverTimestamp()
+  });
+  window.startBattleInspection?.(activeRoom.scramble, inspectionStartTimeMs, activeRound);
+  return true;
+}
+
 async function finalizeFriendMultiplayerIfDone() {
   if (
     friendFinalizing ||
     !isMultiplayerFriendRoom() ||
     currentUser?.uid !== activeRoom.hostUid ||
-    !["inspection", "solving"].includes(activeRoom.status)
+    !["ready", "inspection", "solving"].includes(activeRoom.status)
   ) return;
   const activeUids = activeRoom.activePlayerUids || [];
   if (activeUids.length === 0) return;
@@ -2497,6 +2580,7 @@ async function submitBattleSolve(time, scramble, solveStats = {}) {
     await updateDoc(playerRef, {
       status: "finished",
       endTime: serverTimestamp(),
+      finishedAt: serverTimestamp(),
       finalTime: time,
       tps: Number.isFinite(solveStats.tps) ? solveStats.tps : null,
       moveCount: Math.max(0, Number(solveStats.moveCount) || 0),
@@ -2516,6 +2600,7 @@ async function submitBattleSolve(time, scramble, solveStats = {}) {
     transaction.update(playerRef, {
       status: "finished",
       endTime: serverTimestamp(),
+      finishedAt: serverTimestamp(),
       finalTime: time,
       tps: Number.isFinite(solveStats.tps) ? solveStats.tps : null,
       moveCount: Math.max(0, Number(solveStats.moveCount) || 0),
@@ -3031,3 +3116,4 @@ window.renderBattleLocalTimer = renderBattleLocalTimer;
 window.isBattleMode = () => document.body.classList.contains("battle-mode");
 window.isRankedBattle = () => document.body.classList.contains("battle-mode") && activeRoom?.mode === "ranked";
 window.isRealCubeBattle = () => document.body.classList.contains("battle-mode") && activeRoom?.cubeMode === "real";
+window.beginRealCubeInspection = beginRealCubeInspection;
