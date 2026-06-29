@@ -59,6 +59,7 @@
           <p id="battleRoomMeta">Room: - | Players: 0/2</p>
         </div>
         <div class="battle-mode-actions">
+          <button id="hostStartBattleBtn" class="host-start-button" hidden>Start Game</button>
           <button id="copyRoomUrlBtn" title="Copy room URL">Copy Room URL</button>
           <button id="leaveBattleBtn" class="secondary-action">Return to Normal Mode</button>
         </div>
@@ -97,6 +98,10 @@
           <div class="battle-move-log" id="battleOpponentMoveLog">-</div>
         </article>
       </div>
+      <section class="multiplayer-roster" id="multiplayerRoster" hidden aria-label="Room players">
+        <h2>Room Players</h2>
+        <div class="multiplayer-roster-list" id="multiplayerRosterList"></div>
+      </section>
       <div class="battle-result" id="battleResult"></div>
       <div class="battle-result-badge" id="battleResultBadge"></div>
       <section class="battle-rematch" id="battleRematchPanel" hidden>
@@ -158,6 +163,7 @@
           aria-label="Move input"
         />
         <button id="battleReadyBtn" class="battle-ready-button" hidden>Ready</button>
+        <button id="realCubeTimerBtn" class="real-cube-timer-button" hidden>Start Solve</button>
       </div>
 
       <section class="panel">
@@ -210,7 +216,7 @@
       <h3>Ranking Rules</h3>
       <p>Only valid solves are submitted. Suspicious solves are excluded. Log in to join the online rankings.</p>
       <h3>Battle Mode</h3>
-      <p>Friend Battle uses invite links. Ranked Battle matches another player automatically. Both players solve the same scramble, and a battle ends shortly after one player finishes.</p>
+      <p>Friend Battle supports Virtual Cube and Real Cube rooms. The host starts each round with the players who are Ready. Ranked Battle matches another player automatically.</p>
       <h3>Keyboard Map</h3>
       <div class="key-map" aria-label="Keyboard map">
         <span>R <b>I</b></span><span>R' <b>K</b></span><span>L <b>D</b></span><span>L' <b>E</b></span>
@@ -258,10 +264,16 @@
         <button class="battle-choice-tab" data-battle-choice="ranked">Ranked Battle</button>
       </div>
       <div id="friendBattleControls">
+        <fieldset class="cube-mode-selector">
+          <legend>Cube Mode</legend>
+          <label><input type="radio" name="friendCubeMode" value="virtual" checked /> Virtual Cube</label>
+          <label><input type="radio" name="friendCubeMode" value="real" /> Real Cube</label>
+        </fieldset>
         <div class="buttons battle-buttons"><button id="createRoomBtn">Create Friend Room</button></div>
         <input id="roomIdInput" type="text" maxlength="12" placeholder="Room ID" />
         <div class="buttons battle-buttons">
           <button id="joinRoomBtn">Join Friend Room</button>
+          <button id="spectateRoomBtn">Watch as Spectator</button>
           <button id="copyInviteBtn">Copy Invite Link</button>
         </div>
         <input id="roomUrlOutput" type="text" readonly placeholder="Invite URL" />
@@ -297,11 +309,12 @@
           <option value="1">TPS: 1</option>
         </select>
       </section>
-      <section class="settings-section">
-        <h3>Key Bindings</h3>
-        <p class="settings-hint" id="keyBindingStatus">Choose Change, then press a key.</p>
+      <section class="settings-section key-bindings-settings">
+        <h3>Keyboard Controls</h3>
+        <p class="settings-callout">Customize the virtual cube controls to match the keyboard layout that feels fastest for you.</p>
+        <p class="settings-hint" id="keyBindingStatus">Select Change beside a move, then press the new key.</p>
         <div id="keyBindingsList" class="key-bindings-list" aria-label="Key bindings"></div>
-        <button id="resetKeyBindingsBtn" class="secondary-action key-binding-change">Reset to Default</button>
+        <button id="resetKeyBindingsBtn" class="secondary-action reset-key-bindings">Reset to Default</button>
       </section>
       <section class="settings-section">
         <h3>Theme</h3>
@@ -315,6 +328,15 @@
         <button id="removeBackgroundBtn" class="secondary-action background-remove">Remove Background</button>
         <p class="settings-hint" id="backgroundStatus"></p>
       </section>
+    </section>
+  </div>
+
+  <div class="app-modal" id="beginnerTipModal" hidden role="dialog" aria-modal="true" aria-labelledby="beginnerTipTitle">
+    <section class="modal-content beginner-tip-content">
+      <h2 id="beginnerTipTitle">New to the virtual cube?</h2>
+      <p>You can customize every move key in Settings.</p>
+      <p>The controls usually feel much easier after a few solves.</p>
+      <button id="dismissBeginnerTipBtn">Got it</button>
     </section>
   </div>
 

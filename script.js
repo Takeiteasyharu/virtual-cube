@@ -50,6 +50,7 @@ const DEFAULT_KEY_MAP = Object.freeze({
 const ANIMATION_SPEED_KEY = "cubeAnimationSpeed";
 const KEY_BINDINGS_KEY = "cubeKeyBindings";
 const BACKGROUND_IMAGE_KEY = "cubeBackgroundImage";
+const BEGINNER_TIP_KEY = "cubeOnboardingDismissed";
 const BACKGROUND_IMAGE_MAX_BYTES = 3 * 1024 * 1024;
 let keyMap = { ...DEFAULT_KEY_MAP };
 let selectedBindingKey = "";
@@ -124,6 +125,7 @@ document.addEventListener("DOMContentLoaded", () => {
   setupSettingsUi();
   setupBackgroundSettingsUi();
   setupFeaturePanelUi();
+  setupBeginnerTip();
 
   setAfterMoveCallback(() => {
     updateBattleCompletionScore();
@@ -162,7 +164,10 @@ document.addEventListener("keydown", event => {
 
   if (event.code === "Space") {
     event.preventDefault();
-    if (typeof window.isBattleMode === "function" && window.isBattleMode()) return;
+    if (isBattleModeActive()) {
+      if (window.isRealCubeBattle?.()) handleRealCubeTimerAction();
+      return;
+    }
     scrambleCube();
     return;
   }
@@ -232,6 +237,22 @@ function performMove(move) {
 
 function isBattleModeActive() {
   return typeof window.isBattleMode === "function" && window.isBattleMode();
+}
+
+function handleRealCubeTimerAction() {
+  if (!isBattleModeActive() || !window.isRealCubeBattle?.()) return;
+  if (battleInputState === "inspecting") {
+    startBattleSolve();
+    return;
+  }
+  if (battleInputState === "solving" && isTimerRunning()) {
+    stopTimer();
+    clearRankedBattleTimeLimit();
+    readyToSolve = false;
+    firstTurnDone = false;
+    battleInputState = "finished";
+    setSolvingMode(false);
+  }
 }
 
 function isBattleInspecting() {
@@ -534,7 +555,8 @@ function startBattleInspection(scrambleText, inspectionStartMs = Date.now(), rou
 
   clearBattleInspection();
   const scramble = (scrambleText || "").split(" ").filter(Boolean);
-  resetCube();
+  const isRealCube = Boolean(window.isRealCubeBattle?.());
+  if (!isRealCube) resetCube();
   resetTimer();
   resetSolveStats();
   setSolvingMode(false);
@@ -548,7 +570,7 @@ function startBattleInspection(scrambleText, inspectionStartMs = Date.now(), rou
   battleMoveSequence = 0;
   document.body.classList.remove("battle-locked");
   document.getElementById("cubeContainer")?.classList.remove("ready-waiting");
-  applyScramble(scramble);
+  if (!isRealCube) applyScramble(scramble);
 
   const updateInspection = () => {
     const remaining = Math.max(0, Math.ceil(15 - (Date.now() - inspectionStartMs) / 1000));
@@ -692,6 +714,7 @@ window.loadBattleScramble = loadBattleScramble;
 window.prepareBattleCube = prepareBattleCube;
 window.startBattleInspection = startBattleInspection;
 window.cancelCurrentSolve = cancelCurrentSolve;
+window.handleRealCubeTimerAction = handleRealCubeTimerAction;
 
 function formatBindingKey(key) {
   if (key === ".") return ".";
@@ -726,7 +749,6 @@ function renderKeyBindings() {
       change.textContent = selectedBindingKey === key ? "Press a key..." : "Change";
       change.classList.toggle("is-listening", selectedBindingKey === key);
       change.addEventListener("click", () => {
-        if (window.matchMedia("(max-width: 900px)").matches) return;
         if (isBattleModeActive()) {
           setKeyBindingStatus("Key bindings cannot be changed during a battle.");
           return;
@@ -753,6 +775,7 @@ function setupSettingsUi() {
       setKeyBindingStatus("Key bindings cannot be changed during a battle.");
       return;
     }
+    if (!window.confirm("Reset all key bindings to their defaults?")) return;
     keyMap = { ...DEFAULT_KEY_MAP };
     selectedBindingKey = "";
     saveKeyBindings();
@@ -921,6 +944,17 @@ function setupFeaturePanelUi() {
     panel?.addEventListener("click", event => {
       if (event.target === panel) panel.hidden = true;
     });
+  });
+}
+
+function setupBeginnerTip() {
+  const modal = document.getElementById("beginnerTipModal");
+  const dismissButton = document.getElementById("dismissBeginnerTipBtn");
+  if (!modal || !dismissButton || localStorage.getItem(BEGINNER_TIP_KEY) === "true") return;
+  modal.hidden = false;
+  dismissButton.addEventListener("click", () => {
+    localStorage.setItem(BEGINNER_TIP_KEY, "true");
+    modal.hidden = true;
   });
 }
 

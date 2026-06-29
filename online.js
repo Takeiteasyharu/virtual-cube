@@ -50,6 +50,7 @@ const profileBody = document.getElementById("profileBody");
 const createRoomBtn = document.getElementById("createRoomBtn");
 const joinRoomBtn = document.getElementById("joinRoomBtn");
 const copyInviteBtn = document.getElementById("copyInviteBtn");
+const spectateRoomBtn = document.getElementById("spectateRoomBtn");
 const randomBattleBtn = document.getElementById("randomBattleBtn");
 const cancelMatchBtn = document.getElementById("cancelMatchBtn");
 const battleChoiceButtons = document.querySelectorAll(".battle-choice-tab");
@@ -60,6 +61,10 @@ const roomIdInput = document.getElementById("roomIdInput");
 const roomUrlOutput = document.getElementById("roomUrlOutput");
 const battleStatus = document.getElementById("battleStatus");
 const battleReadyBtn = document.getElementById("battleReadyBtn");
+const hostStartBattleBtn = document.getElementById("hostStartBattleBtn");
+const realCubeTimerBtn = document.getElementById("realCubeTimerBtn");
+const multiplayerRoster = document.getElementById("multiplayerRoster");
+const multiplayerRosterList = document.getElementById("multiplayerRosterList");
 const copyRoomUrlBtn = document.getElementById("copyRoomUrlBtn");
 const leaveBattleBtn = document.getElementById("leaveBattleBtn");
 const battleRoomMeta = document.getElementById("battleRoomMeta");
@@ -102,7 +107,11 @@ let activeRoom = null;
 let activeRound = 1;
 let selectedBattleMode = "friend";
 let battlePlayersByRole = { host: null, guest: null };
+let battlePlayersByUid = new Map();
 let battleMovesByRole = { host: [], guest: [] };
+let isSpectatorMode = false;
+let friendOpponentMovesUnsubscribe = null;
+let friendOpponentMovesUid = "";
 let battleClockInterval = null;
 let battlePresenceInterval = null;
 let localBattleTimerSeconds = 0;
@@ -118,6 +127,7 @@ let opponentExitTimeout = null;
 let displayedOpponentRatingUid = "";
 let readyInspectionStarting = false;
 let ratingUpdateInProgress = false;
+let friendFinalizing = false;
 let completionScoreWriteTimeout = null;
 let pendingCompletionScore = null;
 const savedBattleResultKeys = new Set();
@@ -927,6 +937,7 @@ function createRoomId() {
 function getRoomUrl(roomId) {
   const url = new URL(window.location.href);
   url.searchParams.delete("room");
+  url.searchParams.delete("spectate");
   url.searchParams.set("battleRoom", roomId);
   return url.toString();
 }
@@ -951,6 +962,8 @@ function createPlayer(role) {
     name: getPlayerName(),
     role,
     status: "joined",
+    ready: false,
+    active: false,
     inspectionStartTime: null,
     inspectionStartTimeMs: 0,
     startTime: null,
@@ -1096,6 +1109,9 @@ function clearBattleListeners() {
   activeMoveUnsubscribes.forEach(unsubscribe => unsubscribe());
   activePlayerUnsubscribes = [];
   activeMoveUnsubscribes = [];
+  if (friendOpponentMovesUnsubscribe) friendOpponentMovesUnsubscribe();
+  friendOpponentMovesUnsubscribe = null;
+  friendOpponentMovesUid = "";
   if (completionScoreWriteTimeout) window.clearTimeout(completionScoreWriteTimeout);
   completionScoreWriteTimeout = null;
   pendingCompletionScore = null;
@@ -1103,6 +1119,9 @@ function clearBattleListeners() {
 
 function setBattleMode(enabled) {
   document.body.classList.toggle("battle-mode", enabled);
+  if (!enabled) {
+    document.body.classList.remove("real-cube-battle", "spectator-mode");
+  }
   if (enabled) {
     const battleModal = document.getElementById("battleModal");
     if (battleModal) battleModal.hidden = true;
@@ -1129,7 +1148,7 @@ function setBattleMode(enabled) {
 }
 
 function sendBattleHeartbeat() {
-  if (!currentUser || !activeRoomId || !document.body.classList.contains("battle-mode")) return;
+  if (!currentUser || !activeRoomId || isSpectatorMode || !document.body.classList.contains("battle-mode")) return;
 
   updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
     updatedAt: serverTimestamp()
@@ -1193,6 +1212,7 @@ function renderRankedTimeLimit(you) {
 
 async function saveBattleResultForCurrentUser() {
   if (!currentUser || !activeRoom || activeRoom.status !== "finished") return;
+  if (isMultiplayerFriendRoom() && !(activeRoom.activePlayerUids || []).includes(currentUser.uid)) return;
 
   const you = getDisplayPlayer(activeRoomRole);
   const opponent = getDisplayPlayer(getOpponentRole());
@@ -1285,11 +1305,91 @@ async function recordOwnBattleStats(result, mode) {
 }
 
 function getOpponentRole() {
+  if (activeRoom?.mode === "friend" && activeRoom?.maxPlayers > 2) return "opponent";
   return activeRoomRole === "host" ? "guest" : "host";
 }
 
 function getDisplayPlayer(role) {
+  if (activeRoom?.mode === "friend" && activeRoom?.maxPlayers > 2) {
+    if (isSpectatorMode && role === activeRoomRole) return null;
+    if (role === activeRoomRole || role === "you") return battlePlayersByUid.get(currentUser?.uid) || null;
+    if (role === "host") return battlePlayersByUid.get(activeRoom.hostUid) || null;
+    return [...battlePlayersByUid.values()].find(player => player.uid !== currentUser?.uid && player.status !== "returned") || null;
+  }
   return battlePlayersByRole[role] || null;
+}
+
+function isMultiplayerFriendRoom() {
+  return activeRoom?.mode === "friend" && Number(activeRoom.maxPlayers || 2) > 2;
+}
+
+function renderMultiplayerRoster() {
+  if (!multiplayerRoster || !multiplayerRosterList) return;
+  multiplayerRoster.hidden = !isMultiplayerFriendRoom();
+  if (multiplayerRoster.hidden) return;
+  const activeUids = new Set(activeRoom.activePlayerUids || []);
+  const players = [...battlePlayersByUid.values()].sort((a, b) => {
+    const aTime = Number.isFinite(a.finalTime) ? a.finalTime : Infinity;
+    const bTime = Number.isFinite(b.finalTime) ? b.finalTime : Infinity;
+    return aTime - bTime || String(a.name).localeCompare(String(b.name));
+  });
+  multiplayerRosterList.replaceChildren(...players.map((player, index) => {
+    const row = document.createElement("div");
+    row.className = "multiplayer-roster-row";
+    const isActive = activeUids.has(player.uid);
+    const elapsed = player.uid === currentUser?.uid
+      ? localBattleTimerSeconds
+      : getPlayerElapsedSeconds(player);
+    const timer = Number.isFinite(player.finalTime) ? formatBattleTime(player.finalTime) : formatBattleTime(elapsed);
+    const state = isActive ? (player.status || "waiting") : (player.ready ? "ready" : "waiting");
+    row.innerHTML = `<strong></strong><span></span><time></time>`;
+    const place = activeRoom.status === "finished" && isActive && Number.isFinite(player.finalTime) ? `#${index + 1} ` : "";
+    row.querySelector("strong").textContent = `${place}${player.name || "Player"}${player.uid === activeRoom.hostUid ? " (Host)" : ""}`;
+    row.querySelector("span").textContent = state.toUpperCase();
+    row.querySelector("time").textContent = timer;
+    return row;
+  }));
+}
+
+function syncFriendOpponentMovesListener() {
+  if (!isMultiplayerFriendRoom() || activeRoom.cubeMode === "real" || isSpectatorMode) return;
+  const opponent = getDisplayPlayer("opponent");
+  const uid = opponent?.uid || "";
+  if (uid === friendOpponentMovesUid) return;
+  if (friendOpponentMovesUnsubscribe) friendOpponentMovesUnsubscribe();
+  friendOpponentMovesUnsubscribe = null;
+  friendOpponentMovesUid = uid;
+  battleMovesByRole.opponent = [];
+  if (!uid) return;
+  const movesQuery = query(
+    collection(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", uid, "moves"),
+    where("round", "==", activeRound),
+    orderBy("moveIndex", "asc")
+  );
+  friendOpponentMovesUnsubscribe = onSnapshot(movesQuery, snapshot => {
+    battleMovesByRole.opponent = snapshot.docs.map(entry => entry.data());
+    window.opponentCube?.applyMoves(battleMovesByRole.opponent);
+    renderBattleUi();
+  });
+}
+
+function watchFriendPlayers(roomId) {
+  activePlayerUnsubscribes.push(onSnapshot(
+    collection(db, BATTLE_ROOMS_COLLECTION, roomId, "players"),
+    snapshot => {
+      battlePlayersByUid = new Map(snapshot.docs.map(entry => [entry.id, entry.data()]));
+      syncFriendOpponentMovesListener();
+      const localPlayer = battlePlayersByUid.get(currentUser?.uid);
+      if (localPlayer && activeRoom?.status === "waiting") {
+        window.prepareBattleCube?.("", activeRound);
+      }
+      if (localPlayer?.status === "ready" && activeRoom?.status === "inspection") {
+        startInspectionForReadyPlayer().catch(console.error);
+      }
+      finalizeFriendMultiplayerIfDone().catch(console.error);
+      renderBattleUi();
+    }
+  ));
 }
 
 function setBattleText(id, value) {
@@ -1347,6 +1447,34 @@ async function loadOpponentRating(opponent) {
 
 function renderBattleNotice() {
   if (!activeRoom) return;
+  if (isMultiplayerFriendRoom()) {
+    if (isSpectatorMode) {
+      battleNotice.textContent = activeRoom.status === "waiting" ? "Spectator mode: waiting for the host to start." : "Spectator mode: game in progress.";
+      return;
+    }
+    if (activeRoom.status === "waiting") {
+      battleNotice.textContent = currentUser?.uid === activeRoom.hostUid
+        ? "Players can toggle Ready. Start whenever you are ready."
+        : "Toggle Ready, then wait for the host to start.";
+      return;
+    }
+    if (activeRoom.status === "inspection") {
+      battleNotice.textContent = (activeRoom.activePlayerUids || []).includes(currentUser?.uid)
+        ? "Inspection in progress."
+        : "You are watching this round.";
+      return;
+    }
+    if (activeRoom.status === "finished") {
+      battleNotice.textContent = "Battle finished.";
+      return;
+    }
+    if (activeRoom.status === "solving") {
+      battleNotice.textContent = (activeRoom.activePlayerUids || []).includes(currentUser?.uid)
+        ? "Battle in progress."
+        : "You are watching this round.";
+      return;
+    }
+  }
   if (opponentExitTimeout) {
     battleNotice.textContent = "Opponent left the room.";
     return;
@@ -1384,6 +1512,12 @@ function renderBattleResult() {
   }
 
   const winner = activeRoom.winnerName || "No winner";
+  if (isMultiplayerFriendRoom()) {
+    battleResult.textContent = `Winner: ${winner} | Friend Battle: no rating change`;
+    battleResultBadge.textContent = activeRoom.winnerUid === currentUser?.uid ? "WINNER" : "FINISHED";
+    battleResultBadge.className = `battle-result-badge ${activeRoom.winnerUid === currentUser?.uid ? "winner" : ""}`;
+    return;
+  }
   const host = getDisplayPlayer("host");
   const guest = getDisplayPlayer("guest");
   const formatResultPlayer = player => {
@@ -1415,6 +1549,14 @@ function renderBattleResult() {
 }
 
 function renderBattleReadyButton(you, opponent) {
+  if (isMultiplayerFriendRoom()) {
+    const activeRoundRunning = ["inspection", "solving", "finishing"].includes(activeRoom?.status);
+    battleReadyBtn.hidden = isSpectatorMode || !you || activeRoundRunning;
+    if (battleReadyBtn.hidden) return;
+    battleReadyBtn.disabled = false;
+    battleReadyBtn.textContent = you.ready ? "Ready ✓" : "Ready";
+    return;
+  }
   const battleEnded = activeRoom?.status === "finished" || activeRoom?.status === "finishing";
   battleReadyBtn.hidden = battleEnded || !you || ["inspecting", "solving"].includes(you.status);
   if (battleReadyBtn.hidden) return;
@@ -1425,6 +1567,10 @@ function renderBattleReadyButton(you, opponent) {
 }
 
 function renderRematchPanel(you, opponent) {
+  if (isMultiplayerFriendRoom()) {
+    battleRematchPanel.hidden = true;
+    return;
+  }
   const battleFinished = activeRoom?.status === "finished";
   battleRematchPanel.hidden = !battleFinished;
   if (!battleFinished) return;
@@ -1445,16 +1591,22 @@ function renderBattleUi() {
 
   const you = getDisplayPlayer(activeRoomRole);
   const opponent = getDisplayPlayer(getOpponentRole());
-  const count = [getDisplayPlayer("host"), getDisplayPlayer("guest")].filter(Boolean).length;
+  const count = isMultiplayerFriendRoom()
+    ? [...battlePlayersByUid.values()].filter(player => player.status !== "returned").length
+    : [getDisplayPlayer("host"), getDisplayPlayer("guest")].filter(Boolean).length;
 
   roomIdInput.value = activeRoomId;
   roomUrlOutput.value = getRoomUrl(activeRoomId);
   battleRoomMeta.textContent = activeRoom.mode === "ranked"
     ? `Ranked match | Players: ${count}/2`
-    : `Room: ${activeRoomId} | Players: ${count}/2`;
-  battleModeLabel.textContent = activeRoom.mode === "ranked" ? "Ranked Battle" : "Friend Battle";
+    : `Room: ${activeRoomId} | Players: ${count}/${activeRoom.maxPlayers || 2}${isSpectatorMode ? " | Spectating" : ""}`;
+  battleModeLabel.textContent = activeRoom.mode === "ranked"
+    ? "Ranked Battle"
+    : `${activeRoom.cubeMode === "real" ? "Real Cube" : "Virtual Cube"} · Friend Battle`;
   copyRoomUrlBtn.hidden = activeRoom.mode === "ranked";
-  const canSeeScramble = ["inspecting", "solving", "finished", "dnf"].includes(you?.status);
+  const canSeeScramble = isSpectatorMode
+    ? ["inspection", "solving", "finished"].includes(activeRoom.status)
+    : ["inspecting", "solving", "finished", "dnf"].includes(you?.status);
   battleScramble.textContent = canSeeScramble ? (activeRoom.scramble || "") : "";
   renderBattlePlayer("battleYou", you, activeRoomRole);
   renderBattlePlayer("battleOpponent", opponent, getOpponentRole());
@@ -1466,6 +1618,19 @@ function renderBattleUi() {
   renderBattleResult();
   renderBattleReadyButton(you, opponent);
   renderRematchPanel(you, opponent);
+  renderMultiplayerRoster();
+  document.body.classList.toggle("real-cube-battle", activeRoom.cubeMode === "real");
+  document.body.classList.toggle("spectator-mode", isSpectatorMode);
+  const hostCanStart = isMultiplayerFriendRoom() && currentUser?.uid === activeRoom.hostUid && !isSpectatorMode && ["waiting", "finished"].includes(activeRoom.status);
+  hostStartBattleBtn.hidden = !hostCanStart;
+  if (hostCanStart) {
+    const readyCount = [...battlePlayersByUid.values()].filter(player => player.ready && player.status !== "returned").length;
+    hostStartBattleBtn.disabled = readyCount === 0;
+    hostStartBattleBtn.textContent = activeRoom.status === "finished" ? `Start Rematch (${readyCount} ready)` : `Start Game (${readyCount} ready)`;
+  }
+  const localIsActive = (activeRoom.activePlayerUids || []).includes(currentUser?.uid);
+  realCubeTimerBtn.hidden = activeRoom.cubeMode !== "real" || isSpectatorMode || !localIsActive || !["inspecting", "solving"].includes(you?.status);
+  if (!realCubeTimerBtn.hidden) realCubeTimerBtn.textContent = you?.status === "solving" ? "Stop Solve" : "Start Solve";
 
   if (activeRoom.status === "finished") {
     if (activeRoom.mode === "ranked" && !activeRoom.ratingUpdated) {
@@ -1523,6 +1688,7 @@ function syncLocalBattleState(player) {
 
 async function startInspectionForReadyPlayer() {
   if (readyInspectionStarting || !currentUser || !activeRoomId || !activeRoom?.scramble) return;
+  if (isMultiplayerFriendRoom() && !(activeRoom.activePlayerUids || []).includes(currentUser.uid)) return;
   readyInspectionStarting = true;
 
   try {
@@ -1530,12 +1696,25 @@ async function startInspectionForReadyPlayer() {
     const snapshot = await getDoc(playerRef);
     if (!snapshot.exists() || snapshot.data().status !== "ready") return;
 
-    const inspectionStartTimeMs = Date.now();
+    const inspectionStartTimeMs = isMultiplayerFriendRoom()
+      ? Number(activeRoom.inspectionStartTimeMs || Date.now())
+      : Date.now();
     await updateDoc(playerRef, {
       status: "inspecting",
+      ready: false,
+      active: true,
       round: activeRound,
       inspectionStartTime: serverTimestamp(),
       inspectionStartTimeMs,
+      startTime: null,
+      startTimeMs: 0,
+      endTime: null,
+      finalTime: null,
+      tps: null,
+      moveCount: 0,
+      currentCompletionScore: 0,
+      maxCompletionScore: 0,
+      lastMove: "",
       updatedAt: serverTimestamp()
     });
     window.startBattleInspection?.(activeRoom.scramble, inspectionStartTimeMs, activeRound);
@@ -1587,6 +1766,7 @@ function watchRoom(roomId) {
   activeRoom = null;
   activeRound = 0;
   battlePlayersByRole = { host: null, guest: null };
+  battlePlayersByUid = new Map();
   battleMovesByRole = { host: [], guest: [] };
   setBattleMode(true);
   window.history.replaceState({}, "", getRoomUrl(roomId));
@@ -1611,7 +1791,9 @@ function watchRoom(roomId) {
       window.opponentCube?.clear();
     }
 
-    if (
+    if (room.mode === "friend" && Number(room.maxPlayers || 2) > 2) {
+      if (activePlayerUnsubscribes.length === 0) watchFriendPlayers(roomId);
+    } else if (
       room.hostUid !== previousHostUid ||
       room.guestUid !== previousGuestUid ||
       (previousRound && activeRound !== previousRound)
@@ -1624,7 +1806,7 @@ function watchRoom(roomId) {
       watchPlayer(roomId, "guest", room.guestUid);
     }
 
-    if (previousRound && activeRound > previousRound) {
+    if (previousRound && activeRound > previousRound && !isSpectatorMode && !isMultiplayerFriendRoom()) {
       beginNextBattleRound(room).catch(console.error);
     }
 
@@ -1724,9 +1906,16 @@ async function createBattleRoom(mode = "friend") {
   }
 
   const roomId = createRoomId();
+  const cubeMode = mode === "friend"
+    ? (document.querySelector('input[name="friendCubeMode"]:checked')?.value || "virtual")
+    : "virtual";
   const room = {
     roomId,
     mode,
+    cubeMode,
+    maxPlayers: mode === "friend" ? 20 : 2,
+    playerCount: 1,
+    activePlayerUids: [],
     scramble: "",
     status: "waiting",
     hostUid: currentUser.uid,
@@ -1750,18 +1939,13 @@ async function createBattleRoom(mode = "friend") {
   await setDoc(doc(db, BATTLE_ROOMS_COLLECTION, roomId, "players", currentUser.uid), createPlayer("host"));
   activeRoomId = roomId;
   activeRoomRole = "host";
+  isSpectatorMode = false;
   roomIdInput.value = roomId;
   roomUrlOutput.value = getRoomUrl(roomId);
   if (mode === "friend") {
     clearFriendLobby();
-    setBattleStatus("Friend room created. Share the invite link.");
-    friendLobbyUnsubscribe = onSnapshot(doc(db, BATTLE_ROOMS_COLLECTION, roomId), snapshot => {
-      const waitingRoom = snapshot.data();
-      if (waitingRoom?.guestUid) {
-        clearFriendLobby();
-        watchRoom(roomId);
-      }
-    });
+    setBattleStatus(`${cubeMode === "real" ? "Real Cube" : "Virtual Cube"} room created. Share the invite link.`);
+    watchRoom(roomId);
   } else {
     watchRoom(roomId);
   }
@@ -1946,7 +2130,7 @@ async function startRankedBattle() {
   }, 60000);
 }
 
-async function joinBattleRoom(roomId, allowRankedMatch = false) {
+async function joinBattleRoom(roomId, allowRankedMatch = false, asSpectator = false) {
   if (!currentUser) {
     setBattleStatus("Log in or use Guest Login to join a room.");
     return;
@@ -1964,7 +2148,7 @@ async function joinBattleRoom(roomId, allowRankedMatch = false) {
   }
 
   let room = snapshot.data();
-  if (room.status === "cancelled" || room.status === "finished") {
+  if (room.status === "cancelled" || (room.status === "finished" && room.mode !== "friend")) {
     setBattleStatus("This room is no longer available.");
     return;
   }
@@ -1973,8 +2157,56 @@ async function joinBattleRoom(roomId, allowRankedMatch = false) {
     return;
   }
 
-  if (room.hostUid === currentUser.uid) {
+  const isMultiplayerFriend = room.mode === "friend" && Number(room.maxPlayers || 2) > 2;
+  if (asSpectator && room.mode !== "friend") {
+    setBattleStatus("Spectator mode is available for Friend Battle rooms.");
+    return;
+  }
+
+  if (asSpectator) {
+    activeRoomRole = "spectator";
+    isSpectatorMode = true;
+  } else if (isMultiplayerFriend && room.hostUid !== currentUser.uid) {
+    const playerRef = doc(db, BATTLE_ROOMS_COLLECTION, normalizedRoomId, "players", currentUser.uid);
+    try {
+      await runTransaction(db, async transaction => {
+        const [currentRoomSnapshot, playerSnapshot] = await Promise.all([
+          transaction.get(roomRef),
+          transaction.get(playerRef)
+        ]);
+        if (!currentRoomSnapshot.exists()) throw new Error("Room not found.");
+        const currentRoom = currentRoomSnapshot.data();
+        if (!playerSnapshot.exists() && Number(currentRoom.playerCount || 1) >= Number(currentRoom.maxPlayers || 20)) {
+          throw new Error("This room is full.");
+        }
+        if (!playerSnapshot.exists()) {
+          transaction.set(playerRef, createPlayer("player"));
+          transaction.update(roomRef, {
+            playerCount: Number(currentRoom.playerCount || 1) + 1,
+            updatedAt: serverTimestamp()
+          });
+        } else {
+          transaction.update(playerRef, { status: "joined", ready: false, updatedAt: serverTimestamp() });
+          if (playerSnapshot.data()?.status === "returned") {
+            transaction.update(roomRef, {
+              playerCount: Math.min(Number(currentRoom.maxPlayers || 20), Number(currentRoom.playerCount || 0) + 1),
+              updatedAt: serverTimestamp()
+            });
+          }
+        }
+      });
+    } catch (error) {
+      setBattleStatus(error.message || "This room could not be joined.");
+      return;
+    }
+    activeRoomRole = "player";
+    isSpectatorMode = false;
+  } else if (isMultiplayerFriend) {
     activeRoomRole = "host";
+    isSpectatorMode = false;
+  } else if (room.hostUid === currentUser.uid) {
+    activeRoomRole = "host";
+    isSpectatorMode = false;
   } else {
     try {
       await runTransaction(db, async transaction => {
@@ -1999,13 +2231,14 @@ async function joinBattleRoom(roomId, allowRankedMatch = false) {
     }
 
     activeRoomRole = "guest";
+    isSpectatorMode = false;
     await setDoc(doc(db, BATTLE_ROOMS_COLLECTION, normalizedRoomId, "players", currentUser.uid), createPlayer("guest"));
   }
 
   activeRoomId = normalizedRoomId;
   roomIdInput.value = normalizedRoomId;
   roomUrlOutput.value = getRoomUrl(normalizedRoomId);
-  setBattleStatus("Joined room.");
+  setBattleStatus(asSpectator ? "Joined as spectator." : "Joined room.");
   watchRoom(normalizedRoomId);
 }
 
@@ -2020,6 +2253,24 @@ async function readyBattleRoom() {
   if (!snapshot.exists()) return;
 
   const room = snapshot.data();
+  if (room.mode === "friend" && Number(room.maxPlayers || 2) > 2) {
+    if (isSpectatorMode) return;
+    if (["inspection", "solving", "finishing"].includes(room.status)) {
+      setBattleStatus("This round is already in progress.");
+      return;
+    }
+    const player = battlePlayersByUid.get(currentUser.uid);
+    const ready = !Boolean(player?.ready);
+    await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
+      ready,
+      active: false,
+      status: ready ? "ready" : "joined",
+      finalTime: null,
+      updatedAt: serverTimestamp()
+    });
+    setBattleStatus(ready ? "Ready. Waiting for the host to start." : "Ready cancelled.");
+    return;
+  }
   if (room.status === "finishing" || room.status === "finished") {
     setBattleStatus("This battle has already ended.");
     return;
@@ -2081,6 +2332,65 @@ async function notifyBattleSolveStarted() {
     window.trackCubeEvent?.("ranked_battle_start");
   } else if (activeRoom?.mode === "friend") {
     window.trackCubeEvent?.("friend_battle_start");
+  }
+}
+
+async function startFriendMultiplayerGame() {
+  if (!currentUser || !isMultiplayerFriendRoom() || currentUser.uid !== activeRoom.hostUid || isSpectatorMode) return;
+  const readyPlayers = [...battlePlayersByUid.values()]
+    .filter(player => player.ready && player.status !== "returned")
+    .slice(0, Number(activeRoom.maxPlayers || 20));
+  if (readyPlayers.length === 0) {
+    setBattleStatus("At least one player must be Ready.");
+    return;
+  }
+  const scramble = getBattleScramble();
+  if (!scramble) {
+    setBattleStatus("Scramble generator is not ready.");
+    return;
+  }
+  const nextRound = activeRoom.status === "finished" ? activeRound + 1 : activeRound;
+  const inspectionStartTimeMs = Date.now();
+  await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId), {
+    status: "inspection",
+    scramble,
+    round: nextRound,
+    activePlayerUids: readyPlayers.map(player => player.uid),
+    inspectionStartTime: serverTimestamp(),
+    inspectionStartTimeMs,
+    winnerUid: "",
+    winnerName: "",
+    finishedAt: null,
+    updatedAt: serverTimestamp()
+  });
+}
+
+async function finalizeFriendMultiplayerIfDone() {
+  if (
+    friendFinalizing ||
+    !isMultiplayerFriendRoom() ||
+    currentUser?.uid !== activeRoom.hostUid ||
+    !["inspection", "solving"].includes(activeRoom.status)
+  ) return;
+  const activeUids = activeRoom.activePlayerUids || [];
+  if (activeUids.length === 0) return;
+  const activePlayers = activeUids.map(uid => battlePlayersByUid.get(uid));
+  if (activePlayers.some(player => !player || !["finished", "dnf", "time_limit"].includes(player.status))) return;
+  const finishedPlayers = activePlayers
+    .filter(player => Number.isFinite(player.finalTime))
+    .sort((a, b) => a.finalTime - b.finalTime);
+  const winner = finishedPlayers[0] || null;
+  friendFinalizing = true;
+  try {
+    await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId), {
+      status: "finished",
+      winnerUid: winner?.uid || "",
+      winnerName: winner?.name || "No winner",
+      finishedAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+  } finally {
+    friendFinalizing = false;
   }
 }
 
@@ -2181,6 +2491,21 @@ async function submitBattleSolve(time, scramble, solveStats = {}) {
 
   const roomRef = doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId);
   const playerRef = doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid);
+
+  if (isMultiplayerFriendRoom()) {
+    if (!(activeRoom.activePlayerUids || []).includes(currentUser.uid) || activeRoom.scramble !== scramble) return;
+    await updateDoc(playerRef, {
+      status: "finished",
+      endTime: serverTimestamp(),
+      finalTime: time,
+      tps: Number.isFinite(solveStats.tps) ? solveStats.tps : null,
+      moveCount: Math.max(0, Number(solveStats.moveCount) || 0),
+      currentCompletionScore: Math.max(0, Math.min(54, Number(solveStats.currentCompletionScore) || 0)),
+      maxCompletionScore: Math.max(0, Math.min(54, Number(solveStats.maxCompletionScore) || 0)),
+      updatedAt: serverTimestamp()
+    });
+    return;
+  }
 
   await runTransaction(db, async transaction => {
     const roomSnapshot = await transaction.get(roomRef);
@@ -2396,11 +2721,23 @@ function leaveBattleMode() {
     window.clearTimeout(opponentExitTimeout);
     opponentExitTimeout = null;
   }
-  if (currentUser && activeRoomId && document.body.classList.contains("battle-mode")) {
-    updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
-      status: "returned",
+  if (currentUser && activeRoomId && document.body.classList.contains("battle-mode") && !isSpectatorMode) {
+    const leavingActiveRound = isMultiplayerFriendRoom() &&
+      (activeRoom.activePlayerUids || []).includes(currentUser.uid) &&
+      ["inspection", "solving"].includes(activeRoom.status);
+    const updates = [updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
+      status: leavingActiveRound ? "dnf" : "returned",
+      ready: false,
+      active: false,
       updatedAt: serverTimestamp()
-    }).catch(console.error);
+    })];
+    if (isMultiplayerFriendRoom()) {
+      updates.push(updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId), {
+        playerCount: Math.max(0, Number(activeRoom.playerCount || 1) - 1),
+        updatedAt: serverTimestamp()
+      }));
+    }
+    Promise.all(updates).catch(console.error);
   }
 
   clearBattleListeners();
@@ -2410,10 +2747,15 @@ function leaveBattleMode() {
   activeRoom = null;
   activeRoomId = "";
   activeRoomRole = "";
+  isSpectatorMode = false;
+  battlePlayersByUid = new Map();
   activeRound = 1;
   displayedOpponentRatingUid = "";
   localBattleTimerSeconds = 0;
   battleReadyBtn.hidden = true;
+  hostStartBattleBtn.hidden = true;
+  realCubeTimerBtn.hidden = true;
+  multiplayerRoster.hidden = true;
   battleRematchPanel.hidden = true;
   setBattleMode(false);
   if (typeof window.cancelCurrentSolve === "function") {
@@ -2424,6 +2766,7 @@ function leaveBattleMode() {
   const url = new URL(window.location.href);
   url.searchParams.delete("room");
   url.searchParams.delete("battleRoom");
+  url.searchParams.delete("spectate");
   window.history.replaceState({}, "", url);
 }
 
@@ -2463,6 +2806,7 @@ function renderOpponentCube(opponent) {
 
 function returnToNormalAfterOpponentExit(opponent) {
   if (!activeRoom || !document.body.classList.contains("battle-mode")) return;
+  if (isMultiplayerFriendRoom()) return;
   if (["finished", "finishing"].includes(activeRoom.status)) return;
   if (!isPlayerDisconnected(opponent) || opponentExitTimeout) return;
 
@@ -2536,6 +2880,13 @@ function setupAuthUi() {
     });
   });
 
+  spectateRoomBtn?.addEventListener("click", () => {
+    joinBattleRoom(roomIdInput.value, false, true).catch(error => {
+      setBattleStatus("Spectator mode could not be opened.");
+      console.error(error);
+    });
+  });
+
   copyInviteBtn.addEventListener("click", () => {
     if (!activeRoomId) {
       setBattleStatus("Create or join a friend room first.");
@@ -2570,6 +2921,15 @@ function setupAuthUi() {
       console.error(error);
     });
   });
+
+  hostStartBattleBtn?.addEventListener("click", () => {
+    startFriendMultiplayerGame().catch(error => {
+      battleNotice.textContent = "Game could not be started.";
+      console.error(error);
+    });
+  });
+
+  realCubeTimerBtn?.addEventListener("click", () => window.handleRealCubeTimerAction?.());
 
   playAgainBtn.addEventListener("click", () => {
     requestRematch().catch(error => {
@@ -2640,7 +3000,8 @@ if (isConfigured()) {
 
       const roomFromUrl = new URLSearchParams(window.location.search).get("battleRoom");
       if (roomFromUrl && !activeRoomId) {
-        joinBattleRoom(roomFromUrl).catch(console.error);
+        const spectate = new URLSearchParams(window.location.search).get("spectate") === "1";
+        joinBattleRoom(roomFromUrl, false, spectate).catch(console.error);
       }
     } else {
       leaveBattleMode();
@@ -2668,3 +3029,4 @@ window.notifyRankedBattleTimeLimit = notifyRankedBattleTimeLimit;
 window.renderBattleLocalTimer = renderBattleLocalTimer;
 window.isBattleMode = () => document.body.classList.contains("battle-mode");
 window.isRankedBattle = () => document.body.classList.contains("battle-mode") && activeRoom?.mode === "ranked";
+window.isRealCubeBattle = () => document.body.classList.contains("battle-mode") && activeRoom?.cubeMode === "real";

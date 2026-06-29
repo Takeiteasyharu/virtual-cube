@@ -827,6 +827,139 @@ body.battle-mode .opponent-cube-panel.opponent-unavailable {
   font-size: 14px;
 }
 
+.host-start-button {
+  background: #1f8a4c;
+  color: #fff;
+  font-weight: 700;
+}
+
+.multiplayer-roster {
+  margin: 14px 0;
+  padding: 14px;
+  border: 2px solid rgba(17, 17, 17, 0.3);
+  border-radius: 6px;
+}
+
+.multiplayer-roster h2 {
+  margin: 0 0 10px;
+  text-align: center;
+  font-size: 18px;
+}
+
+.multiplayer-roster-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.multiplayer-roster-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 64px;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 10px;
+  background: rgba(255, 255, 255, 0.58);
+  border-radius: 5px;
+}
+
+.multiplayer-roster-row time {
+  text-align: right;
+  font-family: "Courier New", monospace;
+  font-weight: 700;
+}
+
+.cube-mode-selector {
+  display: flex;
+  gap: 16px;
+  margin: 8px 0 14px;
+  padding: 12px;
+  border: 1px solid rgba(17, 17, 17, 0.35);
+  border-radius: 6px;
+}
+
+.cube-mode-selector legend {
+  padding: 0 6px;
+  font-weight: 700;
+}
+
+.cube-mode-selector label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.real-cube-timer-button {
+  min-width: 220px;
+  min-height: 64px;
+  margin: 16px auto 0;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+body.real-cube-battle #cubeContainer canvas,
+body.real-cube-battle .opponent-cube-panel,
+body.real-cube-battle .move-input {
+  display: none;
+}
+
+body.real-cube-battle #cubeContainer {
+  width: min(92vw, 620px);
+  height: 180px;
+  min-height: 180px;
+}
+
+body.spectator-mode #battleReadyBtn,
+body.spectator-mode #realCubeTimerBtn {
+  display: none;
+}
+
+.key-bindings-settings {
+  border: 2px solid #3977c9;
+}
+
+.settings-callout {
+  margin: 0 0 12px;
+  padding: 10px;
+  background: rgba(57, 119, 201, 0.12);
+  line-height: 1.45;
+}
+
+.reset-key-bindings {
+  display: block;
+  width: min(100%, 280px);
+  margin: 16px auto 0;
+}
+
+.beginner-tip-content {
+  max-width: 460px;
+  text-align: center;
+}
+
+.beginner-tip-content h2 {
+  margin-top: 0;
+}
+
+.beginner-tip-content button {
+  width: min(100%, 240px);
+  margin-top: 10px;
+}
+
+body.dark .multiplayer-roster {
+  border-color: #78c5ef;
+}
+
+body.dark .multiplayer-roster-row,
+body.dark .settings-callout {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+body.dark .key-bindings-settings {
+  border-color: #78c5ef;
+}
+
 .battle-ready-button {
   display: none;
   position: absolute;
@@ -1507,7 +1640,15 @@ body.solving .timer {
   }
 
   .key-binding-change {
-    display: none;
+    display: block;
+  }
+
+  .multiplayer-roster-list {
+    grid-template-columns: 1fr;
+  }
+
+  .cube-mode-selector {
+    flex-direction: column;
   }
 
   .profile-grid {
