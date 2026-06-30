@@ -1,4 +1,4 @@
-const CACHE_NAME = "virtual-cube-timer-v49";
+const CACHE_NAME = "virtual-cube-timer-v50";
 const BASE_PATH = "/virtual-cube/";
 
 const CACHE_URLS = [
@@ -17,6 +17,7 @@ const CACHE_URLS = [
   `${BASE_PATH}online.js`,
   `${BASE_PATH}manifest.json`,
   `${BASE_PATH}icon.svg`,
+  `${BASE_PATH}images/keycontrol.png`,
   "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js",
   "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js",
   "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js",
