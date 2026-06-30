@@ -129,6 +129,7 @@ let displayedOpponentRatingUid = "";
 let readyInspectionStarting = false;
 let ratingUpdateInProgress = false;
 let friendFinalizing = false;
+let realFriendScramblePreparing = false;
 let completionScoreWriteTimeout = null;
 let pendingCompletionScore = null;
 const savedBattleResultKeys = new Set();
@@ -1407,10 +1408,40 @@ function watchFriendPlayers(roomId) {
       if (localPlayer?.status === "ready" && activeRoom?.status === "inspection") {
         startInspectionForReadyPlayer().catch(console.error);
       }
+      ensureRealFriendScrambleForReadyPlayers().catch(console.error);
       finalizeFriendMultiplayerIfDone().catch(console.error);
       renderBattleUi();
     }
   ));
+}
+
+async function ensureRealFriendScrambleForReadyPlayers() {
+  if (
+    realFriendScramblePreparing ||
+    !currentUser ||
+    !activeRoomId ||
+    currentUser.uid !== activeRoom?.hostUid ||
+    !isMultiplayerFriendRoom() ||
+    activeRoom.cubeMode !== "real" ||
+    activeRoom.scramble ||
+    !["waiting", "finished"].includes(activeRoom.status)
+  ) return;
+
+  const readyPlayers = [...battlePlayersByUid.values()]
+    .filter(player => player.ready && player.status !== "returned");
+  if (readyPlayers.length < 2) return;
+
+  const scramble = getBattleScramble();
+  if (!scramble) return;
+  realFriendScramblePreparing = true;
+  try {
+    await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId), {
+      scramble,
+      updatedAt: serverTimestamp()
+    });
+  } finally {
+    realFriendScramblePreparing = false;
+  }
 }
 
 function setBattleText(id, value) {
@@ -1635,9 +1666,12 @@ function renderBattleUi() {
     ? "Ranked Battle"
     : `${activeRoom.cubeMode === "real" ? "Real Cube" : "Virtual Cube"} · Friend Battle`;
   copyRoomUrlBtn.hidden = activeRoom.mode === "ranked";
-  const canSeeScramble = isSpectatorMode
+  const realFriendScramblePreview = activeRoom.mode === "friend" &&
+    activeRoom.cubeMode === "real" &&
+    Boolean(activeRoom.scramble);
+  const canSeeScramble = realFriendScramblePreview || (isSpectatorMode
     ? ["inspection", "solving", "finished"].includes(activeRoom.status)
-    : ["inspecting", "solving", "finished", "dnf"].includes(you?.status);
+    : ["inspecting", "solving", "finished", "dnf"].includes(you?.status));
   battleScramble.textContent = canSeeScramble ? (activeRoom.scramble || "") : "";
   renderBattlePlayer("battleYou", you, activeRoomRole);
   renderBattlePlayer("battleOpponent", opponent, getOpponentRole());
@@ -1658,10 +1692,13 @@ function renderBattleUi() {
   if (hostCanStart) {
     const readyCount = [...battlePlayersByUid.values()].filter(player => player.ready && player.status !== "returned").length;
     const hostIsReady = Boolean(battlePlayersByUid.get(activeRoom.hostUid)?.ready);
-    hostStartBattleBtn.disabled = !hostIsReady || readyCount === 0;
+    const minimumReadyPlayers = activeRoom.cubeMode === "real" ? 2 : 1;
+    hostStartBattleBtn.disabled = !hostIsReady || readyCount < minimumReadyPlayers || (activeRoom.cubeMode === "real" && !activeRoom.scramble);
     hostStartBattleBtn.textContent = !hostIsReady
       ? "Host must be Ready"
-      : (activeRoom.status === "finished" ? `Start Rematch (${readyCount} ready)` : `Start Game (${readyCount} ready)`);
+      : (readyCount < minimumReadyPlayers
+        ? `Waiting for players (${readyCount}/${minimumReadyPlayers})`
+        : (activeRoom.status === "finished" ? `Play Again (${readyCount} ready)` : `Start Game (${readyCount} ready)`));
   }
   const localIsActive = (activeRoom.activePlayerUids || []).includes(currentUser?.uid);
   const realCubeActive = activeRoom.cubeMode === "real" && !isSpectatorMode && localIsActive && ["ready", "inspection", "solving"].includes(activeRoom.status);
@@ -2405,13 +2442,21 @@ async function startFriendMultiplayerGame() {
     setBattleStatus("At least one player must be Ready.");
     return;
   }
-  const scramble = getBattleScramble();
+  const isRealCube = activeRoom.cubeMode === "real";
+  if (isRealCube && readyPlayers.length < 2) {
+    setBattleStatus("At least two players must be Ready for Real Cube Mode.");
+    return;
+  }
+  if (isRealCube && !activeRoom.scramble) {
+    setBattleStatus("Waiting for the synchronized scramble.");
+    return;
+  }
+  const scramble = isRealCube ? activeRoom.scramble : getBattleScramble();
   if (!scramble) {
     setBattleStatus("Scramble generator is not ready.");
     return;
   }
   const nextRound = activeRoom.status === "finished" ? activeRound + 1 : activeRound;
-  const isRealCube = activeRoom.cubeMode === "real";
   const inspectionStartTimeMs = isRealCube ? 0 : Date.now();
   await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId), {
     status: isRealCube ? "ready" : "inspection",
@@ -2492,10 +2537,12 @@ async function finalizeFriendMultiplayerIfDone() {
     .filter(player => Number.isFinite(player.finalTime))
     .sort((a, b) => a.finalTime - b.finalTime);
   const winner = finishedPlayers[0] || null;
+  const nextScramble = activeRoom.cubeMode === "real" ? getBattleScramble() : "";
   friendFinalizing = true;
   try {
     await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId), {
       status: "finished",
+      ...(nextScramble ? { scramble: nextScramble } : {}),
       winnerUid: winner?.uid || "",
       winnerName: winner?.name || "No winner",
       finishedAt: serverTimestamp(),
