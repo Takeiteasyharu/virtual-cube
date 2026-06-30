@@ -2458,6 +2458,25 @@ async function beginRealCubeInspection() {
   return true;
 }
 
+async function abortRealCubeBattle() {
+  if (
+    !currentUser ||
+    !activeRoomId ||
+    activeRoom?.cubeMode !== "real" ||
+    !["inspecting", "solving"].includes(battlePlayersByUid.get(currentUser.uid)?.status)
+  ) return;
+
+  await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
+    status: "dnf",
+    ready: false,
+    finalTime: null,
+    endTime: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  });
+  window.cancelCurrentSolve?.();
+  finalizeFriendMultiplayerIfDone().catch(console.error);
+}
+
 async function finalizeFriendMultiplayerIfDone() {
   if (
     friendFinalizing ||
@@ -3127,3 +3146,4 @@ window.isBattleMode = () => document.body.classList.contains("battle-mode");
 window.isRankedBattle = () => document.body.classList.contains("battle-mode") && activeRoom?.mode === "ranked";
 window.isRealCubeBattle = () => document.body.classList.contains("battle-mode") && activeRoom?.cubeMode === "real";
 window.beginRealCubeInspection = beginRealCubeInspection;
+window.abortRealCubeBattle = abortRealCubeBattle;
