@@ -130,6 +130,7 @@ let readyInspectionStarting = false;
 let ratingUpdateInProgress = false;
 let friendFinalizing = false;
 let realFriendScramblePreparing = false;
+let friendRematchStarting = false;
 let completionScoreWriteTimeout = null;
 let pendingCompletionScore = null;
 const savedBattleResultKeys = new Set();
@@ -1409,10 +1410,34 @@ function watchFriendPlayers(roomId) {
         startInspectionForReadyPlayer().catch(console.error);
       }
       ensureRealFriendScrambleForReadyPlayers().catch(console.error);
+      autoStartFriendRematchWhenReady().catch(console.error);
       finalizeFriendMultiplayerIfDone().catch(console.error);
       renderBattleUi();
     }
   ));
+}
+
+async function autoStartFriendRematchWhenReady() {
+  if (
+    friendRematchStarting ||
+    !currentUser ||
+    !activeRoomId ||
+    currentUser.uid !== activeRoom?.hostUid ||
+    !isMultiplayerFriendRoom() ||
+    activeRoom.status !== "finished"
+  ) return;
+
+  const playersInRoom = [...battlePlayersByUid.values()]
+    .filter(player => player.status !== "returned");
+  if (playersInRoom.length < 2 || playersInRoom.some(player => !player.ready)) return;
+  if (activeRoom.cubeMode === "real" && !activeRoom.scramble) return;
+
+  friendRematchStarting = true;
+  try {
+    await startFriendMultiplayerGame();
+  } finally {
+    friendRematchStarting = false;
+  }
 }
 
 async function ensureRealFriendScrambleForReadyPlayers() {
@@ -1687,7 +1712,7 @@ function renderBattleUi() {
   document.body.classList.toggle("real-cube-battle", activeRoom.cubeMode === "real");
   window.setVirtualCubeVisible?.(activeRoom.cubeMode !== "real");
   document.body.classList.toggle("spectator-mode", isSpectatorMode);
-  const hostCanStart = isMultiplayerFriendRoom() && currentUser?.uid === activeRoom.hostUid && !isSpectatorMode && ["waiting", "finished"].includes(activeRoom.status);
+  const hostCanStart = isMultiplayerFriendRoom() && currentUser?.uid === activeRoom.hostUid && !isSpectatorMode && activeRoom.status === "waiting";
   hostStartBattleBtn.hidden = !hostCanStart;
   if (hostCanStart) {
     const readyCount = [...battlePlayersByUid.values()].filter(player => player.ready && player.status !== "returned").length;
@@ -1698,7 +1723,7 @@ function renderBattleUi() {
       ? "Host must be Ready"
       : (readyCount < minimumReadyPlayers
         ? `Waiting for players (${readyCount}/${minimumReadyPlayers})`
-        : (activeRoom.status === "finished" ? `Play Again (${readyCount} ready)` : `Start Game (${readyCount} ready)`));
+        : `Start Game (${readyCount} ready)`);
   }
   const localIsActive = (activeRoom.activePlayerUids || []).includes(currentUser?.uid);
   const realCubeActive = activeRoom.cubeMode === "real" && !isSpectatorMode && localIsActive && ["ready", "inspection", "solving"].includes(activeRoom.status);
