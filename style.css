@@ -509,6 +509,18 @@ body.dark .page-return a {
   font-size: 16px;
 }
 
+#cubeSizeInput {
+  display: block;
+  width: min(100%, 420px);
+  margin: 10px 0 4px;
+  accent-color: #286a96;
+}
+
+#cubeSizeValue {
+  font-weight: 700;
+  opacity: 1;
+}
+
 #backgroundImageInput {
   display: block;
   width: min(100%, 420px);

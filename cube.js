@@ -42,6 +42,7 @@ function initCube() {
   scene.add(light);
 
   createCubies();
+  applyCubeSizeScale();
   animateScene();
 
   window.addEventListener("resize", onResize);
@@ -163,9 +164,27 @@ function onResize() {
   if (!container.clientWidth || !container.clientHeight) return;
 
   camera.aspect = container.clientWidth / container.clientHeight;
+  applyCubeSizeScale();
   camera.updateProjectionMatrix();
   renderer.setSize(container.clientWidth, container.clientHeight);
+  renderer.render(scene, camera);
 }
+
+function applyCubeSizeScale(scale = null) {
+  if (!camera) return;
+  const requestedScale = scale === null
+    ? (typeof window.getCubeSizeScale === "function" ? window.getCubeSizeScale() : 1)
+    : Number(scale);
+  const normalizedScale = Number.isFinite(requestedScale)
+    ? Math.min(2, Math.max(0.5, requestedScale))
+    : 1;
+  camera.zoom = normalizedScale;
+  camera.updateProjectionMatrix();
+  if (renderer && scene) renderer.render(scene, camera);
+}
+
+window.resizeMainCube = onResize;
+window.applyCubeSizeScale = applyCubeSizeScale;
 
 function resetCube() {
   cubies.forEach(cubie => scene.remove(cubie));

@@ -52,6 +52,7 @@ const KEY_BINDINGS_KEY = "cubeKeyBindings";
 const BACKGROUND_IMAGE_KEY = "cubeBackgroundImage";
 const BEGINNER_TIP_KEY = "cubeOnboardingDismissed";
 const NORMAL_TIMER_MODE_KEY = "normalTimerMode";
+const CUBE_SIZE_SCALE_KEY = "cubeSizeScale";
 const BACKGROUND_IMAGE_MAX_BYTES = 3 * 1024 * 1024;
 let keyMap = { ...DEFAULT_KEY_MAP };
 let selectedBindingKey = "";
@@ -88,7 +89,20 @@ function setAnimationSpeed(value) {
   localStorage.setItem(ANIMATION_SPEED_KEY, normalized);
 }
 
+function getCubeSizeScale() {
+  const value = Number(localStorage.getItem(CUBE_SIZE_SCALE_KEY));
+  return Number.isFinite(value) && value >= 0.5 && value <= 2 ? value : 1;
+}
+
+function setCubeSizeScale(value) {
+  const normalized = Math.min(2, Math.max(0.5, Number(value) || 1));
+  localStorage.setItem(CUBE_SIZE_SCALE_KEY, String(normalized));
+  window.applyCubeSizeScale?.(normalized);
+  return normalized;
+}
+
 window.getCubeAnimationSpeed = getAnimationSpeed;
+window.getCubeSizeScale = getCubeSizeScale;
 
 let readyToSolve = false;
 let firstTurnDone = false;
@@ -313,8 +327,15 @@ function isRealCubeTimerMode() {
 function setVirtualCubeVisible(visible) {
   const canvas = document.querySelector("#cubeContainer > canvas");
   if (canvas) {
+    const wasHidden = canvas.hidden;
     canvas.hidden = !visible;
     canvas.style.pointerEvents = visible ? "" : "none";
+    if (visible && wasHidden) {
+      window.requestAnimationFrame(() => {
+        window.resizeMainCube?.();
+        window.applyCubeSizeScale?.(getCubeSizeScale());
+      });
+    }
   }
 }
 
@@ -918,12 +939,23 @@ function renderKeyBindings() {
 function setupSettingsUi() {
   const speedSelect = document.getElementById("animationSpeedSelect");
   const timerModeSelect = document.getElementById("normalTimerModeSelect");
+  const cubeSizeInput = document.getElementById("cubeSizeInput");
+  const cubeSizeValue = document.getElementById("cubeSizeValue");
   const resetButton = document.getElementById("resetKeyBindingsBtn");
   if (!speedSelect) return;
 
   speedSelect.value = getAnimationSpeed();
   setAnimationSpeed(speedSelect.value);
   speedSelect.addEventListener("change", () => setAnimationSpeed(speedSelect.value));
+  if (cubeSizeInput) {
+    const renderCubeSize = value => {
+      const normalized = setCubeSizeScale(value);
+      cubeSizeInput.value = String(normalized);
+      if (cubeSizeValue) cubeSizeValue.textContent = `${normalized.toFixed(2)}x`;
+    };
+    renderCubeSize(getCubeSizeScale());
+    cubeSizeInput.addEventListener("input", () => renderCubeSize(cubeSizeInput.value));
+  }
   if (timerModeSelect) {
     timerModeSelect.value = getNormalTimerMode();
     timerModeSelect.addEventListener("change", () => {
