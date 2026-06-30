@@ -44,7 +44,10 @@ function stopTimer() {
   }
 
   if (typeof window.submitBattleSolve === "function") {
-    window.submitBattleSolve(finalTime, currentScramble, solveStats);
+    Promise.resolve(window.submitBattleSolve(finalTime, currentScramble, solveStats)).catch(error => {
+      window.handleBattleFinishSyncError?.(error);
+      console.error("Battle finish could not be synchronized.", error);
+    });
   }
 
   renderStats();

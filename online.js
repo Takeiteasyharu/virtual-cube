@@ -1172,8 +1172,17 @@ function formatBattleTime(seconds) {
   return Number.isFinite(seconds) ? seconds.toFixed(2) : "-";
 }
 
+function hasFinalBattleTime(player) {
+  return Boolean(
+    player &&
+    player.finalTime !== null &&
+    player.finalTime !== undefined &&
+    Number.isFinite(Number(player.finalTime))
+  );
+}
+
 function getPlayerElapsedSeconds(player) {
-  if (player?.status === "finished" && Number.isFinite(Number(player.finalTime))) {
+  if (hasFinalBattleTime(player)) {
     return Number(player.finalTime);
   }
   if (!player || player.status !== "solving") return 0;
@@ -1185,7 +1194,7 @@ function isPlayerFinished(player) {
   return Boolean(
     player &&
     (player.status === "finished" || player.finishedAt) &&
-    Number.isFinite(Number(player.finalTime))
+    hasFinalBattleTime(player)
   );
 }
 
@@ -1210,7 +1219,7 @@ function calculateBattleMoveCount(moves) {
 }
 
 function getBattlePlayerSeconds(player, role) {
-  if (player?.status === "finished" && Number.isFinite(Number(player.finalTime))) {
+  if (hasFinalBattleTime(player)) {
     return Number(player.finalTime);
   }
   return role === activeRoomRole
@@ -1752,7 +1761,7 @@ function renderBattleUi() {
   }
 
   if (activeRoom.status === "finishing" && Date.now() >= Number(activeRoom.finishDeadlineMs)) {
-    finalizeBattle().catch(console.error);
+    if (!isMultiplayerFriendRoom()) finalizeBattle().catch(console.error);
   }
 
   if (activeRoom.mode === "ranked" && you?.timeLimitReached && opponent?.timeLimitReached) {
@@ -2552,7 +2561,7 @@ async function finalizeFriendMultiplayerIfDone() {
     friendFinalizing ||
     !isMultiplayerFriendRoom() ||
     currentUser?.uid !== activeRoom.hostUid ||
-    !["ready", "inspection", "solving"].includes(activeRoom.status)
+    !["ready", "inspection", "solving", "finishing"].includes(activeRoom.status)
   ) return;
   const activeUids = activeRoom.activePlayerUids || [];
   if (activeUids.length === 0) return;
@@ -2675,20 +2684,24 @@ async function submitBattleSolve(time, scramble, solveStats = {}) {
 
   const roomRef = doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId);
   const playerRef = doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid);
+  const finishPayload = {
+    status: "finished",
+    endTime: serverTimestamp(),
+    finishedAt: serverTimestamp(),
+    finalTime: time,
+    tps: Number.isFinite(solveStats.tps) ? solveStats.tps : null,
+    moveCount: Math.max(0, Math.floor(Number(solveStats.moveCount) || 0)),
+    currentCompletionScore: Math.max(0, Math.min(54, Math.floor(Number(solveStats.currentCompletionScore) || 0))),
+    maxCompletionScore: Math.max(0, Math.min(54, Math.floor(Number(solveStats.maxCompletionScore) || 0))),
+    updatedAt: serverTimestamp()
+  };
 
   if (isMultiplayerFriendRoom()) {
     if (!(activeRoom.activePlayerUids || []).includes(currentUser.uid) || activeRoom.scramble !== scramble) return;
-    await updateDoc(playerRef, {
-      status: "finished",
-      endTime: serverTimestamp(),
-      finishedAt: serverTimestamp(),
-      finalTime: time,
-      tps: Number.isFinite(solveStats.tps) ? solveStats.tps : null,
-      moveCount: Math.max(0, Number(solveStats.moveCount) || 0),
-      currentCompletionScore: Math.max(0, Math.min(54, Number(solveStats.currentCompletionScore) || 0)),
-      maxCompletionScore: Math.max(0, Math.min(54, Number(solveStats.maxCompletionScore) || 0)),
-      updatedAt: serverTimestamp()
-    });
+    const localPlayer = battlePlayersByUid.get(currentUser.uid);
+    if (localPlayer) Object.assign(localPlayer, finishPayload, { finishedAt: new Date(), updatedAt: new Date() });
+    renderBattleUi();
+    await updateDoc(playerRef, finishPayload);
     return;
   }
 
@@ -2698,17 +2711,7 @@ async function submitBattleSolve(time, scramble, solveStats = {}) {
     const room = roomSnapshot.data();
     if (room.scramble !== scramble || room.status === "finished") return;
 
-    transaction.update(playerRef, {
-      status: "finished",
-      endTime: serverTimestamp(),
-      finishedAt: serverTimestamp(),
-      finalTime: time,
-      tps: Number.isFinite(solveStats.tps) ? solveStats.tps : null,
-      moveCount: Math.max(0, Number(solveStats.moveCount) || 0),
-      currentCompletionScore: Math.max(0, Math.min(54, Number(solveStats.currentCompletionScore) || 0)),
-      maxCompletionScore: Math.max(0, Math.min(54, Number(solveStats.maxCompletionScore) || 0)),
-      updatedAt: serverTimestamp()
-    });
+    transaction.update(playerRef, finishPayload);
 
     if (!Number(room.finishDeadlineMs) || room.status !== "finishing") {
       transaction.update(roomRef, {
@@ -2896,6 +2899,11 @@ async function applyRankedBattleResultAsHost() {
 function renderBattleLocalTimer(seconds) {
   localBattleTimerSeconds = Math.max(0, Number(seconds) || 0);
   renderBattleUi();
+}
+
+function handleBattleFinishSyncError(error) {
+  battleNotice.textContent = "Finish could not be synchronized. Check your connection and Firestore permissions.";
+  console.error("Battle finish sync failed", error);
 }
 
 function leaveBattleMode() {
@@ -3214,6 +3222,7 @@ window.notifyBattleMove = notifyBattleMove;
 window.notifyBattleCompletionScore = notifyBattleCompletionScore;
 window.notifyRankedBattleTimeLimit = notifyRankedBattleTimeLimit;
 window.renderBattleLocalTimer = renderBattleLocalTimer;
+window.handleBattleFinishSyncError = handleBattleFinishSyncError;
 window.isBattleMode = () => document.body.classList.contains("battle-mode");
 window.isRankedBattle = () => document.body.classList.contains("battle-mode") && activeRoom?.mode === "ranked";
 window.isRealCubeBattle = () => document.body.classList.contains("battle-mode") && activeRoom?.cubeMode === "real";
