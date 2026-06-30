@@ -484,6 +484,21 @@ function setupMobileRealTimerControls() {
   if (!timerArea) return;
   const isControl = target => target instanceof Element && Boolean(target.closest("button, input, select, textarea, a"));
 
+  timerArea.addEventListener("contextmenu", event => {
+    if (!document.body.classList.contains("real-timer-clean")) return;
+    event.preventDefault();
+  });
+
+  timerArea.addEventListener("selectstart", event => {
+    if (!document.body.classList.contains("real-timer-clean")) return;
+    event.preventDefault();
+  });
+
+  timerArea.addEventListener("dragstart", event => {
+    if (!document.body.classList.contains("real-timer-clean")) return;
+    event.preventDefault();
+  });
+
   timerArea.addEventListener("pointerdown", event => {
     if (!isMobileRealTimer() || !document.body.classList.contains("real-timer-clean") || isControl(event.target)) return;
     if (realTimerActivePointerId !== null || event.isPrimary === false) return;
