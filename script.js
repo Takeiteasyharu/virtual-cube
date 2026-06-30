@@ -51,6 +51,7 @@ const ANIMATION_SPEED_KEY = "cubeAnimationSpeed";
 const KEY_BINDINGS_KEY = "cubeKeyBindings";
 const BACKGROUND_IMAGE_KEY = "cubeBackgroundImage";
 const BEGINNER_TIP_KEY = "cubeOnboardingDismissed";
+const NORMAL_TIMER_MODE_KEY = "normalTimerMode";
 const BACKGROUND_IMAGE_MAX_BYTES = 3 * 1024 * 1024;
 let keyMap = { ...DEFAULT_KEY_MAP };
 let selectedBindingKey = "";
@@ -108,6 +109,8 @@ let battleCurrentCompletionScore = 0;
 let rankedBattleTimeLimitTimeout = null;
 let realCubeSpaceArmed = false;
 let realCubeInspectionStarting = false;
+let normalRealCubeSpaceArmed = false;
+let solveVerifiedByVirtualCube = false;
 
 const ROTATION_MOVES = ["x", "x'", "yRotation", "yRotation'", "zRotation", "zRotation'"];
 const COUNTABLE_MOVE_FACES = new Set([
@@ -125,6 +128,7 @@ document.addEventListener("DOMContentLoaded", () => {
   loadCustomBackground();
   setupMoveInput();
   setupSettingsUi();
+  applyNormalTimerMode();
   setupBackgroundSettingsUi();
   setupFeaturePanelUi();
   setupBeginnerTip();
@@ -148,6 +152,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.getElementById("clearTimesBtn").addEventListener("click", () => {
     clearTimes();
+  });
+
+  document.getElementById("realCubeTimerBtn")?.addEventListener("click", () => {
+    handleRealCubeTimerAction();
   });
 });
 
@@ -173,6 +181,11 @@ document.addEventListener("keydown", event => {
       }
       return;
     }
+    if (isNormalRealCubeMode()) {
+      if (event.repeat) return;
+      handleNormalRealCubeSpaceDown();
+      return;
+    }
     scrambleCube();
     return;
   }
@@ -193,7 +206,15 @@ document.addEventListener("keydown", event => {
 });
 
 document.addEventListener("keyup", event => {
-  if (event.code !== "Space" || !isBattleModeActive() || !window.isRealCubeBattle?.()) return;
+  if (event.code !== "Space") return;
+  if (!isBattleModeActive() && isNormalRealCubeMode()) {
+    event.preventDefault();
+    if (!normalRealCubeSpaceArmed) return;
+    normalRealCubeSpaceArmed = false;
+    if (normalSolveState === "inspecting") startNormalSolve();
+    return;
+  }
+  if (!isBattleModeActive() || !window.isRealCubeBattle?.()) return;
   event.preventDefault();
   if (!realCubeSpaceArmed) return;
   realCubeSpaceArmed = false;
@@ -210,6 +231,7 @@ function getMoveFromKey(key) {
 }
 
 function performMove(move) {
+  if (isRealCubeTimerMode()) return;
   if (isBattleInputLocked()) return;
 
   document.getElementById("lastMove").textContent = displayMove(move);
@@ -253,7 +275,11 @@ function isBattleModeActive() {
 }
 
 function handleRealCubeTimerAction() {
-  if (!isBattleModeActive() || !window.isRealCubeBattle?.()) return;
+  if (!isBattleModeActive()) {
+    handleNormalRealCubeTimerAction();
+    return;
+  }
+  if (!window.isRealCubeBattle?.()) return;
   if (["joined", "inactive", "finished"].includes(battleInputState)) {
     beginRealCubeInspection();
     return;
@@ -269,6 +295,83 @@ function handleRealCubeTimerAction() {
     firstTurnDone = false;
     battleInputState = "finished";
     setSolvingMode(false);
+  }
+}
+
+function getNormalTimerMode() {
+  return localStorage.getItem(NORMAL_TIMER_MODE_KEY) === "real" ? "real" : "virtual";
+}
+
+function isNormalRealCubeMode() {
+  return !isBattleModeActive() && getNormalTimerMode() === "real";
+}
+
+function isRealCubeTimerMode() {
+  return Boolean(window.isRealCubeBattle?.()) || isNormalRealCubeMode();
+}
+
+function setVirtualCubeVisible(visible) {
+  const canvas = document.querySelector("#cubeContainer > canvas");
+  if (canvas) {
+    canvas.hidden = !visible;
+    canvas.style.pointerEvents = visible ? "" : "none";
+  }
+}
+
+function renderNormalRealCubeUi() {
+  if (isBattleModeActive()) return;
+  const realMode = getNormalTimerMode() === "real";
+  const instruction = document.getElementById("realCubeInstruction");
+  const button = document.getElementById("realCubeTimerBtn");
+  document.body.classList.toggle("normal-real-cube", realMode);
+  setVirtualCubeVisible(!realMode);
+  if (!instruction || !button) return;
+  instruction.hidden = !realMode;
+  button.hidden = !realMode;
+  if (!realMode) return;
+
+  if (normalSolveState === "inspecting") {
+    instruction.textContent = "Release Space to start solve";
+    button.textContent = "Start Solve";
+  } else if (normalSolveState === "solving") {
+    instruction.textContent = "Press Space to stop timer";
+    button.textContent = "Stop Timer";
+  } else if (normalSolveState === "finished") {
+    instruction.textContent = "Finished";
+    button.textContent = "Start Inspection";
+  } else {
+    instruction.textContent = "Press Space to start inspection";
+    button.textContent = "Start Inspection";
+  }
+}
+
+function applyNormalTimerMode() {
+  renderNormalRealCubeUi();
+}
+
+function handleNormalRealCubeSpaceDown() {
+  if (["idle", "aborted", "finished"].includes(normalSolveState)) {
+    scrambleCube();
+  } else if (normalSolveState === "inspecting") {
+    normalRealCubeSpaceArmed = true;
+  } else if (normalSolveState === "solving" && isTimerRunning()) {
+    stopTimer();
+    normalSolveState = "finished";
+    readyToSolve = false;
+    firstTurnDone = false;
+    setSolvingMode(false);
+    renderNormalRealCubeUi();
+  }
+}
+
+function handleNormalRealCubeTimerAction() {
+  if (!isNormalRealCubeMode()) return;
+  if (["idle", "aborted", "finished"].includes(normalSolveState)) {
+    scrambleCube();
+  } else if (normalSolveState === "inspecting") {
+    startNormalSolve();
+  } else if (normalSolveState === "solving") {
+    handleNormalRealCubeSpaceDown();
   }
 }
 
@@ -308,6 +411,7 @@ function resetSolveStats() {
   solveStartedAt = 0;
   battleMaxCompletionScore = 0;
   battleCurrentCompletionScore = 0;
+  solveVerifiedByVirtualCube = false;
 }
 
 function clearRankedBattleTimeLimit() {
@@ -334,6 +438,7 @@ function startNormalInspection() {
   clearNormalInspection();
   normalInspectionActive = true;
   normalSolveState = "inspecting";
+  renderNormalRealCubeUi();
   document.body.classList.add("inspection-active");
 
   const inspectionStartedAt = Date.now();
@@ -363,6 +468,7 @@ function startNormalSolve() {
   resetSolveStats();
   solveStartedAt = Date.now();
   startTimer();
+  renderNormalRealCubeUi();
 }
 
 function clearNormalInspection() {
@@ -523,7 +629,7 @@ function scrambleCube() {
   readyToSolve = true;
   firstTurnDone = false;
 
-  applyScramble(scramble);
+  if (!isNormalRealCubeMode()) applyScramble(scramble);
   startNormalInspection();
 }
 
@@ -546,6 +652,8 @@ function abortNormalSolve() {
   setSolvingMode(false);
   setBattleInspectionOverlay(false);
   document.getElementById("lastMove").textContent = "-";
+  normalRealCubeSpaceArmed = false;
+  renderNormalRealCubeUi();
 }
 
 function loadBattleScramble(scrambleText) {
@@ -709,7 +817,9 @@ function getCurrentSolveStats(timeSeconds = null) {
     moves: [...solveMoves],
     tps: tps === null ? null : Number(tps.toFixed(2)),
     currentCompletionScore: battleCurrentCompletionScore,
-    maxCompletionScore: battleMaxCompletionScore
+    maxCompletionScore: battleMaxCompletionScore,
+    mode: isRealCubeTimerMode() ? "real" : "virtual",
+    rankingEligible: !isRealCubeTimerMode() && solveVerifiedByVirtualCube
   };
 }
 
@@ -732,6 +842,7 @@ function checkSolvedAndStopTimer() {
     isTimerRunning() &&
     isCubeSolved()
   ) {
+    solveVerifiedByVirtualCube = true;
     stopTimer();
     clearRankedBattleTimeLimit();
     readyToSolve = false;
@@ -806,12 +917,23 @@ function renderKeyBindings() {
 
 function setupSettingsUi() {
   const speedSelect = document.getElementById("animationSpeedSelect");
+  const timerModeSelect = document.getElementById("normalTimerModeSelect");
   const resetButton = document.getElementById("resetKeyBindingsBtn");
   if (!speedSelect) return;
 
   speedSelect.value = getAnimationSpeed();
   setAnimationSpeed(speedSelect.value);
   speedSelect.addEventListener("change", () => setAnimationSpeed(speedSelect.value));
+  if (timerModeSelect) {
+    timerModeSelect.value = getNormalTimerMode();
+    timerModeSelect.addEventListener("change", () => {
+      if (isBattleModeActive()) return;
+      abortNormalSolve();
+      localStorage.setItem(NORMAL_TIMER_MODE_KEY, timerModeSelect.value === "real" ? "real" : "virtual");
+      normalSolveState = "idle";
+      applyNormalTimerMode();
+    });
+  }
   resetButton?.addEventListener("click", () => {
     if (isBattleModeActive()) {
       setKeyBindingStatus("Key bindings cannot be changed during a battle.");
@@ -865,6 +987,10 @@ function setupSettingsUi() {
 
   renderKeyBindings();
 }
+
+window.setVirtualCubeVisible = setVirtualCubeVisible;
+window.applyNormalTimerMode = applyNormalTimerMode;
+window.getCurrentTimerMode = () => isRealCubeTimerMode() ? "real" : "virtual";
 
 function setBackgroundStatus(message) {
   const status = document.getElementById("backgroundStatus");

@@ -39,8 +39,8 @@ function stopTimer() {
     moves: Number.isFinite(solveStats.moveCount) ? solveStats.moveCount : 0
   });
 
-  if (typeof window.submitOnlineSolve === "function") {
-    window.submitOnlineSolve(finalTime, currentScramble, getCurrentAo5(), solveStats);
+  if (solveStats.mode === "virtual" && solveStats.rankingEligible === true && typeof window.submitOnlineSolve === "function") {
+    window.submitOnlineSolve(finalTime, currentScramble, getCurrentOnlineAo5(), solveStats);
   }
 
   if (typeof window.submitBattleSolve === "function") {
@@ -126,6 +126,7 @@ function saveSolve(time, scramble, solveStats = {}) {
       ? solveStats.moves.map(move => typeof move === "string" ? move : move?.move).filter(Boolean)
       : [],
     scramble,
+    mode: solveStats.mode === "real" ? "real" : "virtual",
     date: new Date().toLocaleString()
   });
 
@@ -200,6 +201,7 @@ function createHistoryItem(solve, index, summary) {
       createDetailLine("Moves", moves),
       createDetailLine("TPS", Number.isFinite(solve.tps) ? solve.tps.toFixed(2) : "-"),
       createDetailLine("Move count", String(Number(solve.moveCount) || 0)),
+      createDetailLine("Mode", solve.mode === "real" ? "Real Cube" : "Virtual Cube"),
       createDetailLine("Date", solve.date || "-")
     );
     li.appendChild(details);
@@ -217,7 +219,7 @@ function createDetailLine(label, value) {
 }
 
 function renderPB() {
-  const solves = getSolves();
+  const solves = getSolves().filter(solve => solve.mode !== "real");
   const pbDisplay = document.getElementById("pbDisplay");
 
   if (solves.length === 0) {
@@ -240,7 +242,7 @@ function calculateAverage(count) {
 }
 
 function calculateAverageValue(count) {
-  const solves = getSolves();
+  const solves = getSolves().filter(solve => solve.mode !== "real");
 
   if (solves.length < count) return null;
 
@@ -262,4 +264,13 @@ function calculateAverageValue(count) {
 function getCurrentAo5() {
   const average = calculateAverageValue(5);
   return average === null ? null : Number(average.toFixed(2));
+}
+
+function getCurrentOnlineAo5() {
+  const virtualSolves = getSolves().filter(solve => solve.mode !== "real");
+  if (virtualSolves.length < 5) return null;
+  const sorted = virtualSolves.slice(0, 5).map(solve => solve.time).sort((a, b) => a - b);
+  sorted.shift();
+  sorted.pop();
+  return Number((sorted.reduce((sum, time) => sum + time, 0) / sorted.length).toFixed(2));
 }

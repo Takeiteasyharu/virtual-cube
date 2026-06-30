@@ -364,6 +364,7 @@ function isValidOnlineSolve(time, scramble) {
 
 function isValidRankingEntry(solve) {
   return Boolean(
+    solve.mode !== "real" &&
     isValidSolvePayload(Number(solve.time), solve.scramble)
   );
 }
@@ -413,6 +414,8 @@ function queuePendingSolve(time, scramble, ao5, solveStats = {}) {
       ? solveStats.moves.map(move => typeof move === "string" ? move : move?.move).filter(Boolean)
       : [],
     scramble,
+    mode: "virtual",
+    rankingEligible: true,
     solvedAt: new Date().toISOString()
   });
 
@@ -422,6 +425,7 @@ function queuePendingSolve(time, scramble, ao5, solveStats = {}) {
 }
 
 async function addRankingEntry(rankingType, time, scramble, solvedAt = new Date().toISOString(), solveStats = {}) {
+  if (solveStats.mode !== "virtual" || solveStats.rankingEligible !== true) return false;
   if (!isValidOnlineSolve(time, scramble)) {
     return false;
   }
@@ -432,6 +436,7 @@ async function addRankingEntry(rankingType, time, scramble, solvedAt = new Date(
   await addDoc(collection(db, "solves"), {
     rankingType,
     valid: true,
+    mode: "virtual",
     time,
     scramble,
     tps: Number.isFinite(solveStats.tps) ? solveStats.tps : null,
@@ -471,7 +476,7 @@ function getLocalSolveSummary() {
   let solves = [];
   try {
     solves = (JSON.parse(localStorage.getItem("cubeSolves")) || [])
-      .filter(solve => Number.isFinite(Number(solve.time)));
+      .filter(solve => Number.isFinite(Number(solve.time)) && solve.mode !== "real");
   } catch (error) {
     solves = [];
   }
@@ -523,7 +528,9 @@ async function submitPendingSolves() {
     await addOnlineSolve(solve.time, solve.scramble, solve.ao5, solve.solvedAt, {
       tps: solve.tps,
       moveCount: solve.moveCount,
-      moves: solve.moves
+      moves: solve.moves,
+      mode: solve.mode === "real" ? "real" : "virtual",
+      rankingEligible: solve.mode !== "real" && solve.rankingEligible !== false
     });
     pending.shift();
     savePendingSolves(pending);
@@ -908,6 +915,7 @@ async function showProfile() {
 
 async function submitOnlineSolve(time, scramble, ao5 = null, solveStats = {}) {
   if (!isConfigured()) return;
+  if (solveStats.mode !== "virtual" || solveStats.rankingEligible !== true) return;
 
   if (!currentUser) {
     queuePendingSolve(time, scramble, ao5, solveStats);
@@ -1121,6 +1129,7 @@ function clearBattleListeners() {
 
 function setBattleMode(enabled) {
   document.body.classList.toggle("battle-mode", enabled);
+  if (enabled) document.body.classList.remove("normal-real-cube");
   if (!enabled) {
     document.body.classList.remove("real-cube-battle", "spectator-mode");
   }
@@ -1642,6 +1651,7 @@ function renderBattleUi() {
   renderRematchPanel(you, opponent);
   renderMultiplayerRoster();
   document.body.classList.toggle("real-cube-battle", activeRoom.cubeMode === "real");
+  window.setVirtualCubeVisible?.(activeRoom.cubeMode !== "real");
   document.body.classList.toggle("spectator-mode", isSpectatorMode);
   const hostCanStart = isMultiplayerFriendRoom() && currentUser?.uid === activeRoom.hostUid && !isSpectatorMode && ["waiting", "finished"].includes(activeRoom.status);
   hostStartBattleBtn.hidden = !hostCanStart;
@@ -1666,7 +1676,7 @@ function renderBattleUi() {
   if (!realCubeTimerBtn.hidden) {
     realCubeTimerBtn.textContent = waitingForInspection
       ? "Start Inspection"
-      : (you?.status === "solving" ? "Stop Solve" : "Start Solve");
+      : (you?.status === "solving" ? "Stop Timer" : "Start Solve");
   }
 
   if (activeRoom.status === "finished") {
@@ -2840,9 +2850,11 @@ function leaveBattleMode() {
   battleReadyBtn.hidden = true;
   hostStartBattleBtn.hidden = true;
   realCubeTimerBtn.hidden = true;
+  realCubeInstruction.hidden = true;
   multiplayerRoster.hidden = true;
   battleRematchPanel.hidden = true;
   setBattleMode(false);
+  window.applyNormalTimerMode?.();
   if (typeof window.cancelCurrentSolve === "function") {
     window.cancelCurrentSolve();
   } else {
@@ -3013,8 +3025,6 @@ function setupAuthUi() {
       console.error(error);
     });
   });
-
-  realCubeTimerBtn?.addEventListener("click", () => window.handleRealCubeTimerAction?.());
 
   playAgainBtn.addEventListener("click", () => {
     requestRematch().catch(error => {

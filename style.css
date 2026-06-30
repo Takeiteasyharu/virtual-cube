@@ -498,7 +498,8 @@ body.dark .page-return a {
   opacity: 0.82;
 }
 
-#animationSpeedSelect {
+#animationSpeedSelect,
+#normalTimerModeSelect {
   width: min(100%, 340px);
   border: 2px solid #111;
   border-radius: 6px;
@@ -912,20 +913,28 @@ body.battle-mode .opponent-cube-panel.opponent-unavailable {
   border-radius: 6px;
 }
 
-body.real-cube-battle #cubeContainer canvas,
+body.real-cube-battle #cubeContainer > canvas,
+body.normal-real-cube #cubeContainer > canvas,
+body.real-cube-battle #cubeContainer > canvas[hidden],
+body.normal-real-cube #cubeContainer > canvas[hidden],
 body.real-cube-battle .opponent-cube-panel,
-body.real-cube-battle .move-input {
-  display: none;
+body.real-cube-battle .move-input,
+body.normal-real-cube .opponent-cube-panel,
+body.normal-real-cube .move-input {
+  display: none !important;
 }
 
-body.real-cube-battle #cubeContainer {
+body.real-cube-battle #cubeContainer,
+body.normal-real-cube #cubeContainer {
   width: min(92vw, 620px);
   height: 140px;
   min-height: 140px;
   background: transparent;
+  pointer-events: none;
 }
 
-body.real-cube-battle .cube-area {
+body.real-cube-battle .cube-area,
+body.normal-real-cube .cube-area {
   justify-content: flex-start;
 }
 
@@ -1332,7 +1341,8 @@ body.dark .modal-content {
   color: #f5f5f5;
 }
 
-body.dark #animationSpeedSelect {
+body.dark #animationSpeedSelect,
+body.dark #normalTimerModeSelect {
   border-color: #f5f5f5;
   background: #10212c;
   color: #f5f5f5;
