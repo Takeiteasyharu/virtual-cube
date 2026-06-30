@@ -2679,13 +2679,20 @@ async function finalizeRankedTimeLimit() {
 }
 
 async function submitBattleSolve(time, scramble, solveStats = {}) {
-  if (!currentUser || !activeRoomId || !document.body.classList.contains("battle-mode")) return;
-  if (!Number.isFinite(time) || time < 3 || time >= 3600) return;
+  if (!currentUser || !activeRoomId || !document.body.classList.contains("battle-mode")) {
+    throw new Error("Battle finish was requested without an active room.");
+  }
+  if (!Number.isFinite(time) || time < 3 || time >= 3600) {
+    throw new Error("Battle finish time did not pass validation.");
+  }
 
   const roomRef = doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId);
   const playerRef = doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid);
   const finishPayload = {
     status: "finished",
+    ready: false,
+    active: false,
+    round: activeRound,
     endTime: serverTimestamp(),
     finishedAt: serverTimestamp(),
     finalTime: time,
@@ -2697,11 +2704,19 @@ async function submitBattleSolve(time, scramble, solveStats = {}) {
   };
 
   if (isMultiplayerFriendRoom()) {
-    if (!(activeRoom.activePlayerUids || []).includes(currentUser.uid) || activeRoom.scramble !== scramble) return;
+    if (!(activeRoom.activePlayerUids || []).includes(currentUser.uid)) {
+      throw new Error("The player is not active in this Friend Battle round.");
+    }
     const localPlayer = battlePlayersByUid.get(currentUser.uid);
     if (localPlayer) Object.assign(localPlayer, finishPayload, { finishedAt: new Date(), updatedAt: new Date() });
     renderBattleUi();
     await updateDoc(playerRef, finishPayload);
+    console.info("Friend Battle finish synchronized", {
+      roomId: activeRoomId,
+      round: activeRound,
+      uid: currentUser.uid,
+      finalTime: time
+    });
     return;
   }
 
