@@ -355,12 +355,20 @@ function setVirtualCubeVisible(visible) {
 }
 
 function renderNormalRealCubeUi() {
-  if (isBattleModeActive()) return;
+  const scrambleNetPanel = document.getElementById("normalScrambleNetPanel");
+  if (isBattleModeActive()) {
+    if (scrambleNetPanel) scrambleNetPanel.hidden = true;
+    return;
+  }
   const realMode = getNormalTimerMode() === "real";
   const instruction = document.getElementById("realCubeInstruction");
   const button = document.getElementById("realCubeTimerBtn");
   document.body.classList.toggle("normal-real-cube", realMode);
   setVirtualCubeVisible(!realMode);
+  if (scrambleNetPanel) scrambleNetPanel.hidden = !realMode || !normalActiveScramble;
+  if (realMode && normalActiveScramble) {
+    window.renderScrambleNet?.(normalActiveScramble, document.getElementById("normalScrambleCubeNet"));
+  }
   if (!instruction || !button) return;
   instruction.hidden = !realMode;
   button.hidden = !realMode;
@@ -385,11 +393,24 @@ function renderNormalRealCubeUi() {
   syncRealTimerScreenState();
 }
 
+function setNormalRealScramble(scrambleText) {
+  normalActiveScramble = String(scrambleText || "").trim();
+  document.getElementById("scrambleText").textContent = normalActiveScramble || "Scramble will appear here";
+  setCurrentScramble(normalActiveScramble);
+  const panel = document.getElementById("normalScrambleNetPanel");
+  if (panel) panel.hidden = !isNormalRealCubeMode() || !normalActiveScramble;
+  if (normalActiveScramble) {
+    window.renderScrambleNet?.(normalActiveScramble, document.getElementById("normalScrambleCubeNet"));
+  }
+}
+
+function prepareNextNormalRealScramble() {
+  setNormalRealScramble(generateScramble(20).join(" "));
+}
+
 function applyNormalTimerMode() {
   if (isNormalRealCubeMode() && !normalActiveScramble) {
-    normalActiveScramble = generateScramble(20).join(" ");
-    document.getElementById("scrambleText").textContent = normalActiveScramble;
-    setCurrentScramble(normalActiveScramble);
+    prepareNextNormalRealScramble();
   }
   renderNormalRealCubeUi();
 }
@@ -406,9 +427,7 @@ function handleNormalRealCubeSpaceDown() {
     readyToSolve = false;
     firstTurnDone = false;
     setSolvingMode(false);
-    normalActiveScramble = generateScramble(20).join(" ");
-    document.getElementById("scrambleText").textContent = normalActiveScramble;
-    setCurrentScramble(normalActiveScramble);
+    prepareNextNormalRealScramble();
     renderNormalRealCubeUi();
   }
 }
@@ -789,7 +808,7 @@ function scrambleCube() {
   resetSolveStats();
   setSolvingMode(true);
 
-  const preparedRealScramble = isNormalRealCubeMode() && !isRealCubeInspectionEnabled()
+  const preparedRealScramble = isNormalRealCubeMode()
     ? normalActiveScramble
     : "";
   const scrambleText = lockedScramble || preparedRealScramble || generateScramble(20).join(" ");
@@ -798,9 +817,12 @@ function scrambleCube() {
   document.getElementById("scrambleText").textContent = scrambleText;
   document.getElementById("lastMove").textContent = "-";
 
-  setCurrentScramble(scrambleText);
-
-  normalActiveScramble = scrambleText;
+  if (isNormalRealCubeMode()) {
+    setNormalRealScramble(scrambleText);
+  } else {
+    setCurrentScramble(scrambleText);
+    normalActiveScramble = scrambleText;
+  }
   readyToSolve = true;
   firstTurnDone = false;
 
@@ -1150,6 +1172,10 @@ function setupSettingsUi() {
       if (isBattleModeActive()) return;
       abortNormalSolve();
       localStorage.setItem(NORMAL_TIMER_MODE_KEY, timerModeSelect.value === "real" ? "real" : "virtual");
+      if (timerModeSelect.value === "real") {
+        lockedScramble = "";
+        normalActiveScramble = "";
+      }
       normalSolveState = "idle";
       applyNormalTimerMode();
     });

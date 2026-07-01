@@ -1057,6 +1057,21 @@ body.real-cube-battle .battle-player-grid {
   display: none;
 }
 
+.normal-real-scramble-net {
+  width: min(92vw, 720px);
+  margin: 0 auto 14px;
+}
+
+.normal-real-scramble-net .cube-net {
+  --net-sticker-size: clamp(17px, 3vw, 34px);
+}
+
+body:not(.normal-real-cube) .normal-real-scramble-net,
+body.battle-mode .normal-real-scramble-net,
+body.real-timer-clean .normal-real-scramble-net {
+  display: none !important;
+}
+
 .scramble-net-panel h3 {
   margin: 0 0 12px;
   text-align: center;

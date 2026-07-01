@@ -16,7 +16,7 @@
     F: ["z", 1, -1],
     B: ["z", -1, 1]
   };
-  let renderedScramble = null;
+  const renderedScrambles = new WeakMap();
 
   function createSolvedStickers() {
     const stickers = [];
@@ -81,8 +81,8 @@
   }
 
   function renderScrambleNet(scramble, container) {
-    if (!container || renderedScramble === scramble) return;
-    renderedScramble = scramble;
+    if (!container || renderedScrambles.get(container) === scramble) return;
+    renderedScrambles.set(container, scramble);
     const faces = calculateFaces(scramble);
     container.replaceChildren(...FACE_ORDER.map(face => {
       const faceElement = document.createElement("div");
