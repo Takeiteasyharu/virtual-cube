@@ -1,4 +1,4 @@
-const CACHE_NAME = "virtual-cube-timer-v59";
+const CACHE_NAME = "virtual-cube-timer-v60";
 const BASE_PATH = "/virtual-cube/";
 
 const CACHE_URLS = [
@@ -10,6 +10,7 @@ const CACHE_URLS = [
   `${BASE_PATH}style.css`,
   `${BASE_PATH}cube.js`,
   `${BASE_PATH}opponent-cube.js`,
+  `${BASE_PATH}cube-net.js`,
   `${BASE_PATH}scramble.js`,
   `${BASE_PATH}timer.js`,
   `${BASE_PATH}script.js`,

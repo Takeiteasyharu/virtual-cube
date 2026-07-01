@@ -2,6 +2,112 @@
   box-sizing: border-box;
 }
 
+@media (min-width: 901px) {
+  body.real-timer-clean {
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: none;
+    overscroll-behavior: none;
+  }
+
+  body.real-timer-clean main,
+  body.real-timer-clean main * {
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    touch-action: none;
+  }
+
+  body.real-timer-clean header,
+  body.real-timer-clean .left-panel,
+  body.real-timer-clean .battle-screen,
+  body.real-timer-clean footer,
+  body.real-timer-clean .opponent-cube-panel,
+  body.real-timer-clean .move-input,
+  body.real-timer-clean .real-cube-instruction,
+  body.real-timer-clean .real-cube-timer-button {
+    display: none !important;
+  }
+
+  body.real-timer-clean main {
+    position: fixed !important;
+    z-index: 100;
+    inset: 0;
+    display: block !important;
+    min-height: 100dvh !important;
+    padding: 0 !important;
+    touch-action: none;
+  }
+
+  body.real-timer-clean .cube-area,
+  body.real-timer-clean #cubeContainer {
+    position: absolute !important;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    transform: none !important;
+    pointer-events: none;
+  }
+
+  body.real-timer-clean .panel {
+    position: absolute !important;
+    z-index: 2;
+    inset: 0;
+    display: flex !important;
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0;
+    background: transparent;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    pointer-events: none;
+    transform: none !important;
+  }
+
+  body.real-timer-clean .panel > * {
+    display: none !important;
+  }
+
+  body.real-timer-clean.real-timer-solving .panel .timer {
+    display: block !important;
+    margin: 0;
+    font-size: clamp(72px, 16vw, 150px);
+  }
+
+  body.real-timer-clean .battle-inspection-overlay {
+    top: 22%;
+  }
+
+  body.real-timer-clean .panel .buttons {
+    position: absolute;
+    right: 24px;
+    bottom: 24px;
+    display: block !important;
+    width: auto;
+    margin: 0;
+    pointer-events: auto;
+  }
+
+  body.real-timer-clean .panel .buttons > * {
+    display: none !important;
+  }
+
+  body.real-timer-clean .panel #resetBtn {
+    display: block !important;
+    min-width: 128px;
+    margin: 0;
+    padding: 16px 22px;
+    background: #8f2929;
+  }
+}
+
 body {
   margin: 0;
   font-family: Arial, sans-serif;
@@ -923,6 +1029,112 @@ body.battle-mode .opponent-cube-panel.opponent-unavailable {
   text-align: right;
   font-family: "Courier New", monospace;
   font-weight: 700;
+}
+
+body.real-cube-battle .battle-scramble {
+  max-width: 1200px;
+  margin: 18px auto 12px;
+  padding: 10px 16px;
+  font-size: clamp(22px, 4vw, 44px);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+body.real-cube-battle .battle-player-grid {
+  display: none;
+}
+
+.scramble-net-panel {
+  width: min(100%, 880px);
+  margin: 10px auto 18px;
+  padding: 14px;
+  border: 2px solid rgba(17, 17, 17, 0.28);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.scramble-net-panel[hidden] {
+  display: none;
+}
+
+.scramble-net-panel h3 {
+  margin: 0 0 12px;
+  text-align: center;
+  font-size: 20px;
+}
+
+.cube-net {
+  --net-sticker-size: clamp(20px, 4vw, 42px);
+  display: grid;
+  grid-template-columns: repeat(4, max-content);
+  grid-template-rows: repeat(3, max-content);
+  gap: 6px;
+  justify-content: center;
+  align-items: center;
+}
+
+.cube-net-face {
+  position: relative;
+}
+
+.cube-net-face > strong {
+  position: absolute;
+  top: 3px;
+  left: 5px;
+  z-index: 1;
+  color: #111;
+  font-size: 11px;
+  text-shadow: 0 0 2px #fff;
+}
+
+.cube-net-face-grid {
+  display: grid;
+  grid-template-columns: repeat(3, var(--net-sticker-size));
+  grid-template-rows: repeat(3, var(--net-sticker-size));
+  gap: 2px;
+  padding: 3px;
+  background: #111;
+  border-radius: 4px;
+}
+
+.cube-net-face-grid span {
+  border-radius: 2px;
+}
+
+.cube-net-face.face-u { grid-column: 2; grid-row: 1; }
+.cube-net-face.face-l { grid-column: 1; grid-row: 2; }
+.cube-net-face.face-f { grid-column: 2; grid-row: 2; }
+.cube-net-face.face-r { grid-column: 3; grid-row: 2; }
+.cube-net-face.face-b { grid-column: 4; grid-row: 2; }
+.cube-net-face.face-d { grid-column: 2; grid-row: 3; }
+
+body.real-cube-battle .multiplayer-roster {
+  width: min(100%, 1100px);
+  margin: 18px auto;
+  padding: 18px;
+}
+
+body.real-cube-battle .multiplayer-roster h2 {
+  margin-bottom: 14px;
+  font-size: clamp(22px, 3vw, 30px);
+}
+
+body.real-cube-battle .multiplayer-roster-list {
+  max-height: min(46vh, 520px);
+  gap: 10px;
+  padding-right: 10px;
+}
+
+body.real-cube-battle .multiplayer-roster-row {
+  grid-template-columns: minmax(0, 1fr) auto minmax(76px, auto);
+  min-height: 58px;
+  padding: 12px 14px;
+  font-size: clamp(16px, 2vw, 20px);
+}
+
+body.dark .scramble-net-panel {
+  border-color: #6e98ad;
+  background: rgba(10, 30, 42, 0.72);
 }
 
 .cube-mode-selector {

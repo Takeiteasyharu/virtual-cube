@@ -70,6 +70,8 @@ const copyRoomUrlBtn = document.getElementById("copyRoomUrlBtn");
 const leaveBattleBtn = document.getElementById("leaveBattleBtn");
 const battleRoomMeta = document.getElementById("battleRoomMeta");
 const battleScramble = document.getElementById("battleScramble");
+const scrambleNetPanel = document.getElementById("scrambleNetPanel");
+const scrambleCubeNet = document.getElementById("scrambleCubeNet");
 const rankedTimeLimitDisplay = document.getElementById("rankedTimeLimitDisplay");
 const battleNotice = document.getElementById("battleNotice");
 const battleResult = document.getElementById("battleResult");
@@ -1709,6 +1711,10 @@ function renderBattleUi() {
     ? ["inspection", "solving", "finished"].includes(activeRoom.status)
     : ["inspecting", "solving", "finished", "dnf"].includes(you?.status));
   battleScramble.textContent = canSeeScramble ? (activeRoom.scramble || "") : "";
+  scrambleNetPanel.hidden = !realFriendScramblePreview;
+  if (realFriendScramblePreview) {
+    window.renderScrambleNet?.(activeRoom.scramble, scrambleCubeNet);
+  }
   renderBattlePlayer("battleYou", you, activeRoomRole);
   renderBattlePlayer("battleOpponent", opponent, getOpponentRole());
   loadOpponentRating(opponent);

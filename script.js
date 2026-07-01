@@ -419,7 +419,8 @@ function handleRealCubeSpaceDown() {
 }
 
 function isMobileRealTimer() {
-  return window.matchMedia("(max-width: 900px)").matches && isRealCubeTimerMode();
+  const isTouchDevice = window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 1;
+  return isTouchDevice && isRealCubeTimerMode();
 }
 
 function isRealTimerInspecting() {
