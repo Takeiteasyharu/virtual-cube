@@ -130,6 +130,9 @@ let rankedSearchInterval = null;
 let rankedSearchStartedAt = 0;
 let friendLobbyUnsubscribe = null;
 let opponentExitTimeout = null;
+let friendMembershipReconciling = false;
+let battleLeaving = false;
+let friendHostExitTimeout = null;
 let displayedOpponentRatingUid = "";
 let readyInspectionStarting = false;
 let ratingUpdateInProgress = false;
@@ -1216,6 +1219,10 @@ function isCountedBattleMove(move) {
   return !["x", "x'", "y", "y'", "z", "z'"].includes(move?.move);
 }
 
+function isFriendRoomParticipant(player) {
+  return Boolean(player) && !isPlayerDisconnected(player);
+}
+
 function calculateBattleMoveCount(moves) {
   if (typeof window.calculateNormalizedMoveCount === "function") {
     return window.calculateNormalizedMoveCount(moves);
@@ -1353,7 +1360,7 @@ function getDisplayPlayer(role) {
     if (isSpectatorMode && role === activeRoomRole) return null;
     if (role === activeRoomRole || role === "you") return battlePlayersByUid.get(currentUser?.uid) || null;
     if (role === "host") return battlePlayersByUid.get(activeRoom.hostUid) || null;
-    return [...battlePlayersByUid.values()].find(player => player.uid !== currentUser?.uid && player.status !== "returned") || null;
+    return [...battlePlayersByUid.values()].find(player => player.uid !== currentUser?.uid && isFriendRoomParticipant(player)) || null;
   }
   return battlePlayersByRole[role] || null;
 }
@@ -1367,7 +1374,7 @@ function renderMultiplayerRoster() {
   multiplayerRoster.hidden = !isMultiplayerFriendRoom();
   if (multiplayerRoster.hidden) return;
   const activeUids = new Set(activeRoom.activePlayerUids || []);
-  const players = [...battlePlayersByUid.values()].sort((a, b) => {
+  const players = [...battlePlayersByUid.values()].filter(isFriendRoomParticipant).sort((a, b) => {
     const aTime = hasFinalBattleTime(a) ? Number(a.finalTime) : Infinity;
     const bTime = hasFinalBattleTime(b) ? Number(b.finalTime) : Infinity;
     return aTime - bTime || String(a.name).localeCompare(String(b.name));
@@ -1417,6 +1424,8 @@ function watchFriendPlayers(roomId) {
     collection(db, BATTLE_ROOMS_COLLECTION, roomId, "players"),
     snapshot => {
       battlePlayersByUid = new Map(snapshot.docs.map(entry => [entry.id, entry.data()]));
+      reconcileFriendRoomMembership().catch(console.error);
+      handleDisconnectedFriendHost();
       syncFriendOpponentMovesListener();
       const localPlayer = battlePlayersByUid.get(currentUser?.uid);
       if (localPlayer && activeRoom?.status === "waiting") {
@@ -1433,6 +1442,53 @@ function watchFriendPlayers(roomId) {
   ));
 }
 
+async function reconcileFriendRoomMembership() {
+  if (
+    friendMembershipReconciling ||
+    !currentUser ||
+    !activeRoomId ||
+    !isMultiplayerFriendRoom() ||
+    currentUser.uid !== activeRoom.hostUid ||
+    activeRoom.status === "cancelled"
+  ) return;
+
+  const participantUids = [...battlePlayersByUid.values()]
+    .filter(isFriendRoomParticipant)
+    .map(player => player.uid);
+  const participantSet = new Set(participantUids);
+  const activePlayerUids = (activeRoom.activePlayerUids || []).filter(uid => participantSet.has(uid));
+  if (
+    Number(activeRoom.playerCount || 0) === participantUids.length &&
+    JSON.stringify(activePlayerUids) === JSON.stringify(activeRoom.activePlayerUids || [])
+  ) return;
+
+  friendMembershipReconciling = true;
+  try {
+    await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId), {
+      playerCount: participantUids.length,
+      activePlayerUids,
+      updatedAt: serverTimestamp()
+    });
+  } finally {
+    friendMembershipReconciling = false;
+  }
+}
+
+function handleDisconnectedFriendHost() {
+  if (
+    friendHostExitTimeout ||
+    !isMultiplayerFriendRoom() ||
+    currentUser?.uid === activeRoom.hostUid ||
+    !isPlayerDisconnected(battlePlayersByUid.get(activeRoom.hostUid))
+  ) return;
+
+  battleNotice.textContent = "The host left the room. Returning to Normal Mode.";
+  friendHostExitTimeout = window.setTimeout(() => {
+    friendHostExitTimeout = null;
+    leaveBattleMode({ roomAlreadyCancelled: true }).catch(console.error);
+  }, 1000);
+}
+
 async function autoStartFriendRematchWhenReady() {
   if (
     friendRematchStarting ||
@@ -1443,8 +1499,7 @@ async function autoStartFriendRematchWhenReady() {
     activeRoom.status !== "finished"
   ) return;
 
-  const playersInRoom = [...battlePlayersByUid.values()]
-    .filter(player => player.status !== "returned");
+  const playersInRoom = [...battlePlayersByUid.values()].filter(isFriendRoomParticipant);
   if (playersInRoom.length < 2 || playersInRoom.some(player => !player.ready)) return;
   if (activeRoom.cubeMode === "real" && !activeRoom.scramble) return;
 
@@ -1469,7 +1524,7 @@ async function ensureRealFriendScrambleForReadyPlayers() {
   ) return;
 
   const readyPlayers = [...battlePlayersByUid.values()]
-    .filter(player => player.ready && player.status !== "returned");
+    .filter(player => player.ready && isFriendRoomParticipant(player));
   if (readyPlayers.length < 2) return;
 
   const scramble = getBattleScramble();
@@ -1695,7 +1750,7 @@ function renderBattleUi() {
   const you = getDisplayPlayer(activeRoomRole);
   const opponent = getDisplayPlayer(getOpponentRole());
   const count = isMultiplayerFriendRoom()
-    ? [...battlePlayersByUid.values()].filter(player => player.status !== "returned").length
+    ? [...battlePlayersByUid.values()].filter(isFriendRoomParticipant).length
     : [getDisplayPlayer("host"), getDisplayPlayer("guest")].filter(Boolean).length;
 
   roomIdInput.value = activeRoomId;
@@ -1737,6 +1792,7 @@ function renderBattleUi() {
   renderRankedTimeLimit(you);
   renderBattleNotice();
   returnToNormalAfterOpponentExit(opponent);
+  handleDisconnectedFriendHost();
   renderBattleResult();
   renderBattleReadyButton(you, opponent);
   renderRematchPanel(you, opponent);
@@ -1747,7 +1803,7 @@ function renderBattleUi() {
   const hostCanStart = isMultiplayerFriendRoom() && currentUser?.uid === activeRoom.hostUid && !isSpectatorMode && activeRoom.status === "waiting";
   hostStartBattleBtn.hidden = !hostCanStart;
   if (hostCanStart) {
-    const readyCount = [...battlePlayersByUid.values()].filter(player => player.ready && player.status !== "returned").length;
+    const readyCount = [...battlePlayersByUid.values()].filter(player => player.ready && isFriendRoomParticipant(player)).length;
     const hostIsReady = Boolean(battlePlayersByUid.get(activeRoom.hostUid)?.ready);
     const minimumReadyPlayers = activeRoom.cubeMode === "real" ? 2 : 1;
     hostStartBattleBtn.disabled = !hostIsReady || readyCount < minimumReadyPlayers || (activeRoom.cubeMode === "real" && !activeRoom.scramble);
@@ -1935,6 +1991,16 @@ function watchRoom(roomId) {
     const previousRound = activeRound;
     activeRoom = room;
     activeRound = Number(room.round) || 1;
+    if (room.mode === "friend" && room.status === "cancelled" && !battleLeaving) {
+      battleNotice.textContent = "The host closed the room. Returning to Normal Mode.";
+      if (!friendHostExitTimeout) {
+        friendHostExitTimeout = window.setTimeout(() => {
+          friendHostExitTimeout = null;
+          leaveBattleMode({ roomAlreadyCancelled: true }).catch(console.error);
+        }, 1000);
+      }
+      return;
+    }
     const localPlayer = getDisplayPlayer(activeRoomRole);
     const localCanSeeScramble = ["inspecting", "solving", "finished", "dnf"].includes(localPlayer?.status);
     if (localCanSeeScramble && room.scramble) {
@@ -1966,6 +2032,7 @@ function watchRoom(roomId) {
     }
 
     renderBattleUi();
+    if (isMultiplayerFriendRoom()) finalizeFriendMultiplayerIfDone().catch(console.error);
     if (
       localPlayer?.status === "ready" &&
       room.scramble &&
@@ -2528,7 +2595,7 @@ async function startFriendMultiplayerGame() {
     return;
   }
   const readyPlayers = [...battlePlayersByUid.values()]
-    .filter(player => player.ready && player.status !== "returned")
+    .filter(player => player.ready && isFriendRoomParticipant(player))
     .slice(0, Number(activeRoom.maxPlayers || 20));
   if (readyPlayers.length === 0) {
     setBattleStatus("At least one player must be Ready.");
@@ -2998,7 +3065,39 @@ function handleBattleFinishSyncError(error) {
   console.error("Battle finish sync failed", error);
 }
 
-function leaveBattleMode() {
+async function persistFriendRoomExit({ roomAlreadyCancelled = false } = {}) {
+  if (!currentUser || !activeRoomId || isSpectatorMode || activeRoom?.mode !== "friend") return;
+  const roomId = activeRoomId;
+  const uid = currentUser.uid;
+  const playerRef = doc(db, BATTLE_ROOMS_COLLECTION, roomId, "players", uid);
+
+  if (uid === activeRoom.hostUid && !roomAlreadyCancelled) {
+    await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, roomId), {
+      status: "cancelled",
+      activePlayerUids: [],
+      cancelledBy: uid,
+      updatedAt: serverTimestamp()
+    });
+  }
+
+  try {
+    await deleteDoc(playerRef);
+  } catch (error) {
+    console.warn("Player document deletion was denied; using returned status until Rules are updated.", error);
+    await updateDoc(playerRef, {
+      status: "returned",
+      ready: false,
+      active: false,
+      updatedAt: serverTimestamp()
+    });
+  }
+}
+
+function resetBattleUiAfterLeave() {
+  if (friendHostExitTimeout) {
+    window.clearTimeout(friendHostExitTimeout);
+    friendHostExitTimeout = null;
+  }
   if (activeRoom?.status === "finishing") {
     battleNotice.textContent = "Finalizing battle result...";
     return;
@@ -3007,25 +3106,6 @@ function leaveBattleMode() {
     window.clearTimeout(opponentExitTimeout);
     opponentExitTimeout = null;
   }
-  if (currentUser && activeRoomId && document.body.classList.contains("battle-mode") && !isSpectatorMode) {
-    const leavingActiveRound = isMultiplayerFriendRoom() &&
-      (activeRoom.activePlayerUids || []).includes(currentUser.uid) &&
-      ["inspection", "solving"].includes(activeRoom.status);
-    const updates = [updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
-      status: leavingActiveRound ? "dnf" : "returned",
-      ready: false,
-      active: false,
-      updatedAt: serverTimestamp()
-    })];
-    if (isMultiplayerFriendRoom()) {
-      updates.push(updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId), {
-        playerCount: Math.max(0, Number(activeRoom.playerCount || 1) - 1),
-        updatedAt: serverTimestamp()
-      }));
-    }
-    Promise.all(updates).catch(console.error);
-  }
-
   clearBattleListeners();
   window.opponentCube?.clear();
   clearFriendLobby();
@@ -3057,6 +3137,35 @@ function leaveBattleMode() {
   url.searchParams.delete("battleRoom");
   url.searchParams.delete("spectate");
   window.history.replaceState({}, "", url);
+}
+
+async function leaveBattleMode(options = {}) {
+  if (battleLeaving) return;
+  if (activeRoom?.status === "finishing") {
+    battleNotice.textContent = "Finalizing battle result...";
+    return;
+  }
+
+  battleLeaving = true;
+  try {
+    if (currentUser && activeRoomId && document.body.classList.contains("battle-mode") && !isSpectatorMode) {
+      if (activeRoom?.mode === "friend") {
+        await persistFriendRoomExit(options);
+      } else {
+        await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
+          status: "returned",
+          ready: false,
+          active: false,
+          updatedAt: serverTimestamp()
+        }).catch(console.error);
+      }
+    }
+  } catch (error) {
+    console.error("Battle room exit could not be fully synchronized.", error);
+  } finally {
+    resetBattleUiAfterLeave();
+    battleLeaving = false;
+  }
 }
 
 async function loginWithGoogle() {
@@ -3241,9 +3350,36 @@ function setupAuthUi() {
     });
   });
 
-  leaveBattleBtn.addEventListener("click", leaveBattleMode);
-  rematchReturnBtn.addEventListener("click", leaveBattleMode);
+  leaveBattleBtn.addEventListener("click", () => leaveBattleMode().catch(console.error));
+  rematchReturnBtn.addEventListener("click", () => leaveBattleMode().catch(console.error));
 }
+
+window.addEventListener("pagehide", () => {
+  if (
+    !currentUser ||
+    !activeRoomId ||
+    !document.body.classList.contains("battle-mode") ||
+    isSpectatorMode
+  ) return;
+
+  const roomId = activeRoomId;
+  const uid = currentUser.uid;
+  updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, roomId, "players", uid), {
+    status: "disconnected",
+    ready: false,
+    active: false,
+    updatedAt: serverTimestamp()
+  }).catch(() => {});
+
+  if (activeRoom?.mode === "friend" && uid === activeRoom.hostUid) {
+    updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, roomId), {
+      status: "cancelled",
+      activePlayerUids: [],
+      cancelledBy: uid,
+      updatedAt: serverTimestamp()
+    }).catch(() => {});
+  }
+});
 
 periodButtons.forEach(button => {
   button.addEventListener("click", () => {
