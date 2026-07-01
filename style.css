@@ -1008,6 +1008,16 @@ body.battle-mode .opponent-cube-panel.opponent-unavailable {
   font-size: 18px;
 }
 
+.multiplayer-roster-hint {
+  margin: -4px 0 12px;
+  text-align: center;
+  font-size: 14px;
+}
+
+.multiplayer-roster-hint[hidden] {
+  display: none;
+}
+
 .multiplayer-roster-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1025,6 +1035,28 @@ body.battle-mode .opponent-cube-panel.opponent-unavailable {
   padding: 9px 10px;
   background: rgba(255, 255, 255, 0.58);
   border-radius: 5px;
+}
+
+.multiplayer-roster-row.opponent-selectable {
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.multiplayer-roster-row.opponent-selectable:hover,
+.multiplayer-roster-row.opponent-selectable:focus-visible {
+  border-color: #3977c9;
+  outline: none;
+}
+
+.multiplayer-roster-row.selected-opponent {
+  border-color: #0f78b8;
+  background: rgba(57, 119, 201, 0.2);
+}
+
+body.dark .multiplayer-roster-row.selected-opponent {
+  border-color: #78c5ef;
+  background: rgba(120, 197, 239, 0.2);
 }
 
 .multiplayer-roster-row time {

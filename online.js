@@ -68,6 +68,7 @@ const friendRealControls = document.getElementById("friendRealControls");
 const friendRealStartBtn = document.getElementById("friendRealStartBtn");
 const friendRealAbortBtn = document.getElementById("friendRealAbortBtn");
 const multiplayerRoster = document.getElementById("multiplayerRoster");
+const multiplayerRosterHint = document.getElementById("multiplayerRosterHint");
 const multiplayerRosterList = document.getElementById("multiplayerRosterList");
 const copyRoomUrlBtn = document.getElementById("copyRoomUrlBtn");
 const leaveBattleBtn = document.getElementById("leaveBattleBtn");
@@ -80,6 +81,7 @@ const battleNotice = document.getElementById("battleNotice");
 const battleResult = document.getElementById("battleResult");
 const battleResultBadge = document.getElementById("battleResultBadge");
 const opponentCubePanel = document.getElementById("opponentCubePanel");
+const opponentCubeTitle = document.getElementById("opponentCubeTitle");
 const opponentCubeStatus = document.getElementById("opponentCubeStatus");
 const battleModeLabel = document.getElementById("battleModeLabel");
 const battleRematchPanel = document.getElementById("battleRematchPanel");
@@ -118,6 +120,7 @@ let battleMovesByRole = { host: [], guest: [] };
 let isSpectatorMode = false;
 let friendOpponentMovesUnsubscribe = null;
 let friendOpponentMovesUid = "";
+let selectedOpponentUid = "";
 let battleClockInterval = null;
 let battlePresenceInterval = null;
 let localBattleTimerSeconds = 0;
@@ -1360,6 +1363,7 @@ function getDisplayPlayer(role) {
     if (isSpectatorMode && role === activeRoomRole) return null;
     if (role === activeRoomRole || role === "you") return battlePlayersByUid.get(currentUser?.uid) || null;
     if (role === "host") return battlePlayersByUid.get(activeRoom.hostUid) || null;
+    if (role === "opponent") return getSelectedOpponent();
     return [...battlePlayersByUid.values()].find(player => player.uid !== currentUser?.uid && isFriendRoomParticipant(player)) || null;
   }
   return battlePlayersByRole[role] || null;
@@ -1369,9 +1373,51 @@ function isMultiplayerFriendRoom() {
   return activeRoom?.mode === "friend" && Number(activeRoom.maxPlayers || 2) > 2;
 }
 
+function getBattlePlayersForSelection() {
+  const players = isMultiplayerFriendRoom()
+    ? [...battlePlayersByUid.values()]
+    : [battlePlayersByRole.host, battlePlayersByRole.guest];
+  const seen = new Set();
+  return players.filter(player => {
+    if (!player?.uid || seen.has(player.uid) || player.uid === currentUser?.uid || isPlayerDisconnected(player)) return false;
+    seen.add(player.uid);
+    return true;
+  });
+}
+
+function ensureSelectedOpponent() {
+  if (activeRoom?.cubeMode === "real") {
+    selectedOpponentUid = "";
+    return null;
+  }
+  const candidates = getBattlePlayersForSelection();
+  const selected = candidates.find(player => player.uid === selectedOpponentUid);
+  if (selected) return selected;
+  selectedOpponentUid = candidates[0]?.uid || "";
+  return candidates[0] || null;
+}
+
+function getSelectedOpponent() {
+  return ensureSelectedOpponent();
+}
+
+function selectOpponent(uid) {
+  if (activeRoom?.cubeMode === "real" || !uid || uid === currentUser?.uid) return;
+  const opponent = getBattlePlayersForSelection().find(player => player.uid === uid);
+  if (!opponent || selectedOpponentUid === uid) return;
+  selectedOpponentUid = uid;
+  if (friendOpponentMovesUnsubscribe) friendOpponentMovesUnsubscribe();
+  friendOpponentMovesUnsubscribe = null;
+  friendOpponentMovesUid = "";
+  battleMovesByRole.opponent = [];
+  syncFriendOpponentMovesListener();
+  renderBattleUi();
+}
+
 function renderMultiplayerRoster() {
   if (!multiplayerRoster || !multiplayerRosterList) return;
   multiplayerRoster.hidden = false;
+  if (multiplayerRosterHint) multiplayerRosterHint.hidden = activeRoom.cubeMode === "real";
   const activeUids = new Set(activeRoom.activePlayerUids || []);
   const players = (isMultiplayerFriendRoom()
     ? [...battlePlayersByUid.values()].filter(isFriendRoomParticipant)
@@ -1384,6 +1430,22 @@ function renderMultiplayerRoster() {
   multiplayerRosterList.replaceChildren(...players.map((player, index) => {
     const row = document.createElement("div");
     row.className = "multiplayer-roster-row";
+    const selectable = activeRoom.cubeMode === "virtual" && player.uid !== currentUser?.uid && !isPlayerDisconnected(player);
+    row.classList.toggle("opponent-selectable", selectable);
+    row.classList.toggle("selected-opponent", selectable && player.uid === selectedOpponentUid);
+    if (selectable) {
+      row.tabIndex = 0;
+      row.setAttribute("role", "button");
+      row.setAttribute("aria-pressed", player.uid === selectedOpponentUid ? "true" : "false");
+      row.setAttribute("aria-label", `Watch ${player.name || "player"}'s cube`);
+      row.addEventListener("click", () => selectOpponent(player.uid));
+      row.addEventListener("keydown", event => {
+        if (event.key !== "Enter" && event.code !== "Space") return;
+        event.preventDefault();
+        event.stopPropagation();
+        selectOpponent(player.uid);
+      });
+    }
     const isActive = activeUids.size > 0
       ? activeUids.has(player.uid)
       : ["inspecting", "solving", "finished", "dnf", "time_limit"].includes(player.status);
@@ -1402,15 +1464,23 @@ function renderMultiplayerRoster() {
 }
 
 function syncFriendOpponentMovesListener() {
-  if (!isMultiplayerFriendRoom() || activeRoom.cubeMode === "real" || isSpectatorMode) return;
-  const opponent = getDisplayPlayer("opponent");
+  if (!isMultiplayerFriendRoom() || activeRoom.cubeMode === "real") return;
+  const opponent = getSelectedOpponent();
   const uid = opponent?.uid || "";
   if (uid === friendOpponentMovesUid) return;
+  const previousUid = friendOpponentMovesUid;
   if (friendOpponentMovesUnsubscribe) friendOpponentMovesUnsubscribe();
   friendOpponentMovesUnsubscribe = null;
   friendOpponentMovesUid = uid;
   battleMovesByRole.opponent = [];
-  if (!uid) return;
+  if (previousUid !== uid) window.opponentCube?.clear();
+  if (!uid) {
+    return;
+  }
+  const you = getDisplayPlayer(activeRoomRole);
+  if (activeRoom.scramble && (isSpectatorMode || ["inspecting", "solving", "finished", "dnf"].includes(you?.status))) {
+    window.opponentCube?.setScramble(activeRoom.scramble, activeRound);
+  }
   const movesQuery = query(
     collection(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", uid, "moves"),
     where("round", "==", activeRound),
@@ -1428,6 +1498,7 @@ function watchFriendPlayers(roomId) {
     collection(db, BATTLE_ROOMS_COLLECTION, roomId, "players"),
     snapshot => {
       battlePlayersByUid = new Map(snapshot.docs.map(entry => [entry.id, entry.data()]));
+      ensureSelectedOpponent();
       reconcileFriendRoomMembership().catch(console.error);
       handleDisconnectedFriendHost();
       syncFriendOpponentMovesListener();
@@ -1752,7 +1823,9 @@ function renderBattleUi() {
   if (!activeRoomId || !activeRoom) return;
 
   const you = getDisplayPlayer(activeRoomRole);
-  const opponent = getDisplayPlayer(getOpponentRole());
+  const opponent = activeRoom.cubeMode === "virtual"
+    ? getSelectedOpponent()
+    : getDisplayPlayer(getOpponentRole());
   const count = isMultiplayerFriendRoom()
     ? [...battlePlayersByUid.values()].filter(isFriendRoomParticipant).length
     : [getDisplayPlayer("host"), getDisplayPlayer("guest")].filter(Boolean).length;
@@ -1981,6 +2054,7 @@ function watchRoom(roomId) {
   battlePlayersByRole = { host: null, guest: null };
   battlePlayersByUid = new Map();
   battleMovesByRole = { host: [], guest: [] };
+  selectedOpponentUid = "";
   setBattleMode(true);
   window.history.replaceState({}, "", getRoomUrl(roomId));
 
@@ -2034,6 +2108,11 @@ function watchRoom(roomId) {
     }
     if (previousRound && activeRound > previousRound && !isSpectatorMode && isMultiplayerFriendRoom()) {
       resetFriendRoundDisplay(room);
+      if (friendOpponentMovesUnsubscribe) friendOpponentMovesUnsubscribe();
+      friendOpponentMovesUnsubscribe = null;
+      friendOpponentMovesUid = "";
+      battleMovesByRole.opponent = [];
+      syncFriendOpponentMovesListener();
     }
 
     renderBattleUi();
@@ -3143,6 +3222,7 @@ function resetBattleUiAfterLeave() {
   battlePlayersByUid = new Map();
   activeRound = 1;
   displayedOpponentRatingUid = "";
+  selectedOpponentUid = "";
   localBattleTimerSeconds = 0;
   battleReadyBtn.hidden = true;
   hostStartBattleBtn.hidden = true;
@@ -3218,14 +3298,25 @@ function renderOpponentCube(opponent) {
 
   const disconnected = isPlayerDisconnected(opponent);
   const you = getDisplayPlayer(activeRoomRole);
-  const waitingForReady = !["inspecting", "solving", "finished", "dnf"].includes(you?.status);
+  const waitingForReady = !isSpectatorMode && !["inspecting", "solving", "finished", "dnf"].includes(you?.status);
   opponentCubePanel.classList.toggle("opponent-unavailable", !opponent || disconnected || waitingForReady);
   opponentCubePanel.classList.toggle("ready-waiting", waitingForReady);
-  opponentCubeStatus.textContent = waitingForReady
-    ? "Opponent cube locked until you are ready."
-    : (!opponent
-    ? "Waiting for opponent..."
-    : (disconnected ? "Opponent left" : `Opponent: ${(opponent.status || "joined").toUpperCase()}`));
+  if (opponentCubeTitle) {
+    opponentCubeTitle.textContent = opponent ? `Opponent cube - ${opponent.name || "Player"}` : "Opponent cube";
+  }
+  opponentCubePanel.setAttribute("aria-label", opponent ? `Opponent cube for ${opponent.name || "Player"}` : "Opponent cube");
+  if (!opponent) {
+    opponentCubeStatus.textContent = "No opponent selected";
+  } else if (disconnected) {
+    opponentCubeStatus.textContent = "Opponent left";
+  } else if (waitingForReady) {
+    opponentCubeStatus.textContent = "Opponent cube locked until you are ready.";
+  } else {
+    const opponentTime = hasFinalBattleTime(opponent)
+      ? Number(opponent.finalTime)
+      : getPlayerElapsedSeconds(opponent);
+    opponentCubeStatus.textContent = `${opponent.name || "Opponent"}: ${(opponent.status || "joined").toUpperCase()} | ${formatBattleTime(opponentTime)}`;
+  }
 }
 
 function returnToNormalAfterOpponentExit(opponent) {
