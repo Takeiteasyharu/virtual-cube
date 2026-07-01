@@ -174,9 +174,11 @@ h1 {
 
 .scramble {
   min-height: 32px;
-  font-size: 20px;
+  font-size: clamp(20px, 3vw, 40px);
   font-weight: bold;
-  word-break: break-word;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: normal;
   padding: 8px 16px;
 }
 
@@ -1031,16 +1033,16 @@ body.battle-mode .opponent-cube-panel.opponent-unavailable {
   font-weight: 700;
 }
 
-body.real-cube-battle .battle-scramble {
+body.battle-mode .battle-scramble {
   max-width: 1200px;
   margin: 18px auto 12px;
   padding: 10px 16px;
-  font-size: clamp(22px, 4vw, 44px);
+  font-size: clamp(20px, 3vw, 40px);
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
 
-body.real-cube-battle .battle-player-grid {
+body.battle-mode .battle-player-grid {
   display: none;
 }
 
@@ -1123,24 +1125,24 @@ body.real-timer-clean .normal-real-scramble-net {
 .cube-net-face.face-b { grid-column: 4; grid-row: 2; }
 .cube-net-face.face-d { grid-column: 2; grid-row: 3; }
 
-body.real-cube-battle .multiplayer-roster {
+body.battle-mode .multiplayer-roster {
   width: min(100%, 1100px);
   margin: 18px auto;
   padding: 18px;
 }
 
-body.real-cube-battle .multiplayer-roster h2 {
+body.battle-mode .multiplayer-roster h2 {
   margin-bottom: 14px;
   font-size: clamp(22px, 3vw, 30px);
 }
 
-body.real-cube-battle .multiplayer-roster-list {
+body.battle-mode .multiplayer-roster-list {
   max-height: min(46vh, 520px);
   gap: 10px;
   padding-right: 10px;
 }
 
-body.real-cube-battle .multiplayer-roster-row {
+body.battle-mode .multiplayer-roster-row {
   grid-template-columns: minmax(0, 1fr) auto minmax(76px, auto);
   min-height: 58px;
   padding: 12px 14px;
@@ -1994,7 +1996,7 @@ body.solving .timer {
   }
 
   .scramble {
-    font-size: 16px;
+    font-size: clamp(20px, 6vw, 28px);
     padding: 6px 12px;
   }
 

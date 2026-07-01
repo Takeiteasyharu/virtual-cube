@@ -1371,10 +1371,12 @@ function isMultiplayerFriendRoom() {
 
 function renderMultiplayerRoster() {
   if (!multiplayerRoster || !multiplayerRosterList) return;
-  multiplayerRoster.hidden = !isMultiplayerFriendRoom();
-  if (multiplayerRoster.hidden) return;
+  multiplayerRoster.hidden = false;
   const activeUids = new Set(activeRoom.activePlayerUids || []);
-  const players = [...battlePlayersByUid.values()].filter(isFriendRoomParticipant).sort((a, b) => {
+  const players = (isMultiplayerFriendRoom()
+    ? [...battlePlayersByUid.values()].filter(isFriendRoomParticipant)
+    : [getDisplayPlayer("host"), getDisplayPlayer("guest")].filter(Boolean)
+  ).sort((a, b) => {
     const aTime = hasFinalBattleTime(a) ? Number(a.finalTime) : Infinity;
     const bTime = hasFinalBattleTime(b) ? Number(b.finalTime) : Infinity;
     return aTime - bTime || String(a.name).localeCompare(String(b.name));
@@ -1382,12 +1384,14 @@ function renderMultiplayerRoster() {
   multiplayerRosterList.replaceChildren(...players.map((player, index) => {
     const row = document.createElement("div");
     row.className = "multiplayer-roster-row";
-    const isActive = activeUids.has(player.uid);
+    const isActive = activeUids.size > 0
+      ? activeUids.has(player.uid)
+      : ["inspecting", "solving", "finished", "dnf", "time_limit"].includes(player.status);
     const elapsed = player.uid === currentUser?.uid
       ? localBattleTimerSeconds
       : getPlayerElapsedSeconds(player);
     const timer = hasFinalBattleTime(player) ? formatBattleTime(Number(player.finalTime)) : formatBattleTime(elapsed);
-    const state = isActive ? (player.status || "waiting") : (player.ready ? "ready" : "waiting");
+    const state = player.status || (player.ready ? "ready" : "waiting");
     row.innerHTML = `<strong></strong><span></span><time></time>`;
     const place = activeRoom.status === "finished" && isActive && hasFinalBattleTime(player) ? `#${index + 1} ` : "";
     row.querySelector("strong").textContent = `${place}${player.name || "Player"}${player.uid === activeRoom.hostUid ? " (Host)" : ""}`;
@@ -1755,9 +1759,10 @@ function renderBattleUi() {
 
   roomIdInput.value = activeRoomId;
   roomUrlOutput.value = getRoomUrl(activeRoomId);
-  const realFriendRoom = activeRoom.mode === "friend" && activeRoom.cubeMode === "real";
-  battleRoomMeta.classList.toggle("real-room-meta", realFriendRoom);
-  if (realFriendRoom) {
+  const friendRoom = activeRoom.mode === "friend";
+  const realFriendRoom = friendRoom && activeRoom.cubeMode === "real";
+  battleRoomMeta.classList.toggle("real-room-meta", friendRoom);
+  if (friendRoom) {
     const label = document.createElement("span");
     label.textContent = "Room ID";
     const roomId = document.createElement("strong");
@@ -2585,6 +2590,27 @@ async function notifyBattleSolveStarted() {
   } else if (activeRoom?.mode === "friend") {
     window.trackCubeEvent?.("friend_battle_start");
   }
+}
+
+function handleBattleSpaceStart() {
+  if (!document.body.classList.contains("battle-mode") || isSpectatorMode || activeRoom?.cubeMode === "real") return;
+
+  if (!hostStartBattleBtn.hidden && !hostStartBattleBtn.disabled) {
+    startFriendMultiplayerGame().catch(error => {
+      battleNotice.textContent = "Game could not be started.";
+      console.error(error);
+    });
+    return;
+  }
+
+  const player = isMultiplayerFriendRoom()
+    ? battlePlayersByUid.get(currentUser?.uid)
+    : getDisplayPlayer(activeRoomRole);
+  if (battleReadyBtn.hidden || battleReadyBtn.disabled || player?.ready || player?.status === "ready") return;
+  readyBattleRoom().catch(error => {
+    battleNotice.textContent = "Could not set ready.";
+    console.error(error);
+  });
 }
 
 async function startFriendMultiplayerGame() {
@@ -3465,3 +3491,4 @@ window.isRankedBattle = () => document.body.classList.contains("battle-mode") &&
 window.isRealCubeBattle = () => document.body.classList.contains("battle-mode") && activeRoom?.cubeMode === "real";
 window.beginRealCubeInspection = beginRealCubeInspection;
 window.abortRealCubeBattle = abortRealCubeBattle;
+window.handleBattleSpaceStart = handleBattleSpaceStart;

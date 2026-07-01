@@ -204,15 +204,16 @@ document.addEventListener("keydown", event => {
 
   if (event.code === "Space") {
     event.preventDefault();
+    if (event.repeat) return;
     if (isBattleModeActive()) {
       if (window.isRealCubeBattle?.()) {
-        if (event.repeat) return;
         handleRealCubeSpaceDown();
+      } else {
+        window.handleBattleSpaceStart?.();
       }
       return;
     }
     if (isNormalRealCubeMode()) {
-      if (event.repeat) return;
       handleNormalRealCubeSpaceDown();
       return;
     }
@@ -417,8 +418,7 @@ function applyNormalTimerMode() {
 
 function handleNormalRealCubeSpaceDown() {
   if (["idle", "aborted", "finished"].includes(normalSolveState)) {
-    if (!isRealCubeInspectionEnabled()) return;
-    scrambleCube();
+    handleNormalRealCubeTimerAction();
   } else if (normalSolveState === "inspecting") {
     beginRealTimerHold();
   } else if (normalSolveState === "solving" && isTimerRunning()) {
@@ -445,7 +445,6 @@ function handleNormalRealCubeTimerAction() {
 
 function handleRealCubeSpaceDown() {
   if (["joined", "inactive", "finished"].includes(battleInputState)) {
-    if (!isRealCubeInspectionEnabled()) return;
     beginRealCubeInspection();
     return;
   }
