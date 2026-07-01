@@ -57,7 +57,7 @@
         <div>
           <h2>Real-time Battle</h2>
           <div class="battle-mode-label" id="battleModeLabel">Friend Battle</div>
-          <p id="battleRoomMeta">Room: - | Players: 0/2</p>
+          <p id="battleRoomMeta"><span>Room ID</span> <strong>-</strong> <small>Players: 0/2</small></p>
         </div>
         <div class="battle-mode-actions">
           <button id="hostStartBattleBtn" class="host-start-button" hidden>Start Game</button>
@@ -107,6 +107,10 @@
         <h2>Room Players</h2>
         <div class="multiplayer-roster-list" id="multiplayerRosterList"></div>
       </section>
+      <div class="friend-real-controls" id="friendRealControls" hidden>
+        <button id="friendRealStartBtn">Start Solve</button>
+        <button id="friendRealAbortBtn" class="secondary-action" hidden>Abort</button>
+      </div>
       <div class="battle-result" id="battleResult"></div>
       <div class="battle-result-badge" id="battleResultBadge"></div>
       <section class="battle-rematch" id="battleRematchPanel" hidden>
@@ -308,6 +312,14 @@
           <option value="virtual">Virtual Cube</option>
           <option value="real">Real Cube</option>
         </select>
+      </section>
+      <section class="settings-section">
+        <h3>15s Inspection for Real Cube Mode</h3>
+        <label class="settings-toggle" for="realCubeInspectionToggle">
+          <input id="realCubeInspectionToggle" type="checkbox" />
+          Enable 15-second inspection
+        </label>
+        <p class="settings-hint">Off by default. When disabled, Start Solve opens the timer-ready screen.</p>
       </section>
       <section class="settings-section">
         <h3>Animation Speed</h3>

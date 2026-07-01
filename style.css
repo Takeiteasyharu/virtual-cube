@@ -1132,6 +1132,72 @@ body.real-cube-battle .multiplayer-roster-row {
   font-size: clamp(16px, 2vw, 20px);
 }
 
+.real-room-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: baseline;
+  justify-content: center;
+  margin: 12px 0 18px;
+}
+
+.real-room-meta span {
+  font-size: clamp(16px, 2vw, 22px);
+  font-weight: 700;
+}
+
+.real-room-meta strong {
+  padding: 5px 12px;
+  border: 2px solid currentColor;
+  border-radius: 6px;
+  font-family: "Courier New", monospace;
+  font-size: clamp(18px, 3vw, 32px);
+  letter-spacing: 0;
+  user-select: all;
+}
+
+.real-room-meta small {
+  font-size: clamp(14px, 1.7vw, 18px);
+}
+
+.friend-real-controls {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  width: min(100%, 1100px);
+  margin: 0 auto 18px;
+}
+
+.friend-real-controls[hidden] {
+  display: none;
+}
+
+.friend-real-controls button {
+  width: min(100%, 420px);
+  min-height: 64px;
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.settings-toggle {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-weight: 700;
+}
+
+.settings-toggle input {
+  width: 22px;
+  height: 22px;
+}
+
+.settings-hint {
+  margin: 8px 0 0;
+  line-height: 1.45;
+}
+
 body.dark .scramble-net-panel {
   border-color: #6e98ad;
   background: rgba(10, 30, 42, 0.72);

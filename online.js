@@ -64,6 +64,9 @@ const battleReadyBtn = document.getElementById("battleReadyBtn");
 const hostStartBattleBtn = document.getElementById("hostStartBattleBtn");
 const realCubeTimerBtn = document.getElementById("realCubeTimerBtn");
 const realCubeInstruction = document.getElementById("realCubeInstruction");
+const friendRealControls = document.getElementById("friendRealControls");
+const friendRealStartBtn = document.getElementById("friendRealStartBtn");
+const friendRealAbortBtn = document.getElementById("friendRealAbortBtn");
 const multiplayerRoster = document.getElementById("multiplayerRoster");
 const multiplayerRosterList = document.getElementById("multiplayerRosterList");
 const copyRoomUrlBtn = document.getElementById("copyRoomUrlBtn");
@@ -1697,9 +1700,21 @@ function renderBattleUi() {
 
   roomIdInput.value = activeRoomId;
   roomUrlOutput.value = getRoomUrl(activeRoomId);
-  battleRoomMeta.textContent = activeRoom.mode === "ranked"
-    ? `Ranked match | Players: ${count}/2`
-    : `Room: ${activeRoomId} | Players: ${count}/${activeRoom.maxPlayers || 2}${isSpectatorMode ? " | Spectating" : ""}`;
+  const realFriendRoom = activeRoom.mode === "friend" && activeRoom.cubeMode === "real";
+  battleRoomMeta.classList.toggle("real-room-meta", realFriendRoom);
+  if (realFriendRoom) {
+    const label = document.createElement("span");
+    label.textContent = "Room ID";
+    const roomId = document.createElement("strong");
+    roomId.textContent = activeRoomId;
+    const players = document.createElement("small");
+    players.textContent = `Players: ${count}/${activeRoom.maxPlayers || 2}${isSpectatorMode ? " · Spectating" : ""}`;
+    battleRoomMeta.replaceChildren(label, roomId, players);
+  } else {
+    battleRoomMeta.textContent = activeRoom.mode === "ranked"
+      ? `Ranked match | Players: ${count}/2`
+      : `Room: ${activeRoomId} | Players: ${count}/${activeRoom.maxPlayers || 2}${isSpectatorMode ? " | Spectating" : ""}`;
+  }
   battleModeLabel.textContent = activeRoom.mode === "ranked"
     ? "Ranked Battle"
     : `${activeRoom.cubeMode === "real" ? "Real Cube" : "Virtual Cube"} · Friend Battle`;
@@ -1745,17 +1760,19 @@ function renderBattleUi() {
   const localIsActive = (activeRoom.activePlayerUids || []).includes(currentUser?.uid);
   const realCubeActive = activeRoom.cubeMode === "real" && !isSpectatorMode && localIsActive && ["ready", "inspection", "solving"].includes(activeRoom.status);
   const waitingForInspection = realCubeActive && you?.status === "ready";
+  const inspectionEnabled = window.isRealCubeInspectionEnabled?.() === true;
   realCubeInstruction.hidden = !realCubeActive || !["ready", "inspecting"].includes(you?.status);
   if (!realCubeInstruction.hidden) {
     realCubeInstruction.textContent = waitingForInspection
-      ? "Press Space to start inspection"
-      : "Press and release Space to start solve";
+      ? (inspectionEnabled ? "Press Space to start inspection" : "Press Start Solve to prepare the timer")
+      : "Hold and release Space to start solve";
   }
-  realCubeTimerBtn.hidden = !realCubeActive || !["ready", "inspecting", "solving"].includes(you?.status);
-  if (!realCubeTimerBtn.hidden) {
-    realCubeTimerBtn.textContent = waitingForInspection
-      ? "Start Inspection"
-      : (you?.status === "solving" ? "Stop Timer" : "Start Solve");
+  realCubeTimerBtn.hidden = true;
+  friendRealControls.hidden = !realFriendRoom || !realCubeActive;
+  if (!friendRealControls.hidden) {
+    friendRealStartBtn.hidden = you?.status !== "ready";
+    friendRealStartBtn.textContent = inspectionEnabled ? "Start Inspection" : "Start Solve";
+    friendRealAbortBtn.hidden = !["inspecting", "solving"].includes(you?.status);
   }
 
   if (activeRoom.status === "finished") {
@@ -1795,6 +1812,14 @@ function getInspectionStartMs(player) {
   return player?.inspectionStartTime?.toMillis?.() || player?.inspectionStartTimeMs || Date.now();
 }
 
+function startLocalBattleInspection(scramble, inspectionStartTimeMs, round) {
+  if (activeRoom?.cubeMode === "real" && window.isRealCubeInspectionEnabled?.() !== true) {
+    window.startBattleRealPreparation?.(scramble, round);
+    return;
+  }
+  window.startBattleInspection?.(scramble, inspectionStartTimeMs, round);
+}
+
 function syncLocalBattleState(player) {
   if (!activeRoom || !player || !document.body.classList.contains("battle-mode")) return;
 
@@ -1804,7 +1829,7 @@ function syncLocalBattleState(player) {
 
   if (player.status === "inspecting") {
     if (activeRoom.scramble) window.opponentCube?.setScramble(activeRoom.scramble, activeRound);
-    window.startBattleInspection?.(
+    startLocalBattleInspection(
       activeRoom.scramble,
       getInspectionStartMs(player),
       activeRound
@@ -1844,7 +1869,7 @@ async function startInspectionForReadyPlayer() {
       lastMove: "",
       updatedAt: serverTimestamp()
     });
-    window.startBattleInspection?.(activeRoom.scramble, inspectionStartTimeMs, activeRound);
+    startLocalBattleInspection(activeRoom.scramble, inspectionStartTimeMs, activeRound);
   } finally {
     readyInspectionStarting = false;
   }
@@ -2466,7 +2491,7 @@ async function readyBattleRoom() {
     updatedAt: serverTimestamp()
   });
 
-  window.startBattleInspection?.(scramble, inspectionStartTimeMs, activeRound);
+  startLocalBattleInspection(scramble, inspectionStartTimeMs, activeRound);
 }
 
 async function notifyBattleSolveStarted() {
@@ -2566,7 +2591,7 @@ async function beginRealCubeInspection() {
     moveCount: 0,
     updatedAt: serverTimestamp()
   });
-  window.startBattleInspection?.(activeRoom.scramble, inspectionStartTimeMs, activeRound);
+  startLocalBattleInspection(activeRoom.scramble, inspectionStartTimeMs, activeRound);
   return true;
 }
 
@@ -3016,6 +3041,7 @@ function leaveBattleMode() {
   battleReadyBtn.hidden = true;
   hostStartBattleBtn.hidden = true;
   realCubeTimerBtn.hidden = true;
+  friendRealControls.hidden = true;
   realCubeInstruction.hidden = true;
   multiplayerRoster.hidden = true;
   battleRematchPanel.hidden = true;
@@ -3190,6 +3216,14 @@ function setupAuthUi() {
       battleNotice.textContent = "Game could not be started.";
       console.error(error);
     });
+  });
+
+  friendRealStartBtn?.addEventListener("click", () => {
+    window.handleRealCubeTimerAction?.();
+  });
+
+  friendRealAbortBtn?.addEventListener("click", () => {
+    abortRealCubeBattle().catch(console.error);
   });
 
   playAgainBtn.addEventListener("click", () => {

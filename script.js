@@ -53,6 +53,7 @@ const BACKGROUND_IMAGE_KEY = "cubeBackgroundImage";
 const BEGINNER_TIP_KEY = "cubeOnboardingDismissed";
 const NORMAL_TIMER_MODE_KEY = "normalTimerMode";
 const CUBE_SIZE_SCALE_KEY = "cubeSizeScale";
+const REAL_CUBE_INSPECTION_KEY = "realCubeInspectionEnabled";
 const BACKGROUND_IMAGE_MAX_BYTES = 3 * 1024 * 1024;
 let keyMap = { ...DEFAULT_KEY_MAP };
 let selectedBindingKey = "";
@@ -94,6 +95,10 @@ function getCubeSizeScale() {
   return Number.isFinite(value) && value >= 0.5 && value <= 2 ? value : 1;
 }
 
+function isRealCubeInspectionEnabled() {
+  return localStorage.getItem(REAL_CUBE_INSPECTION_KEY) === "true";
+}
+
 function setCubeSizeScale(value) {
   const normalized = Math.min(2, Math.max(0.5, Number(value) || 1));
   localStorage.setItem(CUBE_SIZE_SCALE_KEY, String(normalized));
@@ -103,6 +108,7 @@ function setCubeSizeScale(value) {
 
 window.getCubeAnimationSpeed = getAnimationSpeed;
 window.getCubeSizeScale = getCubeSizeScale;
+window.isRealCubeInspectionEnabled = isRealCubeInspectionEnabled;
 
 let readyToSolve = false;
 let firstTurnDone = false;
@@ -360,28 +366,37 @@ function renderNormalRealCubeUi() {
   button.hidden = !realMode;
   if (!realMode) return;
 
+  const inspectionEnabled = isRealCubeInspectionEnabled();
   if (normalSolveState === "inspecting") {
-    instruction.textContent = "Release Space to start solve";
+    instruction.textContent = "Hold and release Space to start solve";
     button.textContent = "Start Solve";
   } else if (normalSolveState === "solving") {
     instruction.textContent = "Press Space to stop timer";
     button.textContent = "Stop Timer";
   } else if (normalSolveState === "finished") {
     instruction.textContent = "Finished";
-    button.textContent = "Start Inspection";
+    button.textContent = inspectionEnabled ? "Start Inspection" : "Start Solve";
   } else {
-    instruction.textContent = "Press Space to start inspection";
-    button.textContent = "Start Inspection";
+    instruction.textContent = inspectionEnabled
+      ? "Press Space to start inspection"
+      : "Press Start Solve to prepare the timer";
+    button.textContent = inspectionEnabled ? "Start Inspection" : "Start Solve";
   }
   syncRealTimerScreenState();
 }
 
 function applyNormalTimerMode() {
+  if (isNormalRealCubeMode() && !normalActiveScramble) {
+    normalActiveScramble = generateScramble(20).join(" ");
+    document.getElementById("scrambleText").textContent = normalActiveScramble;
+    setCurrentScramble(normalActiveScramble);
+  }
   renderNormalRealCubeUi();
 }
 
 function handleNormalRealCubeSpaceDown() {
   if (["idle", "aborted", "finished"].includes(normalSolveState)) {
+    if (!isRealCubeInspectionEnabled()) return;
     scrambleCube();
   } else if (normalSolveState === "inspecting") {
     beginRealTimerHold();
@@ -391,6 +406,9 @@ function handleNormalRealCubeSpaceDown() {
     readyToSolve = false;
     firstTurnDone = false;
     setSolvingMode(false);
+    normalActiveScramble = generateScramble(20).join(" ");
+    document.getElementById("scrambleText").textContent = normalActiveScramble;
+    setCurrentScramble(normalActiveScramble);
     renderNormalRealCubeUi();
   }
 }
@@ -408,6 +426,7 @@ function handleNormalRealCubeTimerAction() {
 
 function handleRealCubeSpaceDown() {
   if (["joined", "inactive", "finished"].includes(battleInputState)) {
+    if (!isRealCubeInspectionEnabled()) return;
     beginRealCubeInspection();
     return;
   }
@@ -418,9 +437,12 @@ function handleRealCubeSpaceDown() {
   if (battleInputState === "solving") handleRealCubeTimerAction();
 }
 
-function isMobileRealTimer() {
-  const isTouchDevice = window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 1;
-  return isTouchDevice && isRealCubeTimerMode();
+function isTouchDevice() {
+  return window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 1;
+}
+
+function shouldUseCleanRealTimer() {
+  return isRealCubeTimerMode() && (isTouchDevice() || !isRealCubeInspectionEnabled());
 }
 
 function isRealTimerInspecting() {
@@ -438,7 +460,7 @@ function isRealTimerSolving() {
 function syncRealTimerScreenState() {
   const inspecting = isRealTimerInspecting();
   const solving = isRealTimerSolving();
-  document.body.classList.toggle("real-timer-clean", isMobileRealTimer() && (inspecting || solving));
+  document.body.classList.toggle("real-timer-clean", shouldUseCleanRealTimer() && (inspecting || solving));
   document.body.classList.toggle("real-timer-inspecting", inspecting);
   document.body.classList.toggle("real-timer-solving", solving);
 }
@@ -501,7 +523,7 @@ function setupMobileRealTimerControls() {
   });
 
   timerArea.addEventListener("pointerdown", event => {
-    if (!isMobileRealTimer() || !document.body.classList.contains("real-timer-clean") || isControl(event.target)) return;
+    if (!isTouchDevice() || !isRealCubeTimerMode() || !document.body.classList.contains("real-timer-clean") || isControl(event.target)) return;
     if (realTimerActivePointerId !== null || event.isPrimary === false) return;
     event.preventDefault();
     realTimerActivePointerId = event.pointerId;
@@ -594,6 +616,16 @@ function startNormalInspection() {
 
   updateInspection();
   normalInspectionInterval = window.setInterval(updateInspection, 100);
+}
+
+function startNormalRealPreparation() {
+  clearNormalInspection();
+  normalInspectionActive = true;
+  normalSolveState = "inspecting";
+  document.body.classList.add("inspection-active");
+  setBattleInspectionOverlay(true, "Ready", "Timer Ready");
+  renderNormalRealCubeUi();
+  syncRealTimerScreenState();
 }
 
 function startNormalSolve() {
@@ -757,7 +789,10 @@ function scrambleCube() {
   resetSolveStats();
   setSolvingMode(true);
 
-  const scrambleText = lockedScramble || generateScramble(20).join(" ");
+  const preparedRealScramble = isNormalRealCubeMode() && !isRealCubeInspectionEnabled()
+    ? normalActiveScramble
+    : "";
+  const scrambleText = lockedScramble || preparedRealScramble || generateScramble(20).join(" ");
   const scramble = scrambleText.split(" ").filter(Boolean);
 
   document.getElementById("scrambleText").textContent = scrambleText;
@@ -770,7 +805,8 @@ function scrambleCube() {
   firstTurnDone = false;
 
   if (!isNormalRealCubeMode()) applyScramble(scramble);
-  startNormalInspection();
+  if (isNormalRealCubeMode() && !isRealCubeInspectionEnabled()) startNormalRealPreparation();
+  else startNormalInspection();
 }
 
 function abortNormalSolve() {
@@ -878,6 +914,28 @@ function startBattleInspection(scrambleText, inspectionStartMs = Date.now(), rou
   battleInspectionInterval = window.setInterval(updateInspection, 100);
 }
 
+function startBattleRealPreparation(scrambleText, round = 1) {
+  if (!isBattleModeActive() || !window.isRealCubeBattle?.()) return;
+  if (battleInputState === "inspecting" && battleInspectionRound === round) return;
+
+  clearBattleInspection();
+  resetTimer();
+  resetSolveStats();
+  setSolvingMode(false);
+  document.getElementById("scrambleText").textContent = scrambleText || "";
+  document.getElementById("lastMove").textContent = "-";
+  setCurrentScramble(scrambleText || "");
+  readyToSolve = true;
+  firstTurnDone = false;
+  battleInputState = "inspecting";
+  battleInspectionRound = round;
+  battleMoveSequence = 0;
+  document.body.classList.remove("battle-locked");
+  document.getElementById("cubeContainer")?.classList.remove("ready-waiting");
+  setBattleInspectionOverlay(true, "Ready", "Timer Ready");
+  syncRealTimerScreenState();
+}
+
 function startBattleSolve() {
   if (!isBattleModeActive() || battleInputState === "solving") return;
 
@@ -917,12 +975,14 @@ function clearBattleInspection() {
   }
 }
 
-function setBattleInspectionOverlay(visible, count = "15") {
+function setBattleInspectionOverlay(visible, count = "15", label = "Inspection") {
   const overlay = document.getElementById("battleInspectionOverlay");
+  const labelDisplay = document.getElementById("battleInspectionLabel");
   const countDisplay = document.getElementById("battleInspectionCount");
   if (!overlay || !countDisplay) return;
 
   overlay.hidden = !visible;
+  if (labelDisplay) labelDisplay.textContent = label;
   countDisplay.textContent = count;
   document.body.classList.toggle("inspection-active", visible);
   document.body.classList.toggle("battle-inspecting", visible && isBattleModeActive());
@@ -1013,6 +1073,7 @@ window.getMoveTurnAmount = getMoveTurnAmount;
 window.loadBattleScramble = loadBattleScramble;
 window.prepareBattleCube = prepareBattleCube;
 window.startBattleInspection = startBattleInspection;
+window.startBattleRealPreparation = startBattleRealPreparation;
 window.cancelCurrentSolve = cancelCurrentSolve;
 window.handleRealCubeTimerAction = handleRealCubeTimerAction;
 
@@ -1067,6 +1128,7 @@ function setupSettingsUi() {
   const timerModeSelect = document.getElementById("normalTimerModeSelect");
   const cubeSizeInput = document.getElementById("cubeSizeInput");
   const cubeSizeValue = document.getElementById("cubeSizeValue");
+  const realCubeInspectionToggle = document.getElementById("realCubeInspectionToggle");
   const resetButton = document.getElementById("resetKeyBindingsBtn");
   if (!speedSelect) return;
 
@@ -1090,6 +1152,17 @@ function setupSettingsUi() {
       localStorage.setItem(NORMAL_TIMER_MODE_KEY, timerModeSelect.value === "real" ? "real" : "virtual");
       normalSolveState = "idle";
       applyNormalTimerMode();
+    });
+  }
+  if (realCubeInspectionToggle) {
+    realCubeInspectionToggle.checked = isRealCubeInspectionEnabled();
+    realCubeInspectionToggle.addEventListener("change", () => {
+      localStorage.setItem(REAL_CUBE_INSPECTION_KEY, realCubeInspectionToggle.checked ? "true" : "false");
+      if (!isBattleModeActive() && isNormalRealCubeMode()) {
+        abortNormalSolve();
+        normalSolveState = "idle";
+        applyNormalTimerMode();
+      }
     });
   }
   resetButton?.addEventListener("click", () => {
