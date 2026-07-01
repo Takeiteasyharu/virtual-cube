@@ -1930,6 +1930,9 @@ function watchRoom(roomId) {
     if (previousRound && activeRound > previousRound && !isSpectatorMode && !isMultiplayerFriendRoom()) {
       beginNextBattleRound(room).catch(console.error);
     }
+    if (previousRound && activeRound > previousRound && !isSpectatorMode && isMultiplayerFriendRoom()) {
+      resetFriendRoundDisplay(room);
+    }
 
     renderBattleUi();
     if (
@@ -1941,6 +1944,12 @@ function watchRoom(roomId) {
     }
     setBattleStatus(`Room ${roomId}: ${activeRoomRole}`);
   });
+}
+
+function resetFriendRoundDisplay(room) {
+  localBattleTimerSeconds = 0;
+  battleMovesByRole = { host: [], guest: [], opponent: [] };
+  window.prepareBattleCube?.(room.scramble || "", activeRound);
 }
 
 async function beginNextBattleRound(room) {
@@ -2386,11 +2395,27 @@ async function readyBattleRoom() {
     }
     const player = battlePlayersByUid.get(currentUser.uid);
     const ready = !Boolean(player?.ready);
+    const readyReset = ready ? {
+      round: room.status === "finished" ? activeRound + 1 : activeRound,
+      inspectionStartTime: null,
+      inspectionStartTimeMs: 0,
+      startTime: null,
+      startTimeMs: 0,
+      endTime: null,
+      finishedAt: null,
+      finalTime: null,
+      tps: null,
+      moveCount: 0,
+      currentCompletionScore: 0,
+      maxCompletionScore: 0,
+      timeLimitReached: false,
+      lastMove: ""
+    } : {};
     await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
       ready,
       active: false,
       status: ready ? "ready" : "joined",
-      finalTime: null,
+      ...readyReset,
       updatedAt: serverTimestamp()
     });
     setBattleStatus(ready ? "Ready. Waiting for the host to start." : "Ready cancelled.");
