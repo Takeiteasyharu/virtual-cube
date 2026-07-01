@@ -1172,13 +1172,14 @@ function formatBattleTime(seconds) {
   return Number.isFinite(seconds) ? seconds.toFixed(2) : "-";
 }
 
+function getMinimumAcceptedBattleTime() {
+  return activeRoom?.mode === "friend" && activeRoom?.cubeMode === "real" ? 0.01 : 3;
+}
+
 function hasFinalBattleTime(player) {
-  return Boolean(
-    player &&
-    player.finalTime !== null &&
-    player.finalTime !== undefined &&
-    Number.isFinite(Number(player.finalTime))
-  );
+  if (!player || player.finalTime === null || player.finalTime === undefined) return false;
+  const finalTime = Number(player.finalTime);
+  return Number.isFinite(finalTime) && finalTime >= getMinimumAcceptedBattleTime() && finalTime < 3600;
 }
 
 function getPlayerElapsedSeconds(player) {
@@ -1279,6 +1280,7 @@ async function saveBattleResultForCurrentUser() {
       roomId: activeRoomId,
       round: activeRound,
       mode: activeRoom.mode === "ranked" ? "ranked" : "friend",
+      cubeMode: activeRoom.cubeMode === "real" ? "real" : "virtual",
       result,
       ratingChange,
       ratingBefore,
@@ -1361,8 +1363,8 @@ function renderMultiplayerRoster() {
   if (multiplayerRoster.hidden) return;
   const activeUids = new Set(activeRoom.activePlayerUids || []);
   const players = [...battlePlayersByUid.values()].sort((a, b) => {
-    const aTime = Number.isFinite(a.finalTime) ? a.finalTime : Infinity;
-    const bTime = Number.isFinite(b.finalTime) ? b.finalTime : Infinity;
+    const aTime = hasFinalBattleTime(a) ? Number(a.finalTime) : Infinity;
+    const bTime = hasFinalBattleTime(b) ? Number(b.finalTime) : Infinity;
     return aTime - bTime || String(a.name).localeCompare(String(b.name));
   });
   multiplayerRosterList.replaceChildren(...players.map((player, index) => {
@@ -1372,10 +1374,10 @@ function renderMultiplayerRoster() {
     const elapsed = player.uid === currentUser?.uid
       ? localBattleTimerSeconds
       : getPlayerElapsedSeconds(player);
-    const timer = Number.isFinite(player.finalTime) ? formatBattleTime(player.finalTime) : formatBattleTime(elapsed);
+    const timer = hasFinalBattleTime(player) ? formatBattleTime(Number(player.finalTime)) : formatBattleTime(elapsed);
     const state = isActive ? (player.status || "waiting") : (player.ready ? "ready" : "waiting");
     row.innerHTML = `<strong></strong><span></span><time></time>`;
-    const place = activeRoom.status === "finished" && isActive && Number.isFinite(player.finalTime) ? `#${index + 1} ` : "";
+    const place = activeRoom.status === "finished" && isActive && hasFinalBattleTime(player) ? `#${index + 1} ` : "";
     row.querySelector("strong").textContent = `${place}${player.name || "Player"}${player.uid === activeRoom.hostUid ? " (Host)" : ""}`;
     row.querySelector("span").textContent = state.toUpperCase();
     row.querySelector("time").textContent = timer;
@@ -1497,7 +1499,7 @@ function renderBattlePlayer(prefix, player, role) {
 
   setBattleText(`${prefix}State`, isDisconnected ? "DISCONNECTED" : (isDnf ? "DNF" : (player?.status || "waiting").toUpperCase()));
   setBattleText(`${prefix}Timer`, isFinished ? formatBattleTime(Number(player.finalTime)) : formatBattleTime(currentTimer));
-  const finalTimeText = player?.finalTime !== null && player?.finalTime !== undefined && Number.isFinite(Number(player.finalTime))
+  const finalTimeText = hasFinalBattleTime(player)
     ? formatBattleTime(Number(player.finalTime))
     : "-";
   setBattleText(`${prefix}Final`, isDnf ? "DNF" : finalTimeText);
@@ -2568,8 +2570,8 @@ async function finalizeFriendMultiplayerIfDone() {
   const activePlayers = activeUids.map(uid => battlePlayersByUid.get(uid));
   if (activePlayers.some(player => !player || !["finished", "dnf", "time_limit"].includes(player.status))) return;
   const finishedPlayers = activePlayers
-    .filter(player => Number.isFinite(player.finalTime))
-    .sort((a, b) => a.finalTime - b.finalTime);
+    .filter(isPlayerFinished)
+    .sort((a, b) => Number(a.finalTime) - Number(b.finalTime));
   const winner = finishedPlayers[0] || null;
   const nextScramble = activeRoom.cubeMode === "real" ? getBattleScramble() : "";
   friendFinalizing = true;
@@ -2679,10 +2681,13 @@ async function finalizeRankedTimeLimit() {
 }
 
 async function submitBattleSolve(time, scramble, solveStats = {}) {
-  if (!currentUser || !activeRoomId || !document.body.classList.contains("battle-mode")) {
+  if (!document.body.classList.contains("battle-mode")) return;
+  if (!currentUser || !activeRoomId) {
     throw new Error("Battle finish was requested without an active room.");
   }
-  if (!Number.isFinite(time) || time < 3 || time >= 3600) {
+  const isRealFriendBattle = isMultiplayerFriendRoom() && activeRoom?.cubeMode === "real";
+  const minimumBattleTime = isRealFriendBattle ? 0.01 : 3;
+  if (!Number.isFinite(time) || time < minimumBattleTime || time >= 3600) {
     throw new Error("Battle finish time did not pass validation.");
   }
 
@@ -2710,7 +2715,7 @@ async function submitBattleSolve(time, scramble, solveStats = {}) {
     const localPlayer = battlePlayersByUid.get(currentUser.uid);
     if (localPlayer) Object.assign(localPlayer, finishPayload, { finishedAt: new Date(), updatedAt: new Date() });
     renderBattleUi();
-    await updateDoc(playerRef, finishPayload);
+    await updateBattleFinishWithRetry(playerRef, finishPayload);
     console.info("Friend Battle finish synchronized", {
       roomId: activeRoomId,
       round: activeRound,
@@ -2773,6 +2778,22 @@ async function finalizeBattle() {
       updatedAt: serverTimestamp()
     });
   });
+}
+
+async function updateBattleFinishWithRetry(playerRef, finishPayload) {
+  const delays = [0, 250, 750];
+  let lastError = null;
+  for (const delay of delays) {
+    if (delay) await new Promise(resolve => window.setTimeout(resolve, delay));
+    try {
+      await updateDoc(playerRef, finishPayload);
+      return;
+    } catch (error) {
+      lastError = error;
+      if (["permission-denied", "invalid-argument"].includes(error?.code)) break;
+    }
+  }
+  throw lastError || new Error("Battle finish synchronization failed.");
 }
 
 async function applyRankedBattleResultAsHost() {
