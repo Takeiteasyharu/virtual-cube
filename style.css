@@ -1593,15 +1593,14 @@ body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .cube-area {
   }
 
   body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .panel {
-    display: grid;
-    grid-template-columns: minmax(210px, 0.85fr) minmax(280px, 1.15fr);
-    gap: 16px;
-    top: auto;
-    right: 24px;
-    bottom: 16px;
-    width: min(72vw, 760px);
-    max-height: min(38vh, 420px);
-    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    top: 8px;
+    right: 48px;
+    bottom: auto;
+    width: clamp(280px, 20vw, 360px);
+    max-height: calc(100vh - 195px);
+    overflow-y: auto;
   }
 
   body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .panel .timer {
@@ -1630,22 +1629,17 @@ body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .cube-area {
   body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .real-cube-timer-button { top: 61%; }
 
   body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-scramble-net {
-    position: static;
-    width: 100%;
+    position: fixed;
+    z-index: 3;
+    right: calc(64px + clamp(280px, 20vw, 360px));
+    bottom: 28px;
+    width: clamp(250px, 18vw, 310px);
     margin: 0;
     padding: 10px;
-    grid-column: 1;
-    align-self: center;
   }
 
   body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-history-column {
-    display: block;
-    grid-column: 2;
-    min-width: 0;
-    max-height: calc(min(38vh, 420px) - 36px);
-    overflow-y: auto;
-    padding-right: 8px;
-    scrollbar-gutter: stable;
+    display: contents;
   }
 
   body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-scramble-net .cube-net {
