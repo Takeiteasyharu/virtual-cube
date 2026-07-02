@@ -62,6 +62,7 @@
         <div class="battle-mode-actions">
           <button id="hostStartBattleBtn" class="host-start-button" hidden>Start Game</button>
           <button id="copyRoomUrlBtn" title="Copy room URL">Copy Room URL</button>
+          <button id="friendBattleSettingsBtn" class="battle-settings-button" hidden>Settings</button>
           <button id="leaveBattleBtn" class="secondary-action">Return to Normal Mode</button>
         </div>
       </div>
@@ -143,6 +144,39 @@
         </div>
       </section>
     </section>
+
+    <div class="app-modal" id="friendBattleSettingsModal" hidden role="dialog" aria-modal="true" aria-labelledby="friendBattleSettingsTitle">
+      <section class="modal-content friend-battle-settings-content">
+        <div class="modal-heading">
+          <h2 id="friendBattleSettingsTitle">Settings</h2>
+          <button id="closeFriendBattleSettingsBtn" class="modal-close" type="button">Close</button>
+        </div>
+        <section class="battle-settings-section">
+          <h3>Appearance</h3>
+          <label class="settings-toggle"><input id="friendDarkModeToggle" type="checkbox" /> Dark Mode</label>
+        </section>
+        <section class="battle-settings-section" id="friendTimeEntrySection">
+          <h3>Gameplay</h3>
+          <label for="friendTimeEntryType">Time Entry Type</label>
+          <select id="friendTimeEntryType">
+            <option value="screen">Screen Timer</option>
+            <option value="manual">Manual Entry</option>
+          </select>
+        </section>
+        <section class="battle-settings-section" id="friendOpponentSettingsSection">
+          <h3>Opponent</h3>
+          <label class="settings-toggle"><input id="friendShowOpponentCube" type="checkbox" /> Show Opponent Cube</label>
+        </section>
+        <section class="battle-settings-section">
+          <h3>Room</h3>
+          <button id="friendSettingsLeaveBtn" class="danger-action" type="button">Leave Room</button>
+        </section>
+        <section class="battle-settings-section">
+          <h3>Account</h3>
+          <button id="friendSettingsLogoutBtn" class="danger-action" type="button">Logout</button>
+        </section>
+      </section>
+    </div>
 
     <main>
       <section class="left-panel">

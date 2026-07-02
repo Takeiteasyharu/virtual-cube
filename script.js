@@ -444,6 +444,7 @@ function handleNormalRealCubeTimerAction() {
 }
 
 function handleRealCubeSpaceDown() {
+  if (window.isManualRealFriendEntry?.()) return;
   if (["joined", "inactive", "finished"].includes(battleInputState)) {
     prepareAndArmRealCubeTimer();
     return;
@@ -585,6 +586,7 @@ function setupMobileRealTimerControls() {
   const battleScreen = document.querySelector(".battle-screen");
   battleScreen?.addEventListener("pointerdown", event => {
     if (!isTouchDevice() || !window.isRealFriendBattle?.() || document.body.classList.contains("real-timer-clean")) return;
+    if (window.isManualRealFriendEntry?.()) return;
     if (isControl(event.target) || event.target.closest(".friend-real-edit-menu,.multiplayer-roster")) return;
     if (!event.target.closest("#battleScramble,#friendRealTimerPanel,#scrambleNetPanel")) return;
     if (realTimerActivePointerId !== null || event.isPrimary === false) return;

@@ -81,6 +81,16 @@ const friendRealPlusTwoBtn = document.getElementById("friendRealPlusTwoBtn");
 const friendRealDnfBtn = document.getElementById("friendRealDnfBtn");
 const friendRealRemoveBtn = document.getElementById("friendRealRemoveBtn");
 const friendRealOperationText = document.getElementById("friendRealOperationText");
+const friendBattleSettingsBtn = document.getElementById("friendBattleSettingsBtn");
+const friendBattleSettingsModal = document.getElementById("friendBattleSettingsModal");
+const closeFriendBattleSettingsBtn = document.getElementById("closeFriendBattleSettingsBtn");
+const friendDarkModeToggle = document.getElementById("friendDarkModeToggle");
+const friendTimeEntrySection = document.getElementById("friendTimeEntrySection");
+const friendTimeEntryType = document.getElementById("friendTimeEntryType");
+const friendOpponentSettingsSection = document.getElementById("friendOpponentSettingsSection");
+const friendShowOpponentCube = document.getElementById("friendShowOpponentCube");
+const friendSettingsLeaveBtn = document.getElementById("friendSettingsLeaveBtn");
+const friendSettingsLogoutBtn = document.getElementById("friendSettingsLogoutBtn");
 const copyRoomUrlBtn = document.getElementById("copyRoomUrlBtn");
 const leaveBattleBtn = document.getElementById("leaveBattleBtn");
 const battleRoomMeta = document.getElementById("battleRoomMeta");
@@ -111,6 +121,8 @@ const ELO_K_FACTOR = 32;
 const RANKING_CACHE_TTL_MS = 5 * 60 * 1000;
 const RANKING_LIMIT = 50;
 const MATCHMAKING_LIMIT = 10;
+const FRIEND_TIME_ENTRY_TYPE_KEY = "friendRealTimeEntryType";
+const FRIEND_SHOW_OPPONENT_CUBE_KEY = "friendShowOpponentCube";
 
 let auth = null;
 let db = null;
@@ -1393,6 +1405,29 @@ function isTouchBattleDevice() {
   return window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 1;
 }
 
+function getFriendTimeEntryType() {
+  return localStorage.getItem(FRIEND_TIME_ENTRY_TYPE_KEY) === "manual" ? "manual" : "screen";
+}
+
+function shouldShowFriendOpponentCube() {
+  return localStorage.getItem(FRIEND_SHOW_OPPONENT_CUBE_KEY) !== "false";
+}
+
+function isManualRealFriendEntry() {
+  return isRealFriendRoom() && getFriendTimeEntryType() === "manual";
+}
+
+async function syncOwnFriendPreferences() {
+  if (!currentUser || !activeRoomId || activeRoom?.mode !== "friend" || isSpectatorMode) return;
+  const player = battlePlayersByUid.get(currentUser.uid);
+  const timeEntryType = getFriendTimeEntryType();
+  if (player?.timeEntryType === timeEntryType) return;
+  await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
+    timeEntryType,
+    updatedAt: serverTimestamp()
+  });
+}
+
 function getBattlePlayersForSelection() {
   const players = isMultiplayerFriendRoom()
     ? [...battlePlayersByUid.values()]
@@ -1477,7 +1512,8 @@ function renderMultiplayerRoster() {
     row.innerHTML = `<strong></strong><span></span><time></time>`;
     const place = activeRoom.status === "finished" && isActive && hasFinalBattleTime(player) ? `#${index + 1} ` : "";
     row.querySelector("strong").textContent = `${place}${player.name || "Player"}${player.uid === activeRoom.hostUid ? " (Host)" : ""}`;
-    row.querySelector("span").textContent = state.toUpperCase();
+    const entryLabel = player.timeEntryType === "manual" ? " | MANUAL" : "";
+    row.querySelector("span").textContent = `${state.toUpperCase()}${entryLabel}`;
     row.querySelector("time").textContent = timer;
     return row;
   }));
@@ -1523,6 +1559,9 @@ function watchFriendPlayers(roomId) {
       handleDisconnectedFriendHost();
       syncFriendOpponentMovesListener();
       const localPlayer = battlePlayersByUid.get(currentUser?.uid);
+      if (localPlayer && activeRoom?.mode === "friend" && !isSpectatorMode) {
+        syncOwnFriendPreferences().catch(console.error);
+      }
       if (localPlayer && activeRoom?.status === "waiting") {
         window.prepareBattleCube?.("", activeRound);
       }
@@ -1933,6 +1972,8 @@ function renderBattleUi() {
     ? "Ranked Battle"
     : `${activeRoom.cubeMode === "real" ? "Real Cube" : "Virtual Cube"} · Friend Battle`;
   copyRoomUrlBtn.hidden = activeRoom.mode === "ranked";
+  if (friendBattleSettingsBtn) friendBattleSettingsBtn.hidden = !friendRoom;
+  leaveBattleBtn.hidden = friendRoom;
   const realFriendScramblePreview = activeRoom.mode === "friend" &&
     activeRoom.cubeMode === "real" &&
     Boolean(activeRoom.scramble);
@@ -1987,7 +2028,8 @@ function renderBattleUi() {
   friendRealControls.hidden = true;
   if (friendRealTimerPanel) friendRealTimerPanel.hidden = !realFriendRoom || isSpectatorMode;
   if (friendRealOperationText) {
-    friendRealOperationText.hidden = !realFriendRoom || isSpectatorMode;
+    const manualEntry = isManualRealFriendEntry();
+    friendRealOperationText.hidden = !realFriendRoom || isSpectatorMode || manualEntry;
     const touch = isTouchBattleDevice();
     friendRealOperationText.textContent = you?.status === "solving"
       ? (touch ? "Touch again to stop." : "Press Space again to stop.")
@@ -1999,7 +2041,9 @@ function renderBattleUi() {
       : (hasFinalBattleTime(you) ? formatBattleTime(Number(you.finalTime)) : formatBattleTime(localBattleTimerSeconds));
   }
   if (friendRealEditBtn) {
-    friendRealEditBtn.hidden = !realFriendRoom || isSpectatorMode || ["inspecting", "solving"].includes(you?.status);
+    const manualEntry = isManualRealFriendEntry();
+    friendRealEditBtn.hidden = manualEntry || !realFriendRoom || isSpectatorMode || ["inspecting", "solving"].includes(you?.status);
+    if (friendRealEditMenu && realFriendRoom && manualEntry && !isSpectatorMode) friendRealEditMenu.hidden = false;
   }
 
   if (activeRoom.status === "finished") {
@@ -2845,6 +2889,7 @@ async function beginRealCubeInspection() {
     isSpectatorMode ||
     !(activeRoom.activePlayerUids || []).includes(currentUser.uid)
   ) return false;
+  if (isManualRealFriendEntry()) return false;
   const player = battlePlayersByUid.get(currentUser.uid);
   if (activeRoom.status === "finished") {
     if (!player?.ready) await readyBattleRoom();
@@ -2907,12 +2952,13 @@ async function updateRealFriendManualResult(action, enteredTime = null) {
     active: status !== "ready",
     finalTime: Number.isFinite(finalTime) ? Number(finalTime.toFixed(2)) : null,
     manual: action !== "remove",
+    timeEntryType: getFriendTimeEntryType(),
     penalty,
     endTime: status === "ready" ? null : serverTimestamp(),
     finishedAt: status === "ready" ? null : serverTimestamp(),
     updatedAt: serverTimestamp()
   });
-  friendRealEditMenu.hidden = true;
+  friendRealEditMenu.hidden = getFriendTimeEntryType() !== "manual";
   finalizeFriendMultiplayerIfDone().catch(console.error);
 }
 
@@ -3348,6 +3394,7 @@ async function persistFriendRoomExit({ roomAlreadyCancelled = false } = {}) {
 }
 
 function resetBattleUiAfterLeave() {
+  if (friendBattleSettingsModal) friendBattleSettingsModal.hidden = true;
   if (friendHostExitTimeout) {
     window.clearTimeout(friendHostExitTimeout);
     friendHostExitTimeout = null;
@@ -3445,6 +3492,10 @@ async function loginAsGuest() {
 function renderOpponentCube(opponent) {
   if (!opponentCubePanel || !opponentCubeStatus) return;
 
+  const hiddenByPreference = activeRoom?.mode === "friend" && activeRoom?.cubeMode === "virtual" && !shouldShowFriendOpponentCube();
+  opponentCubePanel.hidden = hiddenByPreference;
+  if (hiddenByPreference) return;
+
   const disconnected = isPlayerDisconnected(opponent);
   const you = getDisplayPlayer(activeRoomRole);
   const waitingForReady = !isSpectatorMode && !["inspecting", "solving", "finished", "dnf"].includes(you?.status);
@@ -3540,6 +3591,62 @@ function setupAuthUi() {
   joinRoomBtn.addEventListener("click", () => {
     joinBattleRoom(roomIdInput.value).catch(error => {
       setBattleStatus("Room could not be joined.");
+      console.error(error);
+    });
+  });
+
+  friendBattleSettingsBtn?.addEventListener("click", () => {
+    const player = battlePlayersByUid.get(currentUser?.uid);
+    friendDarkModeToggle.checked = document.body.classList.contains("dark");
+    friendTimeEntryType.value = getFriendTimeEntryType();
+    friendTimeEntryType.disabled = ["inspecting", "solving"].includes(player?.status);
+    friendTimeEntrySection.hidden = activeRoom?.cubeMode !== "real" || isSpectatorMode;
+    friendOpponentSettingsSection.hidden = activeRoom?.cubeMode !== "virtual";
+    friendShowOpponentCube.checked = shouldShowFriendOpponentCube();
+    friendBattleSettingsModal.hidden = false;
+  });
+
+  closeFriendBattleSettingsBtn?.addEventListener("click", () => {
+    friendBattleSettingsModal.hidden = true;
+  });
+  friendBattleSettingsModal?.addEventListener("click", event => {
+    if (event.target === friendBattleSettingsModal) friendBattleSettingsModal.hidden = true;
+  });
+
+  friendDarkModeToggle?.addEventListener("change", () => {
+    const isDark = document.body.classList.contains("dark");
+    if (friendDarkModeToggle.checked !== isDark) document.getElementById("themeToggleBtn")?.click();
+  });
+
+  friendTimeEntryType?.addEventListener("change", () => {
+    const player = battlePlayersByUid.get(currentUser?.uid);
+    if (["inspecting", "solving"].includes(player?.status)) {
+      friendTimeEntryType.value = getFriendTimeEntryType();
+      setBattleStatus("Time Entry Type cannot be changed during a solve.");
+      return;
+    }
+    const value = friendTimeEntryType.value === "manual" ? "manual" : "screen";
+    localStorage.setItem(FRIEND_TIME_ENTRY_TYPE_KEY, value);
+    if (friendRealEditMenu) friendRealEditMenu.hidden = value !== "manual";
+    syncOwnFriendPreferences().catch(console.error);
+    renderBattleUi();
+  });
+
+  friendShowOpponentCube?.addEventListener("change", () => {
+    localStorage.setItem(FRIEND_SHOW_OPPONENT_CUBE_KEY, friendShowOpponentCube.checked ? "true" : "false");
+    renderBattleUi();
+  });
+
+  friendSettingsLeaveBtn?.addEventListener("click", () => {
+    friendBattleSettingsModal.hidden = true;
+    leaveBattleMode().catch(console.error);
+  });
+
+  friendSettingsLogoutBtn?.addEventListener("click", async () => {
+    friendBattleSettingsModal.hidden = true;
+    await leaveBattleMode().catch(console.error);
+    await signOut(auth).catch(error => {
+      setStatus("Logout failed.");
       console.error(error);
     });
   });
@@ -3757,6 +3864,7 @@ window.isBattleMode = () => document.body.classList.contains("battle-mode");
 window.isRankedBattle = () => document.body.classList.contains("battle-mode") && activeRoom?.mode === "ranked";
 window.isRealCubeBattle = () => document.body.classList.contains("battle-mode") && activeRoom?.cubeMode === "real";
 window.isRealFriendBattle = () => document.body.classList.contains("battle-mode") && isRealFriendRoom();
+window.isManualRealFriendEntry = () => document.body.classList.contains("battle-mode") && isManualRealFriendEntry();
 window.beginRealCubeInspection = beginRealCubeInspection;
 window.abortRealCubeBattle = abortRealCubeBattle;
 window.handleBattleSpaceStart = handleBattleSpaceStart;

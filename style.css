@@ -1051,6 +1051,60 @@ body.battle-mode .opponent-cube-panel.opponent-unavailable {
 body.dark .friend-real-edit-menu { color: #f5f5f5; background: rgba(16, 33, 44, 0.96); border-color: #78c5ef; }
 body.friend-real-battle #hostStartBattleBtn, body.friend-real-battle #battleReadyBtn, body.friend-real-battle .friend-real-controls { display: none !important; }
 
+.battle-settings-button {
+  min-width: 104px;
+  font-weight: 700;
+}
+
+.friend-battle-settings-content {
+  width: min(92vw, 620px);
+  max-height: min(88vh, 820px);
+  overflow-y: auto;
+}
+
+.battle-settings-section {
+  padding: 16px 0;
+  border-bottom: 1px solid rgba(17, 17, 17, 0.22);
+}
+
+.battle-settings-section:last-child { border-bottom: 0; }
+.battle-settings-section h3 { margin: 0 0 12px; }
+.battle-settings-section select { width: 100%; min-height: 46px; margin-top: 8px; padding: 8px 10px; }
+.battle-settings-section button { width: 100%; margin: 0; }
+.danger-action { background: #8d2530; color: #fff; }
+
+body.dark .battle-settings-section { border-color: rgba(255, 255, 255, 0.24); }
+body.dark .battle-settings-section select { color: #f5f5f5; background: #162b36; border-color: #78c5ef; }
+
+@media (min-width: 901px) {
+  body.friend-real-battle .battle-heading {
+    align-items: flex-start;
+    padding: 14px 18px;
+    border-bottom: 3px solid #3977c9;
+  }
+
+  body.friend-real-battle .battle-mode-actions {
+    align-items: center;
+  }
+
+  body.friend-real-battle .battle-scramble {
+    margin-top: 8px;
+  }
+}
+
+@media (max-width: 700px) {
+  .friend-battle-settings-content {
+    width: 100%;
+    max-width: none;
+    min-height: 100vh;
+    max-height: 100vh;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .battle-settings-button { min-height: 48px; }
+}
+
 .multiplayer-roster-hint {
   margin: -4px 0 12px;
   text-align: center;
