@@ -527,6 +527,214 @@ body.dark .page-return a {
   }
 }
 
+/* Solo Real Cube layout: keep controls, preview, and history in normal flow. */
+body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .panel {
+  display: contents !important;
+}
+
+body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) #scrambleBtn,
+body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) #resetBtn {
+  display: none !important;
+}
+
+body.real-timer-clean.real-timer-clean .normal-real-history-column {
+  display: contents !important;
+}
+
+body.real-timer-clean.real-timer-clean .normal-real-history-column > * {
+  display: none !important;
+}
+
+body.real-timer-clean.real-timer-clean .normal-real-history-column > .buttons {
+  display: block !important;
+}
+
+@media (min-width: 1101px) {
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) main {
+    display: grid;
+    grid-template-columns: clamp(280px, 22vw, 380px) minmax(420px, 1fr) clamp(300px, 22vw, 380px);
+    grid-template-rows: auto 1fr;
+    gap: 18px 28px;
+    align-items: start;
+    min-height: calc(100vh - 170px);
+    padding: 8px 48px 24px;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .left-panel {
+    position: static;
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    width: 100%;
+    max-height: calc(100vh - 205px);
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .timer {
+    position: static;
+    grid-column: 2;
+    grid-row: 1;
+    align-self: end;
+    margin: 28px 0 0;
+    font-size: clamp(84px, 10vw, 156px);
+    line-height: 1;
+    transform: none;
+    pointer-events: auto;
+    touch-action: none;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .cube-area {
+    position: static;
+    grid-column: 2;
+    grid-row: 2;
+    display: flex;
+    width: 100%;
+    transform: none;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .real-cube-instruction,
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .real-cube-timer-button,
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-scramble-net {
+    position: static;
+    inset: auto;
+    transform: none;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .real-cube-instruction {
+    margin: 8px auto 0;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .real-cube-timer-button {
+    margin: 14px auto 0;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-scramble-net {
+    width: min(100%, 420px);
+    margin: 28px auto 0;
+    padding: 10px;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-scramble-net .cube-net {
+    --net-sticker-size: clamp(12px, 1.45vw, 22px);
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-history-column {
+    display: block;
+    grid-column: 3;
+    grid-row: 1 / span 2;
+    width: 100%;
+    max-height: calc(100vh - 205px);
+    overflow-y: auto;
+    padding: 18px 20px;
+    scrollbar-gutter: stable;
+  }
+
+  body.custom-background.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-history-column {
+    background: rgba(247, 255, 240, 0.84);
+    backdrop-filter: blur(2px);
+  }
+
+  body.dark.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-history-column {
+    background: rgba(28, 28, 28, 0.92);
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) #timeList {
+    min-height: 132px;
+    max-height: 220px;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) #scrambleHistoryList {
+    min-height: 108px;
+    max-height: 180px;
+  }
+}
+
+@media (max-width: 1100px) {
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) main {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px 24px;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .timer {
+    position: static;
+    order: 1;
+    width: 94vw;
+    margin: 6px auto;
+    font-size: clamp(64px, 20vw, 108px);
+    transform: none;
+    pointer-events: auto;
+    touch-action: none;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .cube-area {
+    position: static;
+    order: 2;
+    display: flex;
+    width: 94vw;
+    transform: none;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .real-cube-instruction,
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .real-cube-timer-button,
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-scramble-net {
+    position: static;
+    inset: auto;
+    transform: none;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-scramble-net {
+    width: min(94vw, 520px);
+    margin: 18px auto 0;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-history-column {
+    display: block;
+    order: 3;
+    width: 94vw;
+    max-height: none;
+    overflow: visible;
+    padding: 18px 20px;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .left-panel {
+    position: static;
+    order: 4;
+    width: 94vw;
+    max-height: none;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) #timeList,
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) #scrambleHistoryList {
+    min-height: 72px;
+    max-height: 240px;
+  }
+}
+
+body.real-timer-clean .normal-real-history-column {
+  display: contents !important;
+}
+
+body.real-timer-clean .normal-real-history-column > * {
+  display: none !important;
+}
+
+body.real-timer-clean .normal-real-history-column > .buttons {
+  display: block !important;
+}
+
+body.real-timer-clean .normal-real-history-column {
+  display: contents !important;
+}
+
+body.real-timer-clean .normal-real-history-column > * {
+  display: none !important;
+}
+
+body.real-timer-clean .normal-real-history-column > .buttons {
+  display: block !important;
+}
+
 .stats {
   display: grid;
   grid-template-columns: 1fr;
@@ -2461,5 +2669,163 @@ body.solving .timer {
   .info-content {
     margin: 12px auto 20px;
     padding: 18px;
+  }
+}
+
+/* Final solo Real Cube layout overrides. */
+body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .panel {
+  display: contents !important;
+}
+
+body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) #scrambleBtn,
+body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) #resetBtn {
+  display: none !important;
+}
+
+@media (min-width: 1101px) {
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) main {
+    display: grid;
+    grid-template-columns: clamp(280px, 22vw, 380px) minmax(420px, 1fr) clamp(300px, 22vw, 380px);
+    grid-template-rows: auto 1fr;
+    gap: 18px 28px;
+    align-items: start;
+    min-height: calc(100vh - 170px);
+    padding: 8px 48px 24px;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .left-panel {
+    position: static;
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    width: 100%;
+    max-height: calc(100vh - 205px);
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .timer {
+    position: static;
+    grid-column: 2;
+    grid-row: 1;
+    align-self: end;
+    margin: 28px 0 0;
+    font-size: clamp(84px, 10vw, 156px);
+    line-height: 1;
+    transform: none;
+    pointer-events: auto;
+    touch-action: none;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .cube-area {
+    position: static;
+    grid-column: 2;
+    grid-row: 2;
+    display: flex;
+    width: 100%;
+    transform: none;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .real-cube-instruction,
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .real-cube-timer-button,
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-scramble-net {
+    position: static;
+    inset: auto;
+    transform: none;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .real-cube-instruction { margin: 8px auto 0; }
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .real-cube-timer-button { margin: 14px auto 0; }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-scramble-net {
+    width: min(100%, 420px);
+    margin: 28px auto 0;
+    padding: 10px;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-scramble-net .cube-net {
+    --net-sticker-size: clamp(12px, 1.45vw, 22px);
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-history-column {
+    display: block;
+    grid-column: 3;
+    grid-row: 1 / span 2;
+    width: 100%;
+    max-height: calc(100vh - 205px);
+    overflow-y: auto;
+    padding: 18px 20px;
+    scrollbar-gutter: stable;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) #timeList {
+    min-height: 132px;
+    max-height: 220px;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) #scrambleHistoryList {
+    min-height: 108px;
+    max-height: 180px;
+  }
+}
+
+@media (max-width: 1100px) {
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) main {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px 24px;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .timer {
+    position: static;
+    order: 1;
+    width: 94vw;
+    margin: 6px auto;
+    font-size: clamp(64px, 20vw, 108px);
+    transform: none;
+    pointer-events: auto;
+    touch-action: none;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .cube-area {
+    position: static;
+    order: 2;
+    display: flex;
+    width: 94vw;
+    transform: none;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .real-cube-instruction,
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .real-cube-timer-button,
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-scramble-net {
+    position: static;
+    inset: auto;
+    transform: none;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-scramble-net {
+    width: min(94vw, 520px);
+    margin: 18px auto 0;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-history-column {
+    display: block;
+    order: 3;
+    width: 94vw;
+    max-height: none;
+    overflow: visible;
+    padding: 18px 20px;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .left-panel {
+    position: static;
+    order: 4;
+    width: 94vw;
+    max-height: none;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) #timeList,
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) #scrambleHistoryList {
+    min-height: 72px;
+    max-height: 240px;
   }
 }
