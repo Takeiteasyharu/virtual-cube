@@ -364,6 +364,21 @@ h2 {
   padding-right: 4px;
 }
 
+.history-empty {
+  margin: 8px 0 14px;
+  color: inherit;
+  opacity: 0.78;
+  font-style: italic;
+}
+
+body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) #timeList,
+body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) #scrambleHistoryList {
+  display: block !important;
+  min-height: 28px;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
 .history-row {
   display: flex;
   align-items: flex-start;

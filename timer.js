@@ -5,6 +5,9 @@ let timerInterval = null;
 
 let currentScramble = "";
 let expandedSolveIndex = null;
+const LEGACY_SOLVES_KEY = "cubeSolves";
+const VIRTUAL_SOLVES_KEY = "virtualCubeSolveHistory";
+const REAL_SOLVES_KEY = "realCubeSolveHistory";
 
 function startTimer() {
   if (timerRunning) return;
@@ -113,25 +116,58 @@ function getHistoryMode() {
   return localStorage.getItem("normalTimerMode") === "real" ? "real" : "virtual";
 }
 
-function getAllSolves() {
+function normalizeStoredSolves(value, fallbackMode = "virtual") {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map(solve => ({
+      ...solve,
+      time: Number(solve?.time),
+      mode: solve?.mode === "real" ? "real" : fallbackMode
+    }))
+    .filter(solve => Number.isFinite(solve.time));
+}
+
+function ensureModeHistoryMigration() {
+  const virtualMissing = localStorage.getItem(VIRTUAL_SOLVES_KEY) === null;
+  const realMissing = localStorage.getItem(REAL_SOLVES_KEY) === null;
+  if (!virtualMissing && !realMissing) return;
+  let legacy = [];
   try {
-    const solves = JSON.parse(localStorage.getItem("cubeSolves")) || [];
-    return solves
-      .filter(solve => Number.isFinite(solve.time))
-      .map(solve => ({ ...solve, mode: solve.mode === "real" ? "real" : "virtual" }));
+    legacy = normalizeStoredSolves(JSON.parse(localStorage.getItem(LEGACY_SOLVES_KEY)) || []);
+  } catch (error) {
+    legacy = [];
+  }
+  if (virtualMissing) localStorage.setItem(VIRTUAL_SOLVES_KEY, JSON.stringify(legacy.filter(solve => solve.mode !== "real")));
+  if (realMissing) localStorage.setItem(REAL_SOLVES_KEY, JSON.stringify(legacy.filter(solve => solve.mode === "real")));
+}
+
+function readModeSolves(mode) {
+  ensureModeHistoryMigration();
+  const key = mode === "real" ? REAL_SOLVES_KEY : VIRTUAL_SOLVES_KEY;
+  try {
+    return normalizeStoredSolves(JSON.parse(localStorage.getItem(key)) || [], mode);
   } catch (error) {
     return [];
   }
 }
 
+function syncLegacySolveHistory() {
+  const combined = [...readModeSolves("virtual"), ...readModeSolves("real")];
+  localStorage.setItem(LEGACY_SOLVES_KEY, JSON.stringify(combined));
+}
+
+function getAllSolves() {
+  return [...readModeSolves("virtual"), ...readModeSolves("real")];
+}
+
 function getSolves(mode = getHistoryMode()) {
-  return getAllSolves().filter(solve => solve.mode === mode);
+  return readModeSolves(mode);
 }
 
 function saveSolve(time, scramble, solveStats = {}) {
   if (window.isBattleMode?.()) return;
-  const solves = getAllSolves();
-
+  const mode = solveStats.mode === "real" ? "real" : "virtual";
+  const solves = readModeSolves(mode);
   solves.unshift({
     time,
     tps: Number.isFinite(solveStats.tps) ? solveStats.tps : null,
@@ -140,24 +176,19 @@ function saveSolve(time, scramble, solveStats = {}) {
       ? solveStats.moves.map(move => typeof move === "string" ? move : move?.move).filter(Boolean)
       : [],
     scramble,
-    mode: solveStats.mode === "real" ? "real" : "virtual",
+    mode,
     date: new Date().toLocaleString()
   });
 
-  const virtualSolves = solves.filter(solve => solve.mode !== "real").slice(0, 100);
-  const realSolves = solves.filter(solve => solve.mode === "real").slice(0, 100);
-  localStorage.setItem("cubeSolves", JSON.stringify([...virtualSolves, ...realSolves].sort((a, b) => {
-    const aDate = Date.parse(a.date) || 0;
-    const bDate = Date.parse(b.date) || 0;
-    return bDate - aDate;
-  })));
+  const key = mode === "real" ? REAL_SOLVES_KEY : VIRTUAL_SOLVES_KEY;
+  localStorage.setItem(key, JSON.stringify(solves.slice(0, 100)));
+  syncLegacySolveHistory();
 }
 
 function clearTimes() {
   const currentMode = getHistoryMode();
-  const remaining = getAllSolves().filter(solve => solve.mode !== currentMode);
-  if (remaining.length) localStorage.setItem("cubeSolves", JSON.stringify(remaining));
-  else localStorage.removeItem("cubeSolves");
+  localStorage.setItem(currentMode === "real" ? REAL_SOLVES_KEY : VIRTUAL_SOLVES_KEY, "[]");
+  syncLegacySolveHistory();
   expandedSolveIndex = null;
   renderStats();
 }
@@ -184,6 +215,14 @@ function renderTimes() {
 
   list.innerHTML = "";
 
+  if (solves.length === 0) {
+    const empty = document.createElement("li");
+    empty.className = "history-empty";
+    empty.textContent = `No ${getHistoryMode() === "real" ? "Real Cube" : "Virtual Cube"} solves yet.`;
+    list.appendChild(empty);
+    return;
+  }
+
   solves.forEach((solve, index) => {
     const tpsText = Number.isFinite(solve.tps) ? ` TPS: ${solve.tps.toFixed(2)}` : "";
     const li = createHistoryItem(solve, index, `${index + 1}. ${solve.time.toFixed(2)}${tpsText}`);
@@ -196,6 +235,14 @@ function renderScrambleHistory() {
   const solves = getSolves();
 
   list.innerHTML = "";
+
+  if (solves.length === 0) {
+    const empty = document.createElement("li");
+    empty.className = "history-empty";
+    empty.textContent = "No scramble history yet.";
+    list.appendChild(empty);
+    return;
+  }
 
   solves.forEach((solve, index) => {
     const li = createHistoryItem(solve, index, `${index + 1}. ${solve.scramble || "-"}`);
