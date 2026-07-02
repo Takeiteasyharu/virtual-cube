@@ -1307,7 +1307,7 @@ body.dark .battle-settings-section select { color: #f5f5f5; background: #162b36;
 
 body.friend-real-battle .battle-screen {
   display: grid;
-  grid-template-columns: minmax(220px, 290px) minmax(420px, 1fr) minmax(260px, 360px);
+  grid-template-columns: minmax(220px, 280px) minmax(420px, 1fr) minmax(220px, 280px);
   grid-template-areas:
     "heading heading heading"
     "scramble scramble scramble"
@@ -1337,9 +1337,10 @@ body.friend-real-battle .friend-real-history-panel {
   max-height: 590px;
   padding: 16px;
   overflow-y: auto;
-  color: #f5f5f5;
-  background: rgba(8, 14, 18, 0.92);
-  border: 1px solid rgba(120, 197, 239, 0.45);
+  color: inherit;
+  background: transparent;
+  border: 1px solid rgba(40, 106, 150, 0.42);
+  justify-self: start;
 }
 
 body.friend-real-battle .friend-real-room-stats {
@@ -1360,6 +1361,22 @@ body.friend-real-battle .friend-real-history-panel h3 { margin: 0 0 12px; text-a
 body.friend-real-battle .friend-real-history-panel ol { margin: 0; padding-left: 28px; }
 body.friend-real-battle .friend-real-history-panel li { margin: 0 0 10px; line-height: 1.35; overflow-wrap: anywhere; }
 body.friend-real-battle .friend-real-timer-panel { width: 100%; margin: 18px 0 0; align-self: center; }
+body.friend-real-battle .friend-real-timer-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  width: 100%;
+  align-items: center;
+  gap: 0;
+}
+body.friend-real-battle .friend-real-timer {
+  grid-column: 2;
+  justify-self: center;
+}
+body.friend-real-battle .friend-real-edit-button {
+  grid-column: 3;
+  justify-self: start;
+  margin-left: 14px;
+}
 body.friend-real-battle .friend-real-timer { font-size: clamp(82px, 11vw, 170px); }
 body.friend-real-battle .multiplayer-roster { width: 100%; margin: 0; border-color: #62c7f5; }
 body.friend-real-battle .multiplayer-roster-list { grid-template-columns: 1fr; max-height: 270px; }
@@ -1367,9 +1384,9 @@ body.friend-real-battle .multiplayer-roster-row { min-height: 66px; font-size: c
 body.friend-real-battle .scramble-net-panel {
   width: min(100%, 300px);
   max-width: 300px;
-  margin: 18px 0 0 auto;
+  margin: 0 0 24px auto;
   padding: 10px;
-  align-self: end;
+  align-self: center;
   justify-self: end;
   overflow: hidden;
 }
@@ -1389,6 +1406,19 @@ body.friend-real-battle .battle-scramble { font-size: clamp(24px, 3vw, 44px); li
   body.friend-real-battle .battle-heading { order: 1; width: 100%; }
   body.friend-real-battle .battle-scramble { order: 2; width: 100%; }
   body.friend-real-battle .friend-real-timer-panel { order: 3; margin-top: 4px; }
+  body.friend-real-battle .friend-real-timer-line {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+  body.friend-real-battle .friend-real-timer {
+    grid-column: 1;
+    justify-self: end;
+  }
+  body.friend-real-battle .friend-real-edit-button {
+    grid-column: 2;
+    justify-self: start;
+    margin-left: 0;
+  }
   body.friend-real-battle .friend-real-operation { order: 4; }
   body.friend-real-battle .scramble-net-panel {
     order: 5;
