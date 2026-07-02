@@ -1807,7 +1807,7 @@ function renderBattleNotice() {
     }
     if (activeRoom.status === "ready" && activeRoom.cubeMode === "real") {
       battleNotice.textContent = (activeRoom.activePlayerUids || []).includes(currentUser?.uid)
-        ? (isTouchBattleDevice() ? "Touch and hold. Release to start." : "Hold Space. Release to start.")
+        ? (isTouchBattleDevice() ? "Touch & hold for 0.3s. Release to start." : "Hold Space for 0.3s. Release to start.")
         : "You are watching this round.";
       return;
     }
@@ -2033,7 +2033,7 @@ function renderBattleUi() {
     const touch = isTouchBattleDevice();
     friendRealOperationText.textContent = you?.status === "solving"
       ? (touch ? "Touch again to stop." : "Press Space again to stop.")
-      : (touch ? "Touch & hold. Release to start. Touch again to stop." : "Hold Space. Release to start. Press Space again to stop.");
+      : (touch ? "Touch & hold for 0.3s. Release to start. Touch again to stop." : "Hold Space for 0.3s. Release to start. Press Space again to stop.");
   }
   if (friendRealTimerDisplay && realFriendRoom) {
     friendRealTimerDisplay.textContent = you?.status === "dnf"
@@ -2057,8 +2057,8 @@ function renderBattleUi() {
   }
   if (isRealFriendRoom()) {
     battleNotice.textContent = isTouchBattleDevice()
-      ? "Touch and hold the timer area. Release to start."
-      : "Hold Space. Release to start.";
+      ? "Touch & hold for 0.3s. Release to start."
+      : "Hold Space for 0.3s. Release to start.";
     return;
   }
 
@@ -2981,6 +2981,22 @@ async function abortRealCubeBattle() {
   finalizeFriendMultiplayerIfDone().catch(console.error);
 }
 
+async function cancelRealCubePreparation() {
+  if (!currentUser || !activeRoomId || activeRoom?.cubeMode !== "real") return;
+  const player = battlePlayersByUid.get(currentUser.uid);
+  if (player?.status !== "inspecting") return;
+  await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
+    status: "ready",
+    ready: false,
+    startTime: null,
+    startTimeMs: 0,
+    inspectionStartTime: null,
+    inspectionStartTimeMs: 0,
+    updatedAt: serverTimestamp()
+  }).catch(console.error);
+  window.cancelCurrentSolve?.();
+}
+
 async function finalizeFriendMultiplayerIfDone() {
   if (
     friendFinalizing ||
@@ -3867,4 +3883,5 @@ window.isRealFriendBattle = () => document.body.classList.contains("battle-mode"
 window.isManualRealFriendEntry = () => document.body.classList.contains("battle-mode") && isManualRealFriendEntry();
 window.beginRealCubeInspection = beginRealCubeInspection;
 window.abortRealCubeBattle = abortRealCubeBattle;
+window.cancelRealCubePreparation = cancelRealCubePreparation;
 window.handleBattleSpaceStart = handleBattleSpaceStart;

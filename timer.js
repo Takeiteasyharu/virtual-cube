@@ -109,17 +109,28 @@ function setCurrentScramble(scrambleText) {
   currentScramble = scrambleText;
 }
 
-function getSolves() {
+function getHistoryMode() {
+  return localStorage.getItem("normalTimerMode") === "real" ? "real" : "virtual";
+}
+
+function getAllSolves() {
   try {
     const solves = JSON.parse(localStorage.getItem("cubeSolves")) || [];
-    return solves.filter(solve => Number.isFinite(solve.time));
+    return solves
+      .filter(solve => Number.isFinite(solve.time))
+      .map(solve => ({ ...solve, mode: solve.mode === "real" ? "real" : "virtual" }));
   } catch (error) {
     return [];
   }
 }
 
+function getSolves(mode = getHistoryMode()) {
+  return getAllSolves().filter(solve => solve.mode === mode);
+}
+
 function saveSolve(time, scramble, solveStats = {}) {
-  const solves = getSolves();
+  if (window.isBattleMode?.()) return;
+  const solves = getAllSolves();
 
   solves.unshift({
     time,
@@ -133,11 +144,20 @@ function saveSolve(time, scramble, solveStats = {}) {
     date: new Date().toLocaleString()
   });
 
-  localStorage.setItem("cubeSolves", JSON.stringify(solves.slice(0, 100)));
+  const virtualSolves = solves.filter(solve => solve.mode !== "real").slice(0, 100);
+  const realSolves = solves.filter(solve => solve.mode === "real").slice(0, 100);
+  localStorage.setItem("cubeSolves", JSON.stringify([...virtualSolves, ...realSolves].sort((a, b) => {
+    const aDate = Date.parse(a.date) || 0;
+    const bDate = Date.parse(b.date) || 0;
+    return bDate - aDate;
+  })));
 }
 
 function clearTimes() {
-  localStorage.removeItem("cubeSolves");
+  const currentMode = getHistoryMode();
+  const remaining = getAllSolves().filter(solve => solve.mode !== currentMode);
+  if (remaining.length) localStorage.setItem("cubeSolves", JSON.stringify(remaining));
+  else localStorage.removeItem("cubeSolves");
   expandedSolveIndex = null;
   renderStats();
 }
@@ -147,6 +167,15 @@ function renderStats() {
   renderScrambleHistory();
   renderPB();
   renderAO();
+  renderModeSpecificSolveSummary();
+}
+
+function renderModeSpecificSolveSummary() {
+  const latest = getSolves()[0];
+  updateTpsDisplay(latest?.tps ?? null);
+  updateMovesDisplay(Number.isFinite(latest?.moveCount) ? latest.moveCount : null);
+  const lastMove = document.getElementById("lastMove");
+  if (lastMove) lastMove.textContent = Array.isArray(latest?.moves) && latest.moves.length ? latest.moves.at(-1) : "-";
 }
 
 function renderTimes() {
@@ -222,7 +251,7 @@ function createDetailLine(label, value) {
 }
 
 function renderPB() {
-  const solves = getSolves().filter(solve => solve.mode !== "real");
+  const solves = getSolves();
   const pbDisplay = document.getElementById("pbDisplay");
 
   if (solves.length === 0) {
@@ -245,7 +274,7 @@ function calculateAverage(count) {
 }
 
 function calculateAverageValue(count) {
-  const solves = getSolves().filter(solve => solve.mode !== "real");
+  const solves = getSolves();
 
   if (solves.length < count) return null;
 
@@ -270,7 +299,7 @@ function getCurrentAo5() {
 }
 
 function getCurrentOnlineAo5() {
-  const virtualSolves = getSolves().filter(solve => solve.mode !== "real");
+  const virtualSolves = getSolves("virtual");
   if (virtualSolves.length < 5) return null;
   const sorted = virtualSolves.slice(0, 5).map(solve => solve.time).sort((a, b) => a - b);
   sorted.shift();
