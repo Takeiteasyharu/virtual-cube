@@ -1,0 +1,12 @@
+node_modules/
+dist/
+build/
+coverage/
+_site/
+.cache/
+.parcel-cache/
+.firebase/
+*.log
+*.tmp
+*.zip
+

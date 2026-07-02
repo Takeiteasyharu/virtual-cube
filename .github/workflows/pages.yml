@@ -1,0 +1,76 @@
+name: Deploy static site to Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Prepare static site
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p _site
+          cp \
+            about.html \
+            cube-net.js \
+            cube.js \
+            firebase-config.js \
+            index.html \
+            manifest.json \
+            online.js \
+            opponent-cube.js \
+            privacy.html \
+            robots.txt \
+            rules.html \
+            scramble.js \
+            script.js \
+            service-worker.js \
+            sitemap.xml \
+            style.css \
+            timer.js \
+            _site/
+          cp -R images _site/images
+          touch _site/.nojekyll
+          echo "Files: $(find _site -type f | wc -l)"
+          du -sh _site
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+        with:
+          timeout: 900000
+          error_count: 20
+
