@@ -1540,9 +1540,27 @@ body.inspection-hold-green #battleInspectionCount {
 }
 
 body.real-timer-clean .battle-inspection-overlay {
+  position: fixed !important;
+  z-index: 10001 !important;
+  left: 50% !important;
+  opacity: 1 !important;
+  filter: none !important;
+  isolation: isolate;
   border: 2px solid rgba(255, 255, 255, 0.58);
   background: rgba(5, 16, 24, 0.94) !important;
   box-shadow: 0 10px 32px rgba(0, 0, 0, 0.42);
+}
+
+body.real-timer-clean #battleInspectionLabel,
+body.real-timer-clean #battleInspectionCount {
+  position: relative;
+  z-index: 10002;
+  opacity: 1 !important;
+  text-shadow: 0 2px 8px #000, 0 0 2px #000;
+}
+
+body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .cube-area {
+  display: none;
 }
 
 @media (min-width: 901px) {
@@ -1556,9 +1574,11 @@ body.real-timer-clean .battle-inspection-overlay {
   }
 
   body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .panel {
+    display: flex;
+    flex-direction: column;
     top: 8px;
     bottom: auto;
-    max-height: min(52vh, 500px);
+    max-height: calc(100vh - 195px);
   }
 
   body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .panel .timer {
@@ -1571,12 +1591,8 @@ body.real-timer-clean .battle-inspection-overlay {
     font-size: clamp(84px, 11vw, 164px);
     line-height: 1;
     transform: translate(-50%, -50%);
-    pointer-events: none;
-  }
-
-  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .cube-area {
-    position: static;
-    transform: none;
+    pointer-events: auto;
+    touch-action: none;
   }
 
   body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .real-cube-instruction,
@@ -1591,13 +1607,11 @@ body.real-timer-clean .battle-inspection-overlay {
   body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .real-cube-timer-button { top: 61%; }
 
   body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-scramble-net {
-    position: fixed;
-    z-index: 3;
-    right: 48px;
-    bottom: 20px;
-    width: clamp(260px, 20vw, 350px);
-    margin: 0;
+    position: static;
+    width: 100%;
+    margin: 14px 0 0;
     padding: 10px;
+    order: 20;
   }
 
   body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-scramble-net .cube-net {
@@ -1612,14 +1626,34 @@ body.real-timer-clean .battle-inspection-overlay {
 }
 
 @media (max-width: 900px) {
-  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .timer {
-    font-size: clamp(64px, 20vw, 104px);
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .panel {
+    display: flex;
+    flex-direction: column;
   }
 
-  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-scramble-net {
-    width: min(94vw, 520px);
-    order: 3;
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .timer {
+    order: 1;
+    font-size: clamp(64px, 20vw, 104px);
+    touch-action: none;
   }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .real-cube-instruction { order: 2; }
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .real-cube-timer-button { order: 3; }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-scramble-net {
+    position: static;
+    width: min(94vw, 520px);
+    margin: 12px auto;
+    order: 4;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .tps-display { order: 5; }
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .moves-display { order: 6; }
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .stats { order: 7; }
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .panel > .buttons { order: 8; }
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .last-move { order: 9; }
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .panel > h2,
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .panel > ul { order: 10; }
 
   body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-scramble-net .cube-net {
     --net-sticker-size: clamp(12px, 3vw, 24px);

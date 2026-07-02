@@ -464,8 +464,8 @@ function isTouchDevice() {
 
 function getRealTimerReadyInstruction() {
   return isTouchDevice()
-    ? "Touch & hold for 0.3s. Release to start."
-    : "Hold Space for 0.3s. Release to start.";
+    ? "Touch & hold. Release to start."
+    : "Hold Space. Release to start.";
 }
 
 function shouldUseCleanRealTimer() {
@@ -610,7 +610,7 @@ function setupMobileRealTimerControls() {
   timerArea.addEventListener("pointerdown", event => {
     if (!isTouchDevice() || !isRealCubeTimerMode() || isControl(event.target)) return;
     if (!document.body.classList.contains("real-timer-clean")) {
-      if (isNormalRealCubeMode()) {
+      if (isNormalRealCubeMode() && event.target.closest("#timerDisplay")) {
         event.preventDefault();
         realTimerActivePointerId = event.pointerId;
         timerArea.setPointerCapture?.(event.pointerId);
@@ -644,7 +644,7 @@ function setupMobileRealTimerControls() {
     if (!isTouchDevice() || !window.isRealFriendBattle?.() || document.body.classList.contains("real-timer-clean")) return;
     if (window.isManualRealFriendEntry?.()) return;
     if (isControl(event.target) || event.target.closest(".friend-real-edit-menu,.multiplayer-roster")) return;
-    if (!event.target.closest("#battleScramble,#friendRealTimerPanel,#scrambleNetPanel")) return;
+    if (!event.target.closest("#friendRealTimerDisplay")) return;
     if (realTimerActivePointerId !== null || event.isPrimary === false) return;
     event.preventDefault();
     realTimerActivePointerId = event.pointerId;

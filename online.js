@@ -1807,7 +1807,7 @@ function renderBattleNotice() {
     }
     if (activeRoom.status === "ready" && activeRoom.cubeMode === "real") {
       battleNotice.textContent = (activeRoom.activePlayerUids || []).includes(currentUser?.uid)
-        ? (isTouchBattleDevice() ? "Touch & hold for 0.3s. Release to start." : "Hold Space for 0.3s. Release to start.")
+        ? (isTouchBattleDevice() ? "Touch & hold. Release to start." : "Hold Space. Release to start.")
         : "You are watching this round.";
       return;
     }
@@ -2033,7 +2033,7 @@ function renderBattleUi() {
     const touch = isTouchBattleDevice();
     friendRealOperationText.textContent = you?.status === "solving"
       ? (touch ? "Touch again to stop." : "Press Space again to stop.")
-      : (touch ? "Touch & hold for 0.3s. Release to start. Touch again to stop." : "Hold Space for 0.3s. Release to start. Press Space again to stop.");
+      : (touch ? "Touch & hold. Release to start. Touch again to stop." : "Hold Space. Release to start. Press Space again to stop.");
   }
   if (friendRealTimerDisplay && realFriendRoom) {
     friendRealTimerDisplay.textContent = you?.status === "dnf"
@@ -2057,8 +2057,8 @@ function renderBattleUi() {
   }
   if (isRealFriendRoom()) {
     battleNotice.textContent = isTouchBattleDevice()
-      ? "Touch & hold for 0.3s. Release to start."
-      : "Hold Space for 0.3s. Release to start.";
+      ? "Touch & hold. Release to start."
+      : "Hold Space. Release to start.";
     return;
   }
 
