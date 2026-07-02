@@ -2,6 +2,23 @@
   box-sizing: border-box;
 }
 
+@media (max-width: 700px) {
+  body.friend-real-battle .battle-screen { padding-inline: 10px; }
+  body.friend-real-battle .friend-real-timer-line { gap: 8px; }
+  body.friend-real-battle .friend-real-timer { font-size: clamp(52px, 19vw, 88px); }
+  body.friend-real-battle .friend-real-edit-button { min-width: 58px; padding-inline: 10px; }
+  body.friend-real-battle .multiplayer-roster { margin-block: 8px; padding: 10px; }
+  body.friend-real-battle .multiplayer-roster:not(.expanded) .multiplayer-roster-list { display: none; }
+  body.friend-real-battle .multiplayer-roster-toggle::after { content: " +"; }
+  body.friend-real-battle .multiplayer-roster.expanded .multiplayer-roster-toggle::after { content: " -"; }
+  body.friend-real-battle .friend-real-edit-actions { flex-wrap: wrap; }
+  body.friend-real-battle .friend-real-edit-actions button { flex: 1 1 42%; }
+}
+
+body.touch-device.friend-real-battle .multiplayer-roster:not(.expanded) .multiplayer-roster-list { display: none; }
+body.touch-device.friend-real-battle .multiplayer-roster-toggle::after { content: " +"; }
+body.touch-device.friend-real-battle .multiplayer-roster.expanded .multiplayer-roster-toggle::after { content: " -"; }
+
 @media (min-width: 901px) {
   body.real-timer-clean {
     overflow: hidden;
@@ -1007,6 +1024,32 @@ body.battle-mode .opponent-cube-panel.opponent-unavailable {
   text-align: center;
   font-size: 18px;
 }
+
+.multiplayer-roster-toggle {
+  display: block;
+  width: 100%;
+  margin: 0 0 10px;
+  padding: 6px 10px;
+  color: inherit;
+  background: transparent;
+  text-align: center;
+  font-size: clamp(22px, 3vw, 30px);
+  font-weight: 700;
+}
+
+.friend-real-timer-panel { width: min(100%, 900px); margin: 4px auto 12px; text-align: center; }
+.friend-real-timer-panel[hidden], .friend-real-operation[hidden] { display: none; }
+.friend-real-timer-line { display: flex; justify-content: center; align-items: center; gap: 14px; }
+.friend-real-timer { min-width: 5ch; font-family: "Courier New", monospace; font-size: clamp(58px, 10vw, 132px); font-weight: 700; line-height: 1; }
+.friend-real-edit-button { width: auto; min-width: 72px; margin: 0; }
+.friend-real-edit-menu { width: min(100%, 520px); margin: 12px auto 0; padding: 14px; border: 2px solid #286a96; border-radius: 6px; background: rgba(255, 255, 255, 0.94); }
+.friend-real-manual-entry, .friend-real-edit-actions { display: flex; gap: 10px; margin-top: 10px; }
+.friend-real-manual-entry input { flex: 1; min-width: 0; }
+.friend-real-manual-entry button, .friend-real-edit-actions button { margin: 0; }
+.friend-real-edit-actions button { flex: 1; }
+.friend-real-operation { margin: 8px auto 16px; text-align: center; font-size: clamp(17px, 2.2vw, 24px); font-weight: 700; }
+body.dark .friend-real-edit-menu { color: #f5f5f5; background: rgba(16, 33, 44, 0.96); border-color: #78c5ef; }
+body.friend-real-battle #hostStartBattleBtn, body.friend-real-battle #battleReadyBtn, body.friend-real-battle .friend-real-controls { display: none !important; }
 
 .multiplayer-roster-hint {
   margin: -4px 0 12px;

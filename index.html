@@ -66,6 +66,24 @@
         </div>
       </div>
       <div class="battle-scramble" id="battleScramble"></div>
+      <section class="friend-real-timer-panel" id="friendRealTimerPanel" hidden aria-label="My real cube timer">
+        <div class="friend-real-timer-line">
+          <div class="friend-real-timer" id="friendRealTimerDisplay">0.00</div>
+          <button id="friendRealEditBtn" class="friend-real-edit-button" type="button">Edit</button>
+        </div>
+        <div class="friend-real-edit-menu" id="friendRealEditMenu" hidden>
+          <label for="friendRealManualTime">Enter time</label>
+          <div class="friend-real-manual-entry">
+            <input id="friendRealManualTime" type="number" min="0.01" max="3599.99" step="0.01" inputmode="decimal" placeholder="12.34" />
+            <button id="friendRealSaveTimeBtn" type="button">Save</button>
+          </div>
+          <div class="friend-real-edit-actions">
+            <button id="friendRealPlusTwoBtn" type="button">+2</button>
+            <button id="friendRealDnfBtn" type="button">DNF</button>
+            <button id="friendRealRemoveBtn" type="button">Remove</button>
+          </div>
+        </div>
+      </section>
       <section class="scramble-net-panel" id="scrambleNetPanel" hidden aria-label="Scrambled cube net">
         <h3>Scramble Preview</h3>
         <div class="cube-net" id="scrambleCubeNet"></div>
@@ -104,10 +122,11 @@
         </article>
       </div>
       <section class="multiplayer-roster" id="multiplayerRoster" hidden aria-label="Room players">
-        <h2>Room Players</h2>
+        <button class="multiplayer-roster-toggle" id="multiplayerRosterToggle" type="button" aria-expanded="false">Room Players</button>
         <p class="multiplayer-roster-hint" id="multiplayerRosterHint">Click a player to watch their cube.</p>
         <div class="multiplayer-roster-list" id="multiplayerRosterList"></div>
       </section>
+      <p class="friend-real-operation" id="friendRealOperationText" hidden>Hold Space. Release to start.</p>
       <div class="friend-real-controls" id="friendRealControls" hidden>
         <button id="friendRealStartBtn">Start Solve</button>
         <button id="friendRealAbortBtn" class="secondary-action" hidden>Abort</button>

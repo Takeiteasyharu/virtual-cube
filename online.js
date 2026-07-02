@@ -70,6 +70,17 @@ const friendRealAbortBtn = document.getElementById("friendRealAbortBtn");
 const multiplayerRoster = document.getElementById("multiplayerRoster");
 const multiplayerRosterHint = document.getElementById("multiplayerRosterHint");
 const multiplayerRosterList = document.getElementById("multiplayerRosterList");
+const multiplayerRosterToggle = document.getElementById("multiplayerRosterToggle");
+const friendRealTimerPanel = document.getElementById("friendRealTimerPanel");
+const friendRealTimerDisplay = document.getElementById("friendRealTimerDisplay");
+const friendRealEditBtn = document.getElementById("friendRealEditBtn");
+const friendRealEditMenu = document.getElementById("friendRealEditMenu");
+const friendRealManualTime = document.getElementById("friendRealManualTime");
+const friendRealSaveTimeBtn = document.getElementById("friendRealSaveTimeBtn");
+const friendRealPlusTwoBtn = document.getElementById("friendRealPlusTwoBtn");
+const friendRealDnfBtn = document.getElementById("friendRealDnfBtn");
+const friendRealRemoveBtn = document.getElementById("friendRealRemoveBtn");
+const friendRealOperationText = document.getElementById("friendRealOperationText");
 const copyRoomUrlBtn = document.getElementById("copyRoomUrlBtn");
 const leaveBattleBtn = document.getElementById("leaveBattleBtn");
 const battleRoomMeta = document.getElementById("battleRoomMeta");
@@ -113,6 +124,7 @@ let activePlayerUnsubscribes = [];
 let activeMoveUnsubscribes = [];
 let activeRoom = null;
 let activeRound = 1;
+let realFriendInitialRoundPreparing = false;
 let selectedBattleMode = "friend";
 let battlePlayersByRole = { host: null, guest: null };
 let battlePlayersByUid = new Map();
@@ -1144,7 +1156,7 @@ function setBattleMode(enabled) {
   document.body.classList.toggle("battle-mode", enabled);
   if (enabled) document.body.classList.remove("normal-real-cube");
   if (!enabled) {
-    document.body.classList.remove("real-cube-battle", "spectator-mode");
+    document.body.classList.remove("real-cube-battle", "friend-real-battle", "spectator-mode");
   }
   if (enabled) {
     const battleModal = document.getElementById("battleModal");
@@ -1373,6 +1385,14 @@ function isMultiplayerFriendRoom() {
   return activeRoom?.mode === "friend" && Number(activeRoom.maxPlayers || 2) > 2;
 }
 
+function isRealFriendRoom() {
+  return isMultiplayerFriendRoom() && activeRoom?.cubeMode === "real";
+}
+
+function isTouchBattleDevice() {
+  return window.matchMedia("(pointer: coarse)").matches || navigator.maxTouchPoints > 1;
+}
+
 function getBattlePlayersForSelection() {
   const players = isMultiplayerFriendRoom()
     ? [...battlePlayersByUid.values()]
@@ -1510,11 +1530,63 @@ function watchFriendPlayers(roomId) {
         startInspectionForReadyPlayer().catch(console.error);
       }
       ensureRealFriendScrambleForReadyPlayers().catch(console.error);
+      autoPrepareInitialRealFriendRound().catch(console.error);
       autoStartFriendRematchWhenReady().catch(console.error);
       finalizeFriendMultiplayerIfDone().catch(console.error);
+      refreshFinishedRealFriendWinner().catch(console.error);
       renderBattleUi();
     }
   ));
+}
+
+async function refreshFinishedRealFriendWinner() {
+  if (!isRealFriendRoom() || activeRoom.status !== "finished" || currentUser?.uid !== activeRoom.hostUid || friendFinalizing) return;
+  const activePlayers = (activeRoom.activePlayerUids || [])
+    .map(uid => battlePlayersByUid.get(uid))
+    .filter(Boolean);
+  const winner = activePlayers.filter(isPlayerFinished)
+    .sort((a, b) => Number(a.finalTime) - Number(b.finalTime))[0] || null;
+  if ((activeRoom.winnerUid || "") === (winner?.uid || "")) return;
+  friendFinalizing = true;
+  try {
+    await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId), {
+      winnerUid: winner?.uid || "",
+      winnerName: winner?.name || "No winner",
+      updatedAt: serverTimestamp()
+    });
+  } finally {
+    friendFinalizing = false;
+  }
+}
+
+async function autoPrepareInitialRealFriendRound() {
+  if (
+    realFriendInitialRoundPreparing ||
+    !currentUser ||
+    !isRealFriendRoom() ||
+    currentUser.uid !== activeRoom.hostUid ||
+    activeRoom.status !== "waiting"
+  ) return;
+  const players = [...battlePlayersByUid.values()]
+    .filter(isFriendRoomParticipant)
+    .slice(0, Number(activeRoom.maxPlayers || 20));
+  if (players.length < 2) return;
+  const scramble = activeRoom.scramble || getBattleScramble();
+  if (!scramble) return;
+  realFriendInitialRoundPreparing = true;
+  try {
+    await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId), {
+      status: "ready",
+      scramble,
+      activePlayerUids: players.map(player => player.uid),
+      winnerUid: "",
+      winnerName: "",
+      finishedAt: null,
+      updatedAt: serverTimestamp()
+    });
+  } finally {
+    realFriendInitialRoundPreparing = false;
+  }
 }
 
 async function reconcileFriendRoomMembership() {
@@ -1679,6 +1751,10 @@ function renderBattleNotice() {
       return;
     }
     if (activeRoom.status === "waiting") {
+      if (isRealFriendRoom()) {
+        battleNotice.textContent = "Waiting for another player.";
+        return;
+      }
       battleNotice.textContent = currentUser?.uid === activeRoom.hostUid
         ? "Players can toggle Ready. Start whenever you are ready."
         : "Toggle Ready, then wait for the host to start.";
@@ -1692,7 +1768,7 @@ function renderBattleNotice() {
     }
     if (activeRoom.status === "ready" && activeRoom.cubeMode === "real") {
       battleNotice.textContent = (activeRoom.activePlayerUids || []).includes(currentUser?.uid)
-        ? "Press Space to start inspection."
+        ? (isTouchBattleDevice() ? "Touch and hold. Release to start." : "Hold Space. Release to start.")
         : "You are watching this round.";
       return;
     }
@@ -1781,6 +1857,10 @@ function renderBattleResult() {
 }
 
 function renderBattleReadyButton(you, opponent) {
+  if (isRealFriendRoom()) {
+    battleReadyBtn.hidden = true;
+    return;
+  }
   if (isMultiplayerFriendRoom()) {
     const activeRoundRunning = ["inspection", "solving", "finishing"].includes(activeRoom?.status) ||
       (activeRoom?.status === "ready" && (activeRoom.activePlayerUids || []).length > 0);
@@ -1834,6 +1914,7 @@ function renderBattleUi() {
   roomUrlOutput.value = getRoomUrl(activeRoomId);
   const friendRoom = activeRoom.mode === "friend";
   const realFriendRoom = friendRoom && activeRoom.cubeMode === "real";
+  document.body.classList.toggle("touch-device", isTouchBattleDevice());
   battleRoomMeta.classList.toggle("real-room-meta", friendRoom);
   if (friendRoom) {
     const label = document.createElement("span");
@@ -1876,9 +1957,10 @@ function renderBattleUi() {
   renderRematchPanel(you, opponent);
   renderMultiplayerRoster();
   document.body.classList.toggle("real-cube-battle", activeRoom.cubeMode === "real");
+  document.body.classList.toggle("friend-real-battle", realFriendRoom);
   window.setVirtualCubeVisible?.(activeRoom.cubeMode !== "real");
   document.body.classList.toggle("spectator-mode", isSpectatorMode);
-  const hostCanStart = isMultiplayerFriendRoom() && currentUser?.uid === activeRoom.hostUid && !isSpectatorMode && activeRoom.status === "waiting";
+  const hostCanStart = isMultiplayerFriendRoom() && !realFriendRoom && currentUser?.uid === activeRoom.hostUid && !isSpectatorMode && activeRoom.status === "waiting";
   hostStartBattleBtn.hidden = !hostCanStart;
   if (hostCanStart) {
     const readyCount = [...battlePlayersByUid.values()].filter(player => player.ready && isFriendRoomParticipant(player)).length;
@@ -1895,18 +1977,29 @@ function renderBattleUi() {
   const realCubeActive = activeRoom.cubeMode === "real" && !isSpectatorMode && localIsActive && ["ready", "inspection", "solving"].includes(activeRoom.status);
   const waitingForInspection = realCubeActive && you?.status === "ready";
   const inspectionEnabled = window.isRealCubeInspectionEnabled?.() === true;
-  realCubeInstruction.hidden = !realCubeActive || !["ready", "inspecting"].includes(you?.status);
+  realCubeInstruction.hidden = realFriendRoom || !realCubeActive || !["ready", "inspecting"].includes(you?.status);
   if (!realCubeInstruction.hidden) {
     realCubeInstruction.textContent = waitingForInspection
       ? (inspectionEnabled ? "Press Space to start inspection" : "Press Start Solve to prepare the timer")
       : "Hold and release Space to start solve";
   }
   realCubeTimerBtn.hidden = true;
-  friendRealControls.hidden = !realFriendRoom || !realCubeActive;
-  if (!friendRealControls.hidden) {
-    friendRealStartBtn.hidden = you?.status !== "ready";
-    friendRealStartBtn.textContent = inspectionEnabled ? "Start Inspection" : "Start Solve";
-    friendRealAbortBtn.hidden = !["inspecting", "solving"].includes(you?.status);
+  friendRealControls.hidden = true;
+  if (friendRealTimerPanel) friendRealTimerPanel.hidden = !realFriendRoom || isSpectatorMode;
+  if (friendRealOperationText) {
+    friendRealOperationText.hidden = !realFriendRoom || isSpectatorMode;
+    const touch = isTouchBattleDevice();
+    friendRealOperationText.textContent = you?.status === "solving"
+      ? (touch ? "Touch again to stop." : "Press Space again to stop.")
+      : (touch ? "Touch & hold. Release to start. Touch again to stop." : "Hold Space. Release to start. Press Space again to stop.");
+  }
+  if (friendRealTimerDisplay && realFriendRoom) {
+    friendRealTimerDisplay.textContent = you?.status === "dnf"
+      ? "DNF"
+      : (hasFinalBattleTime(you) ? formatBattleTime(Number(you.finalTime)) : formatBattleTime(localBattleTimerSeconds));
+  }
+  if (friendRealEditBtn) {
+    friendRealEditBtn.hidden = !realFriendRoom || isSpectatorMode || ["inspecting", "solving"].includes(you?.status);
   }
 
   if (activeRoom.status === "finished") {
@@ -1917,6 +2010,12 @@ function renderBattleUi() {
       saveBattleResultForCurrentUser().catch(console.error);
       refreshRatingAfterBattle();
     }
+  }
+  if (isRealFriendRoom()) {
+    battleNotice.textContent = isTouchBattleDevice()
+      ? "Touch and hold the timer area. Release to start."
+      : "Hold Space. Release to start.";
+    return;
   }
 
   if (activeRoom.status === "finishing" && Date.now() >= Number(activeRoom.finishDeadlineMs)) {
@@ -2055,6 +2154,8 @@ function watchRoom(roomId) {
   battlePlayersByUid = new Map();
   battleMovesByRole = { host: [], guest: [] };
   selectedOpponentUid = "";
+  multiplayerRoster?.classList.remove("expanded");
+  multiplayerRosterToggle?.setAttribute("aria-expanded", "false");
   setBattleMode(true);
   window.history.replaceState({}, "", getRoomUrl(roomId));
 
@@ -2745,7 +2846,12 @@ async function beginRealCubeInspection() {
     !(activeRoom.activePlayerUids || []).includes(currentUser.uid)
   ) return false;
   const player = battlePlayersByUid.get(currentUser.uid);
-  if (player?.status !== "ready") return false;
+  if (activeRoom.status === "finished") {
+    if (!player?.ready) await readyBattleRoom();
+    setBattleStatus("Waiting for the other players.");
+    return false;
+  }
+  if (activeRoom.status !== "ready" || !["joined", "ready"].includes(player?.status)) return false;
   const inspectionStartTimeMs = Date.now();
   await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
     status: "inspecting",
@@ -2765,6 +2871,49 @@ async function beginRealCubeInspection() {
   });
   startLocalBattleInspection(activeRoom.scramble, inspectionStartTimeMs, activeRound);
   return true;
+}
+
+async function updateRealFriendManualResult(action, enteredTime = null) {
+  if (!currentUser || !isRealFriendRoom() || isSpectatorMode) return;
+  const player = battlePlayersByUid.get(currentUser.uid);
+  if (["inspecting", "solving"].includes(player?.status)) return;
+  let finalTime = Number(player?.finalTime);
+  let status = "finished";
+  let penalty = "manual";
+  if (action === "enter") {
+    finalTime = Number(enteredTime);
+    if (!Number.isFinite(finalTime) || finalTime < 0.01 || finalTime >= 3600) {
+      setBattleStatus("Enter a valid time between 0.01 and 3599.99 seconds.");
+      return;
+    }
+  } else if (action === "plus2") {
+    if (!Number.isFinite(finalTime) || finalTime < 0.01) return;
+    finalTime += 2;
+    penalty = "+2";
+  } else if (action === "dnf") {
+    finalTime = null;
+    status = "dnf";
+    penalty = "dnf";
+  } else if (action === "remove") {
+    finalTime = null;
+    status = "ready";
+    penalty = "removed";
+    localBattleTimerSeconds = 0;
+  } else return;
+
+  await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
+    status,
+    ready: false,
+    active: status !== "ready",
+    finalTime: Number.isFinite(finalTime) ? Number(finalTime.toFixed(2)) : null,
+    manual: action !== "remove",
+    penalty,
+    endTime: status === "ready" ? null : serverTimestamp(),
+    finishedAt: status === "ready" ? null : serverTimestamp(),
+    updatedAt: serverTimestamp()
+  });
+  friendRealEditMenu.hidden = true;
+  finalizeFriendMultiplayerIfDone().catch(console.error);
 }
 
 async function abortRealCubeBattle() {
@@ -3437,6 +3586,33 @@ function setupAuthUi() {
     });
   });
 
+  multiplayerRosterToggle?.addEventListener("click", () => {
+    const expanded = multiplayerRoster.classList.toggle("expanded");
+    multiplayerRosterToggle.setAttribute("aria-expanded", String(expanded));
+  });
+
+  friendRealEditBtn?.addEventListener("click", event => {
+    event.stopPropagation();
+    friendRealEditMenu.hidden = !friendRealEditMenu.hidden;
+    if (!friendRealEditMenu.hidden) friendRealManualTime?.focus();
+  });
+  friendRealSaveTimeBtn?.addEventListener("click", event => {
+    event.stopPropagation();
+    updateRealFriendManualResult("enter", friendRealManualTime?.value).catch(console.error);
+  });
+  friendRealPlusTwoBtn?.addEventListener("click", event => {
+    event.stopPropagation();
+    updateRealFriendManualResult("plus2").catch(console.error);
+  });
+  friendRealDnfBtn?.addEventListener("click", event => {
+    event.stopPropagation();
+    updateRealFriendManualResult("dnf").catch(console.error);
+  });
+  friendRealRemoveBtn?.addEventListener("click", event => {
+    event.stopPropagation();
+    updateRealFriendManualResult("remove").catch(console.error);
+  });
+
   hostStartBattleBtn?.addEventListener("click", () => {
     startFriendMultiplayerGame().catch(error => {
       battleNotice.textContent = "Game could not be started.";
@@ -3580,6 +3756,7 @@ window.handleBattleFinishSyncError = handleBattleFinishSyncError;
 window.isBattleMode = () => document.body.classList.contains("battle-mode");
 window.isRankedBattle = () => document.body.classList.contains("battle-mode") && activeRoom?.mode === "ranked";
 window.isRealCubeBattle = () => document.body.classList.contains("battle-mode") && activeRoom?.cubeMode === "real";
+window.isRealFriendBattle = () => document.body.classList.contains("battle-mode") && isRealFriendRoom();
 window.beginRealCubeInspection = beginRealCubeInspection;
 window.abortRealCubeBattle = abortRealCubeBattle;
 window.handleBattleSpaceStart = handleBattleSpaceStart;

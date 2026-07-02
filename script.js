@@ -135,6 +135,7 @@ let realTimerHoldTimeout = null;
 let realTimerHoldStartedAt = 0;
 let realTimerHoldReady = false;
 let realTimerActivePointerId = null;
+let realTimerReleasePending = false;
 
 const ROTATION_MOVES = ["x", "x'", "yRotation", "yRotation'", "zRotation", "zRotation'"];
 const COUNTABLE_MOVE_FACES = new Set([
@@ -246,8 +247,7 @@ document.addEventListener("keyup", event => {
   }
   if (!isBattleModeActive() || !window.isRealCubeBattle?.()) return;
   event.preventDefault();
-  if (!realCubeSpaceArmed) return;
-  releaseRealTimerHold();
+  releaseOrQueueRealTimerHold();
 });
 
 function isTypingInForm(target) {
@@ -445,7 +445,7 @@ function handleNormalRealCubeTimerAction() {
 
 function handleRealCubeSpaceDown() {
   if (["joined", "inactive", "finished"].includes(battleInputState)) {
-    beginRealCubeInspection();
+    prepareAndArmRealCubeTimer();
     return;
   }
   if (battleInputState === "inspecting") {
@@ -520,6 +520,25 @@ function releaseRealTimerHold() {
   else startNormalSolve();
 }
 
+function releaseOrQueueRealTimerHold() {
+  if (realTimerHoldStartedAt) return releaseRealTimerHold();
+  if (realCubeInspectionStarting) realTimerReleasePending = true;
+}
+
+async function prepareAndArmRealCubeTimer() {
+  realTimerReleasePending = false;
+  const prepared = await beginRealCubeInspection();
+  if (!prepared || !isRealTimerInspecting()) return;
+  beginRealTimerHold();
+  if (!realTimerReleasePending) return;
+  realTimerReleasePending = false;
+  window.setTimeout(() => {
+    if (!realTimerHoldStartedAt) return;
+    realTimerHoldReady = true;
+    releaseRealTimerHold();
+  }, 310);
+}
+
 function setupMobileRealTimerControls() {
   const timerArea = document.querySelector("main");
   if (!timerArea) return;
@@ -562,13 +581,32 @@ function setupMobileRealTimerControls() {
     realTimerActivePointerId = null;
     clearRealTimerHold();
   });
+
+  const battleScreen = document.querySelector(".battle-screen");
+  battleScreen?.addEventListener("pointerdown", event => {
+    if (!isTouchDevice() || !window.isRealFriendBattle?.() || document.body.classList.contains("real-timer-clean")) return;
+    if (isControl(event.target) || event.target.closest(".friend-real-edit-menu,.multiplayer-roster")) return;
+    if (!event.target.closest("#battleScramble,#friendRealTimerPanel,#scrambleNetPanel")) return;
+    if (realTimerActivePointerId !== null || event.isPrimary === false) return;
+    event.preventDefault();
+    realTimerActivePointerId = event.pointerId;
+    battleScreen.setPointerCapture?.(event.pointerId);
+    if (isRealTimerSolving()) handleRealCubeTimerAction();
+    else prepareAndArmRealCubeTimer();
+  });
+  battleScreen?.addEventListener("pointerup", event => {
+    if (event.pointerId !== realTimerActivePointerId) return;
+    event.preventDefault();
+    realTimerActivePointerId = null;
+    releaseOrQueueRealTimerHold();
+  });
 }
 
 async function beginRealCubeInspection() {
-  if (realCubeInspectionStarting || typeof window.beginRealCubeInspection !== "function") return;
+  if (realCubeInspectionStarting || typeof window.beginRealCubeInspection !== "function") return false;
   realCubeInspectionStarting = true;
   try {
-    await window.beginRealCubeInspection();
+    return await window.beginRealCubeInspection();
   } finally {
     realCubeInspectionStarting = false;
   }
@@ -1097,6 +1135,8 @@ window.startBattleInspection = startBattleInspection;
 window.startBattleRealPreparation = startBattleRealPreparation;
 window.cancelCurrentSolve = cancelCurrentSolve;
 window.handleRealCubeTimerAction = handleRealCubeTimerAction;
+window.prepareAndArmRealCubeTimer = prepareAndArmRealCubeTimer;
+window.releaseRealCubeTimerHold = releaseOrQueueRealTimerHold;
 
 function formatBindingKey(key) {
   if (key === ".") return ".";
