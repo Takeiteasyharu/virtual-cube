@@ -1312,8 +1312,8 @@ body.friend-real-battle .battle-screen {
     "heading heading heading"
     "scramble scramble scramble"
     "history timer preview"
-    "history roster preview"
-    "history operation preview"
+    "history roster ."
+    "history operation ."
     "notice notice notice"
     "result result result";
   gap: 14px 22px;
@@ -1375,18 +1375,20 @@ body.friend-real-battle .friend-real-timer {
 body.friend-real-battle .friend-real-edit-button {
   grid-column: 3;
   justify-self: start;
-  margin-left: 14px;
+  width: 80px;
+  min-width: 80px;
+  margin-left: 8px;
 }
-body.friend-real-battle .friend-real-timer { font-size: clamp(82px, 11vw, 170px); }
+body.friend-real-battle .friend-real-timer { font-size: clamp(82px, 9.5vw, 145px); }
 body.friend-real-battle .multiplayer-roster { width: 100%; margin: 0; border-color: #62c7f5; }
 body.friend-real-battle .multiplayer-roster-list { grid-template-columns: 1fr; max-height: 270px; }
 body.friend-real-battle .multiplayer-roster-row { min-height: 66px; font-size: clamp(16px, 1.4vw, 22px); }
 body.friend-real-battle .scramble-net-panel {
   width: min(100%, 300px);
   max-width: 300px;
-  margin: 0 0 24px auto;
+  margin: 18px 0 0 auto;
   padding: 10px;
-  align-self: center;
+  align-self: start;
   justify-self: end;
   overflow: hidden;
 }
