@@ -81,6 +81,9 @@ const friendRealPlusTwoBtn = document.getElementById("friendRealPlusTwoBtn");
 const friendRealDnfBtn = document.getElementById("friendRealDnfBtn");
 const friendRealRemoveBtn = document.getElementById("friendRealRemoveBtn");
 const friendRealOperationText = document.getElementById("friendRealOperationText");
+const friendRealHistoryPanel = document.getElementById("friendRealHistoryPanel");
+const friendRealSolveHistoryList = document.getElementById("friendRealSolveHistoryList");
+const friendRealScrambleHistoryList = document.getElementById("friendRealScrambleHistoryList");
 const friendBattleSettingsBtn = document.getElementById("friendBattleSettingsBtn");
 const friendBattleSettingsModal = document.getElementById("friendBattleSettingsModal");
 const closeFriendBattleSettingsBtn = document.getElementById("closeFriendBattleSettingsBtn");
@@ -166,6 +169,7 @@ let ratingUpdateInProgress = false;
 let friendFinalizing = false;
 let realFriendScramblePreparing = false;
 let friendRematchStarting = false;
+let preparedLocalRealFriendRoundKey = "";
 let completionScoreWriteTimeout = null;
 let pendingCompletionScore = null;
 const savedBattleResultKeys = new Set();
@@ -1519,6 +1523,41 @@ function renderMultiplayerRoster() {
   }));
 }
 
+function readRealCubeHistory() {
+  try {
+    const stored = JSON.parse(localStorage.getItem("realCubeSolveHistory") || "[]");
+    return Array.isArray(stored) ? stored : [];
+  } catch (error) {
+    console.warn("Real Cube history could not be read.", error);
+    return [];
+  }
+}
+
+function renderFriendRealHistory() {
+  if (!friendRealHistoryPanel || !friendRealSolveHistoryList || !friendRealScrambleHistoryList) return;
+  friendRealHistoryPanel.hidden = !isRealFriendRoom();
+  if (friendRealHistoryPanel.hidden) return;
+
+  const solves = readRealCubeHistory().slice(0, 20);
+  const emptyItem = text => {
+    const item = document.createElement("li");
+    item.className = "history-empty";
+    item.textContent = text;
+    return item;
+  };
+  friendRealSolveHistoryList.replaceChildren(...(solves.length ? solves.map(solve => {
+    const item = document.createElement("li");
+    const time = Number(solve.time);
+    item.textContent = Number.isFinite(time) ? time.toFixed(2) : "-";
+    return item;
+  }) : [emptyItem("No Real Cube solves yet.")]));
+  friendRealScrambleHistoryList.replaceChildren(...(solves.length ? solves.map(solve => {
+    const item = document.createElement("li");
+    item.textContent = solve.scramble || "-";
+    return item;
+  }) : [emptyItem("No scramble history yet.")]));
+}
+
 function syncFriendOpponentMovesListener() {
   if (!isMultiplayerFriendRoom() || activeRoom.cubeMode === "real") return;
   const opponent = getSelectedOpponent();
@@ -1997,6 +2036,7 @@ function renderBattleUi() {
   renderBattleReadyButton(you, opponent);
   renderRematchPanel(you, opponent);
   renderMultiplayerRoster();
+  renderFriendRealHistory();
   document.body.classList.toggle("real-cube-battle", activeRoom.cubeMode === "real");
   document.body.classList.toggle("friend-real-battle", realFriendRoom);
   window.setVirtualCubeVisible?.(activeRoom.cubeMode !== "real");
@@ -2198,6 +2238,7 @@ function watchRoom(roomId) {
   battlePlayersByUid = new Map();
   battleMovesByRole = { host: [], guest: [] };
   selectedOpponentUid = "";
+  preparedLocalRealFriendRoundKey = "";
   multiplayerRoster?.classList.remove("expanded");
   multiplayerRosterToggle?.setAttribute("aria-expanded", "false");
   setBattleMode(true);
@@ -2260,6 +2301,12 @@ function watchRoom(roomId) {
       syncFriendOpponentMovesListener();
     }
 
+    prepareLocalRealFriendRound(room).catch(error => {
+      preparedLocalRealFriendRoundKey = "";
+      battleNotice.textContent = "The next round could not be prepared.";
+      console.error("Friend Real Cube round preparation failed", error);
+    });
+
     renderBattleUi();
     if (isMultiplayerFriendRoom()) finalizeFriendMultiplayerIfDone().catch(console.error);
     if (
@@ -2277,6 +2324,49 @@ function resetFriendRoundDisplay(room) {
   localBattleTimerSeconds = 0;
   battleMovesByRole = { host: [], guest: [], opponent: [] };
   window.prepareBattleCube?.(room.scramble || "", activeRound);
+}
+
+async function prepareLocalRealFriendRound(room) {
+  if (
+    !currentUser ||
+    isSpectatorMode ||
+    room.mode !== "friend" ||
+    room.cubeMode !== "real" ||
+    room.status !== "ready" ||
+    !(room.activePlayerUids || []).includes(currentUser.uid)
+  ) return;
+
+  const round = Number(room.round) || 1;
+  const roundKey = `${activeRoomId}:${round}`;
+  if (preparedLocalRealFriendRoundKey === roundKey) return;
+
+  const player = battlePlayersByUid.get(currentUser.uid);
+  const staleState = !player ||
+    Number(player.round || 0) !== round ||
+    ["finished", "dnf", "aborted", "returned", "left", "disconnected"].includes(player.status);
+
+  preparedLocalRealFriendRoundKey = roundKey;
+  localBattleTimerSeconds = 0;
+  window.prepareBattleCube?.(room.scramble || "", round);
+  if (!staleState) return;
+
+  await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
+    status: "ready",
+    ready: false,
+    active: true,
+    round,
+    inspectionStartTime: null,
+    inspectionStartTimeMs: 0,
+    startTime: null,
+    startTimeMs: 0,
+    endTime: null,
+    finishedAt: null,
+    finalTime: null,
+    tps: null,
+    moveCount: 0,
+    lastMove: "",
+    updatedAt: serverTimestamp()
+  });
 }
 
 async function beginNextBattleRound(room) {
@@ -3435,6 +3525,7 @@ function resetBattleUiAfterLeave() {
   activeRound = 1;
   displayedOpponentRatingUid = "";
   selectedOpponentUid = "";
+  preparedLocalRealFriendRoundKey = "";
   localBattleTimerSeconds = 0;
   battleReadyBtn.hidden = true;
   hostStartBattleBtn.hidden = true;

@@ -1303,6 +1303,77 @@ body.friend-real-battle #hostStartBattleBtn, body.friend-real-battle #battleRead
 body.dark .battle-settings-section { border-color: rgba(255, 255, 255, 0.24); }
 body.dark .battle-settings-section select { color: #f5f5f5; background: #162b36; border-color: #78c5ef; }
 
+.friend-real-history-panel[hidden] { display: none; }
+
+body.friend-real-battle .battle-screen {
+  display: grid;
+  grid-template-columns: minmax(220px, 290px) minmax(420px, 1fr) minmax(260px, 360px);
+  grid-template-areas:
+    "heading heading heading"
+    "scramble scramble scramble"
+    "history timer preview"
+    "history roster preview"
+    "history operation preview"
+    "notice notice notice"
+    "result result result";
+  gap: 14px 22px;
+  align-items: start;
+}
+
+body.friend-real-battle .battle-heading { grid-area: heading; }
+body.friend-real-battle .battle-scramble { grid-area: scramble; }
+body.friend-real-battle .friend-real-history-panel { grid-area: history; }
+body.friend-real-battle .friend-real-timer-panel { grid-area: timer; }
+body.friend-real-battle .scramble-net-panel { grid-area: preview; }
+body.friend-real-battle .multiplayer-roster { grid-area: roster; }
+body.friend-real-battle .friend-real-operation { grid-area: operation; }
+body.friend-real-battle .battle-notice { grid-area: notice; }
+body.friend-real-battle .battle-result,
+body.friend-real-battle .battle-result-badge,
+body.friend-real-battle .battle-rematch { grid-column: 1 / -1; }
+
+body.friend-real-battle .friend-real-history-panel {
+  min-height: 420px;
+  max-height: 590px;
+  padding: 16px;
+  overflow-y: auto;
+  color: #f5f5f5;
+  background: rgba(8, 14, 18, 0.92);
+  border: 1px solid rgba(120, 197, 239, 0.45);
+}
+
+body.friend-real-battle .friend-real-history-panel section + section { margin-top: 24px; }
+body.friend-real-battle .friend-real-history-panel h3 { margin: 0 0 12px; text-align: center; }
+body.friend-real-battle .friend-real-history-panel ol { margin: 0; padding-left: 28px; }
+body.friend-real-battle .friend-real-history-panel li { margin: 0 0 10px; line-height: 1.35; overflow-wrap: anywhere; }
+body.friend-real-battle .friend-real-timer-panel { width: 100%; margin: 18px 0 0; align-self: center; }
+body.friend-real-battle .friend-real-timer { font-size: clamp(82px, 11vw, 170px); }
+body.friend-real-battle .multiplayer-roster { width: 100%; margin: 0; border-color: #62c7f5; }
+body.friend-real-battle .multiplayer-roster-list { grid-template-columns: 1fr; max-height: 270px; }
+body.friend-real-battle .multiplayer-roster-row { min-height: 66px; font-size: clamp(16px, 1.4vw, 22px); }
+body.friend-real-battle .scramble-net-panel { width: 100%; max-width: 360px; margin: 18px auto 0; }
+body.friend-real-battle .battle-scramble { font-size: clamp(24px, 3vw, 44px); line-height: 1.35; overflow-wrap: anywhere; }
+
+@media (max-width: 900px) {
+  body.friend-real-battle .battle-screen {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  body.friend-real-battle .battle-heading { order: 1; width: 100%; }
+  body.friend-real-battle .battle-scramble { order: 2; width: 100%; }
+  body.friend-real-battle .friend-real-timer-panel { order: 3; margin-top: 4px; }
+  body.friend-real-battle .friend-real-operation { order: 4; }
+  body.friend-real-battle .scramble-net-panel { order: 5; margin-top: 0; }
+  body.friend-real-battle .multiplayer-roster { order: 6; }
+  body.friend-real-battle .friend-real-history-panel { order: 7; width: 100%; min-height: 0; max-height: none; }
+  body.friend-real-battle .battle-notice { order: 8; }
+  body.friend-real-battle .battle-result,
+  body.friend-real-battle .battle-result-badge,
+  body.friend-real-battle .battle-rematch { order: 9; }
+  body.friend-real-battle .friend-real-timer { font-size: clamp(64px, 20vw, 112px); }
+}
+
 @media (min-width: 901px) {
   body.friend-real-battle .battle-heading {
     align-items: flex-start;
@@ -2677,6 +2748,45 @@ body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .panel {
   display: contents !important;
 }
 
+body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .timer,
+body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .cube-area,
+body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .real-cube-instruction,
+body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .real-cube-timer-button,
+body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-scramble-net {
+  position: static !important;
+  inset: auto !important;
+  transform: none !important;
+}
+
+body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .real-cube-instruction {
+  width: auto;
+  max-width: min(92vw, 520px);
+  min-height: 0;
+  margin: 6px auto 0 !important;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  color: inherit;
+  background: transparent;
+  font-size: clamp(16px, 1.6vw, 19px);
+  font-weight: 500;
+  line-height: 1.35;
+  box-shadow: none;
+}
+
+body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) #cubeContainer {
+  display: none !important;
+  width: 0;
+  height: 0;
+  min-height: 0;
+}
+
+body.dark.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .real-cube-instruction {
+  color: #d8dde1;
+  background: transparent;
+  border: 0;
+}
+
 body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) #scrambleBtn,
 body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) #resetBtn {
   display: none !important;
@@ -2706,7 +2816,7 @@ body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) #resetBtn {
     grid-column: 2;
     grid-row: 1;
     align-self: end;
-    margin: 28px 0 0;
+    margin: 12px 0 0;
     font-size: clamp(84px, 10vw, 156px);
     line-height: 1;
     transform: none;
@@ -2732,11 +2842,11 @@ body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) #resetBtn {
   }
 
   body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .real-cube-instruction { margin: 8px auto 0; }
-  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .real-cube-timer-button { margin: 14px auto 0; }
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .real-cube-timer-button { margin: 8px auto 0; }
 
   body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-scramble-net {
     width: min(100%, 420px);
-    margin: 28px auto 0;
+    margin: 14px auto 0;
     padding: 10px;
   }
 
@@ -2779,7 +2889,7 @@ body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) #resetBtn {
     position: static;
     order: 1;
     width: 94vw;
-    margin: 6px auto;
+    margin: 4px auto 0;
     font-size: clamp(64px, 20vw, 108px);
     transform: none;
     pointer-events: auto;
@@ -2804,7 +2914,7 @@ body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) #resetBtn {
 
   body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-scramble-net {
     width: min(94vw, 520px);
-    margin: 18px auto 0;
+    margin: 12px auto 0;
   }
 
   body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-history-column {
