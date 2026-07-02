@@ -286,6 +286,10 @@ body.dark.custom-background .battle-rematch {
   z-index: 2;
 }
 
+.normal-real-history-column {
+  display: contents;
+}
+
 .timer {
   font-family: "Courier New", monospace;
   font-size: 52px;
@@ -1589,11 +1593,15 @@ body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .cube-area {
   }
 
   body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .panel {
-    display: flex;
-    flex-direction: column;
-    top: 8px;
-    bottom: auto;
-    max-height: calc(100vh - 195px);
+    display: grid;
+    grid-template-columns: minmax(210px, 0.85fr) minmax(280px, 1.15fr);
+    gap: 16px;
+    top: auto;
+    right: 24px;
+    bottom: 16px;
+    width: min(72vw, 760px);
+    max-height: min(38vh, 420px);
+    overflow: hidden;
   }
 
   body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .panel .timer {
@@ -1624,9 +1632,20 @@ body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .cube-area {
   body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-scramble-net {
     position: static;
     width: 100%;
-    margin: 14px 0 0;
+    margin: 0;
     padding: 10px;
-    order: 20;
+    grid-column: 1;
+    align-self: center;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-history-column {
+    display: block;
+    grid-column: 2;
+    min-width: 0;
+    max-height: calc(min(38vh, 420px) - 36px);
+    overflow-y: auto;
+    padding-right: 8px;
+    scrollbar-gutter: stable;
   }
 
   body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-scramble-net .cube-net {
@@ -1644,6 +1663,10 @@ body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .cube-area {
   body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .panel {
     display: flex;
     flex-direction: column;
+  }
+
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-history-column {
+    display: contents;
   }
 
   body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .timer {
@@ -1665,10 +1688,10 @@ body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .cube-area {
   body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .tps-display { order: 5; }
   body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .moves-display { order: 6; }
   body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .stats { order: 7; }
-  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .panel > .buttons { order: 8; }
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-history-column > .buttons { order: 8; }
   body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .last-move { order: 9; }
-  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .panel > h2,
-  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .panel > ul { order: 10; }
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-history-column > h2,
+  body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-history-column > ul { order: 10; }
 
   body.normal-real-cube:not(.battle-mode):not(.real-timer-clean) .normal-real-scramble-net .cube-net {
     --net-sticker-size: clamp(12px, 3vw, 24px);

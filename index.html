@@ -234,30 +234,32 @@
           <h3>Scramble Preview</h3>
           <div class="cube-net" id="normalScrambleCubeNet"></div>
         </section>
-        <div class="tps-display" id="tpsDisplay">TPS: -</div>
-        <div class="moves-display" id="movesDisplay">Moves: -</div>
+        <div class="normal-real-history-column">
+          <div class="tps-display" id="tpsDisplay">TPS: -</div>
+          <div class="moves-display" id="movesDisplay">Moves: -</div>
 
-        <div class="stats">
-          <div>PB: <span id="pbDisplay">-</span></div>
-          <div>AO5: <span id="ao5Display">-</span></div>
-          <div>AO12: <span id="ao12Display">-</span></div>
+          <div class="stats">
+            <div>PB: <span id="pbDisplay">-</span></div>
+            <div>AO5: <span id="ao5Display">-</span></div>
+            <div>AO12: <span id="ao12Display">-</span></div>
+          </div>
+
+          <div class="buttons">
+            <button id="scrambleBtn">Scramble</button>
+            <button id="resetBtn">Abort</button>
+            <button id="clearTimesBtn">Clear Times</button>
+          </div>
+
+          <div class="last-move">
+            Last move: <span id="lastMove">-</span>
+          </div>
+
+          <h2>Solve History</h2>
+          <ul id="timeList"></ul>
+
+          <h2>Scramble History</h2>
+          <ul id="scrambleHistoryList"></ul>
         </div>
-
-        <div class="buttons">
-          <button id="scrambleBtn">Scramble</button>
-          <button id="resetBtn">Abort</button>
-          <button id="clearTimesBtn">Clear Times</button>
-        </div>
-
-        <div class="last-move">
-          Last move: <span id="lastMove">-</span>
-        </div>
-
-        <h2>Solve History</h2>
-        <ul id="timeList"></ul>
-
-        <h2>Scramble History</h2>
-        <ul id="scrambleHistoryList"></ul>
       </section>
     </main>
 
