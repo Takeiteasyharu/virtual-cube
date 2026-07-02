@@ -83,7 +83,9 @@ const friendRealRemoveBtn = document.getElementById("friendRealRemoveBtn");
 const friendRealOperationText = document.getElementById("friendRealOperationText");
 const friendRealHistoryPanel = document.getElementById("friendRealHistoryPanel");
 const friendRealSolveHistoryList = document.getElementById("friendRealSolveHistoryList");
-const friendRealScrambleHistoryList = document.getElementById("friendRealScrambleHistoryList");
+const friendRealPb = document.getElementById("friendRealPb");
+const friendRealAo5 = document.getElementById("friendRealAo5");
+const friendRealAo12 = document.getElementById("friendRealAo12");
 const friendBattleSettingsBtn = document.getElementById("friendBattleSettingsBtn");
 const friendBattleSettingsModal = document.getElementById("friendBattleSettingsModal");
 const closeFriendBattleSettingsBtn = document.getElementById("closeFriendBattleSettingsBtn");
@@ -1523,22 +1525,86 @@ function renderMultiplayerRoster() {
   }));
 }
 
-function readRealCubeHistory() {
+function getFriendRealRoomHistoryKey() {
+  return activeRoomId && currentUser?.uid
+    ? `friendRealRoomHistory:${activeRoomId}:${currentUser.uid}`
+    : "";
+}
+
+function readFriendRealRoomHistory() {
+  const key = getFriendRealRoomHistoryKey();
+  if (!key) return [];
   try {
-    const stored = JSON.parse(localStorage.getItem("realCubeSolveHistory") || "[]");
+    const stored = JSON.parse(sessionStorage.getItem(key) || "[]");
     return Array.isArray(stored) ? stored : [];
   } catch (error) {
-    console.warn("Real Cube history could not be read.", error);
+    console.warn("Friend Real Cube room history could not be read.", error);
     return [];
   }
 }
 
+function writeFriendRealRoomHistory(history) {
+  const key = getFriendRealRoomHistoryKey();
+  if (!key) return;
+  sessionStorage.setItem(key, JSON.stringify(history.slice(0, 100)));
+}
+
+function syncCurrentFriendRealResult() {
+  if (!isRealFriendRoom() || isSpectatorMode || !currentUser) return;
+  const player = battlePlayersByUid.get(currentUser.uid);
+  if (!player) return;
+  const round = Number(player.round || activeRound) || 1;
+  const history = readFriendRealRoomHistory();
+  const existingIndex = history.findIndex(result => Number(result.round) === round);
+  const terminal = player.status === "finished" || player.status === "dnf";
+
+  if (terminal) {
+    const result = {
+      round,
+      status: player.status,
+      time: player.status === "finished" && Number.isFinite(Number(player.finalTime))
+        ? Number(Number(player.finalTime).toFixed(2))
+        : null,
+      manual: Boolean(player.manual),
+      penalty: player.penalty || "",
+      scramble: activeRoom.scramble || ""
+    };
+    if (existingIndex >= 0) history.splice(existingIndex, 1);
+    history.unshift(result);
+    writeFriendRealRoomHistory(history);
+    return;
+  }
+
+  if (existingIndex >= 0 && player.penalty === "removed") {
+    history.splice(existingIndex, 1);
+    writeFriendRealRoomHistory(history);
+  }
+}
+
+function calculateFriendRealAverage(history, count) {
+  if (history.length < count) return "-";
+  const values = history.slice(0, count).map(result =>
+    result.status === "finished" && Number.isFinite(Number(result.time)) ? Number(result.time) : Infinity
+  );
+  const sorted = [...values].sort((a, b) => a - b);
+  sorted.shift();
+  sorted.pop();
+  if (sorted.some(value => !Number.isFinite(value))) return "DNF";
+  return (sorted.reduce((sum, value) => sum + value, 0) / sorted.length).toFixed(2);
+}
+
 function renderFriendRealHistory() {
-  if (!friendRealHistoryPanel || !friendRealSolveHistoryList || !friendRealScrambleHistoryList) return;
+  if (!friendRealHistoryPanel || !friendRealSolveHistoryList) return;
   friendRealHistoryPanel.hidden = !isRealFriendRoom();
   if (friendRealHistoryPanel.hidden) return;
 
-  const solves = readRealCubeHistory().slice(0, 20);
+  const solves = readFriendRealRoomHistory();
+  const validTimes = solves
+    .filter(result => result.status === "finished" && Number.isFinite(Number(result.time)))
+    .map(result => Number(result.time));
+  if (friendRealPb) friendRealPb.textContent = validTimes.length ? Math.min(...validTimes).toFixed(2) : "-";
+  if (friendRealAo5) friendRealAo5.textContent = calculateFriendRealAverage(solves, 5);
+  if (friendRealAo12) friendRealAo12.textContent = calculateFriendRealAverage(solves, 12);
   const emptyItem = text => {
     const item = document.createElement("li");
     item.className = "history-empty";
@@ -1547,15 +1613,12 @@ function renderFriendRealHistory() {
   };
   friendRealSolveHistoryList.replaceChildren(...(solves.length ? solves.map(solve => {
     const item = document.createElement("li");
-    const time = Number(solve.time);
-    item.textContent = Number.isFinite(time) ? time.toFixed(2) : "-";
+    const time = solve.status === "dnf" ? "DNF" : Number(solve.time).toFixed(2);
+    const manual = solve.manual ? " (Manual)" : "";
+    const penalty = solve.penalty === "+2" ? " (+2)" : "";
+    item.textContent = `Round ${solve.round}: ${time}${penalty}${manual}`;
     return item;
-  }) : [emptyItem("No Real Cube solves yet.")]));
-  friendRealScrambleHistoryList.replaceChildren(...(solves.length ? solves.map(solve => {
-    const item = document.createElement("li");
-    item.textContent = solve.scramble || "-";
-    return item;
-  }) : [emptyItem("No scramble history yet.")]));
+  }) : [emptyItem("No solves in this room yet.")]));
 }
 
 function syncFriendOpponentMovesListener() {
@@ -1593,6 +1656,7 @@ function watchFriendPlayers(roomId) {
     collection(db, BATTLE_ROOMS_COLLECTION, roomId, "players"),
     snapshot => {
       battlePlayersByUid = new Map(snapshot.docs.map(entry => [entry.id, entry.data()]));
+      syncCurrentFriendRealResult();
       ensureSelectedOpponent();
       reconcileFriendRoomMembership().catch(console.error);
       handleDisconnectedFriendHost();
@@ -3243,6 +3307,7 @@ async function submitBattleSolve(time, scramble, solveStats = {}) {
     }
     const localPlayer = battlePlayersByUid.get(currentUser.uid);
     if (localPlayer) Object.assign(localPlayer, finishPayload, { finishedAt: new Date(), updatedAt: new Date() });
+    syncCurrentFriendRealResult();
     renderBattleUi();
     await updateBattleFinishWithRetry(playerRef, finishPayload);
     console.info("Friend Battle finish synchronized", {
