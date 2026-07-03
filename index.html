@@ -67,6 +67,7 @@
         </div>
       </div>
       <div class="battle-scramble" id="battleScramble"></div>
+      <div class="friend-virtual-battle-stage" id="friendVirtualBattleStage" hidden></div>
       <div class="friend-real-main-layout">
         <aside class="friend-real-history-panel" id="friendRealHistoryPanel" hidden aria-label="Real cube history">
           <dl class="friend-real-room-stats" aria-label="Room statistics">
@@ -220,7 +221,8 @@
         <div id="battleInspectionLabel">Inspection</div>
         <div id="battleInspectionCount">15</div>
       </div>
-      <div class="cube-area">
+      <div id="normalCubeAreaMount" hidden></div>
+      <div class="cube-area" id="mainCubeArea">
         <div id="cubeContainer"></div>
         <div id="realCubeInstruction" class="real-cube-instruction" hidden>Press Space to start inspection</div>
         <button id="realCubeTimerBtn" class="real-cube-timer-button" hidden>Start Solve</button>

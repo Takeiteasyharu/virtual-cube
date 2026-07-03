@@ -109,6 +109,9 @@ const battleResultBadge = document.getElementById("battleResultBadge");
 const opponentCubePanel = document.getElementById("opponentCubePanel");
 const opponentCubeTitle = document.getElementById("opponentCubeTitle");
 const opponentCubeStatus = document.getElementById("opponentCubeStatus");
+const friendVirtualBattleStage = document.getElementById("friendVirtualBattleStage");
+const normalCubeAreaMount = document.getElementById("normalCubeAreaMount");
+const mainCubeArea = document.getElementById("mainCubeArea");
 const battleModeLabel = document.getElementById("battleModeLabel");
 const battleRematchPanel = document.getElementById("battleRematchPanel");
 const battleRematchYou = document.getElementById("battleRematchYou");
@@ -1174,7 +1177,8 @@ function setBattleMode(enabled) {
   document.body.classList.toggle("battle-mode", enabled);
   if (enabled) document.body.classList.remove("normal-real-cube");
   if (!enabled) {
-    document.body.classList.remove("real-cube-battle", "friend-real-battle", "spectator-mode");
+    document.body.classList.remove("real-cube-battle", "friend-real-battle", "friend-virtual-battle", "spectator-mode");
+    restoreMainCubeArea();
   }
   if (enabled) {
     const battleModal = document.getElementById("battleModal");
@@ -1211,6 +1215,27 @@ function sendBattleHeartbeat() {
 
 function formatBattleTime(seconds) {
   return Number.isFinite(seconds) ? seconds.toFixed(2) : "-";
+}
+
+function restoreMainCubeArea() {
+  if (mainCubeArea && normalCubeAreaMount?.parentNode && mainCubeArea.previousElementSibling !== normalCubeAreaMount) {
+    normalCubeAreaMount.insertAdjacentElement("afterend", mainCubeArea);
+  }
+  if (friendVirtualBattleStage) friendVirtualBattleStage.hidden = true;
+}
+
+function syncFriendVirtualBattleLayout() {
+  const enabled = document.body.classList.contains("battle-mode") &&
+    activeRoom?.mode === "friend" && activeRoom?.cubeMode === "virtual";
+  document.body.classList.toggle("friend-virtual-battle", enabled);
+  if (!enabled) {
+    restoreMainCubeArea();
+    return;
+  }
+  if (friendVirtualBattleStage && mainCubeArea && mainCubeArea.parentNode !== friendVirtualBattleStage) {
+    friendVirtualBattleStage.appendChild(mainCubeArea);
+  }
+  if (friendVirtualBattleStage) friendVirtualBattleStage.hidden = false;
 }
 
 function getMinimumAcceptedBattleTime() {
@@ -1625,7 +1650,15 @@ function syncFriendOpponentMovesListener() {
   if (!isMultiplayerFriendRoom() || activeRoom.cubeMode === "real") return;
   const opponent = getSelectedOpponent();
   const uid = opponent?.uid || "";
-  if (uid === friendOpponentMovesUid) return;
+  const canShowRound = Boolean(activeRoom.scramble) &&
+    (isSpectatorMode || ["inspection", "solving", "finished"].includes(activeRoom.status));
+  if (uid === friendOpponentMovesUid) {
+    if (uid && canShowRound) {
+      window.opponentCube?.setScramble(activeRoom.scramble, activeRound);
+      window.opponentCube?.applyMoves(battleMovesByRole.opponent);
+    }
+    return;
+  }
   const previousUid = friendOpponentMovesUid;
   if (friendOpponentMovesUnsubscribe) friendOpponentMovesUnsubscribe();
   friendOpponentMovesUnsubscribe = null;
@@ -1635,8 +1668,7 @@ function syncFriendOpponentMovesListener() {
   if (!uid) {
     return;
   }
-  const you = getDisplayPlayer(activeRoomRole);
-  if (activeRoom.scramble && (isSpectatorMode || ["inspecting", "solving", "finished", "dnf"].includes(you?.status))) {
+  if (canShowRound) {
     window.opponentCube?.setScramble(activeRoom.scramble, activeRound);
   }
   const movesQuery = query(
@@ -1785,7 +1817,10 @@ async function autoStartFriendRematchWhenReady() {
     !activeRoomId ||
     currentUser.uid !== activeRoom?.hostUid ||
     !isMultiplayerFriendRoom() ||
-    activeRoom.status !== "finished"
+    !(
+      (activeRoom.cubeMode === "virtual" && ["waiting", "finished"].includes(activeRoom.status)) ||
+      (activeRoom.cubeMode === "real" && activeRoom.status === "finished")
+    )
   ) return;
 
   const playersInRoom = [...battlePlayersByUid.values()].filter(isFriendRoomParticipant);
@@ -1889,7 +1924,7 @@ function renderBattleNotice() {
   if (!activeRoom) return;
   if (isMultiplayerFriendRoom()) {
     if (isSpectatorMode) {
-      battleNotice.textContent = activeRoom.status === "waiting" ? "Spectator mode: waiting for the host to start." : "Spectator mode: game in progress.";
+      battleNotice.textContent = activeRoom.status === "waiting" ? "Spectator mode: waiting for all players to be ready." : "Spectator mode: game in progress.";
       return;
     }
     if (activeRoom.status === "waiting") {
@@ -1897,9 +1932,7 @@ function renderBattleNotice() {
         battleNotice.textContent = "Waiting for another player.";
         return;
       }
-      battleNotice.textContent = currentUser?.uid === activeRoom.hostUid
-        ? "Players can toggle Ready. Start whenever you are ready."
-        : "Toggle Ready, then wait for the host to start.";
+      battleNotice.textContent = "Press Ready. The round starts automatically when all players are ready.";
       return;
     }
     if (activeRoom.status === "inspection") {
@@ -2056,6 +2089,7 @@ function renderBattleUi() {
   roomUrlOutput.value = getRoomUrl(activeRoomId);
   const friendRoom = activeRoom.mode === "friend";
   const realFriendRoom = friendRoom && activeRoom.cubeMode === "real";
+  syncFriendVirtualBattleLayout();
   document.body.classList.toggle("touch-device", isTouchBattleDevice());
   battleRoomMeta.classList.toggle("real-room-meta", friendRoom);
   if (friendRoom) {
@@ -2080,7 +2114,9 @@ function renderBattleUi() {
   const realFriendScramblePreview = activeRoom.mode === "friend" &&
     activeRoom.cubeMode === "real" &&
     Boolean(activeRoom.scramble);
-  const canSeeScramble = realFriendScramblePreview || (isSpectatorMode
+  const virtualFriendScrambleVisible = friendRoom && activeRoom.cubeMode === "virtual" &&
+    ["inspection", "solving", "finished"].includes(activeRoom.status);
+  const canSeeScramble = realFriendScramblePreview || virtualFriendScrambleVisible || (isSpectatorMode
     ? ["inspection", "solving", "finished"].includes(activeRoom.status)
     : ["inspecting", "solving", "finished", "dnf"].includes(you?.status));
   battleScramble.textContent = canSeeScramble ? (activeRoom.scramble || "") : "";
@@ -2105,7 +2141,8 @@ function renderBattleUi() {
   document.body.classList.toggle("friend-real-battle", realFriendRoom);
   window.setVirtualCubeVisible?.(activeRoom.cubeMode !== "real");
   document.body.classList.toggle("spectator-mode", isSpectatorMode);
-  const hostCanStart = isMultiplayerFriendRoom() && !realFriendRoom && currentUser?.uid === activeRoom.hostUid && !isSpectatorMode && activeRoom.status === "waiting";
+  const virtualFriendAutoStart = friendRoom && activeRoom.cubeMode === "virtual";
+  const hostCanStart = isMultiplayerFriendRoom() && !realFriendRoom && !virtualFriendAutoStart && currentUser?.uid === activeRoom.hostUid && !isSpectatorMode && activeRoom.status === "waiting";
   hostStartBattleBtn.hidden = !hostCanStart;
   if (hostCanStart) {
     const readyCount = [...battlePlayersByUid.values()].filter(player => player.ready && isFriendRoomParticipant(player)).length;
@@ -2332,8 +2369,12 @@ function watchRoom(roomId) {
     }
     const localPlayer = getDisplayPlayer(activeRoomRole);
     const localCanSeeScramble = ["inspecting", "solving", "finished", "dnf"].includes(localPlayer?.status);
-    if (localCanSeeScramble && room.scramble) {
+    const virtualFriendRoundVisible = room.mode === "friend" && room.cubeMode === "virtual" &&
+      ["inspection", "solving", "finished"].includes(room.status);
+    if ((localCanSeeScramble || virtualFriendRoundVisible || isSpectatorMode) && room.scramble) {
       window.opponentCube?.setScramble(room.scramble, activeRound);
+      window.opponentCube?.applyMoves((battleMovesByRole.opponent || [])
+        .filter(move => !move.round || Number(move.round) === activeRound));
     } else {
       window.opponentCube?.clear();
     }
@@ -2370,6 +2411,10 @@ function watchRoom(roomId) {
       battleNotice.textContent = "The next round could not be prepared.";
       console.error("Friend Real Cube round preparation failed", error);
     });
+
+    if (room.mode === "friend" && room.cubeMode === "virtual") {
+      syncFriendOpponentMovesListener();
+    }
 
     renderBattleUi();
     if (isMultiplayerFriendRoom()) finalizeFriendMultiplayerIfDone().catch(console.error);
@@ -2899,7 +2944,7 @@ async function readyBattleRoom() {
       ...readyReset,
       updatedAt: serverTimestamp()
     });
-    setBattleStatus(ready ? "Ready. Waiting for the host to start." : "Ready cancelled.");
+    setBattleStatus(ready ? "Ready. Waiting for all players." : "Ready cancelled.");
     return;
   }
   if (room.status === "finishing" || room.status === "finished") {
@@ -2972,14 +3017,6 @@ async function notifyBattleSolveStarted() {
 
 function handleBattleSpaceStart() {
   if (!document.body.classList.contains("battle-mode") || isSpectatorMode || activeRoom?.cubeMode === "real") return;
-
-  if (!hostStartBattleBtn.hidden && !hostStartBattleBtn.disabled) {
-    startFriendMultiplayerGame().catch(error => {
-      battleNotice.textContent = "Game could not be started.";
-      console.error(error);
-    });
-    return;
-  }
 
   const player = isMultiplayerFriendRoom()
     ? battlePlayersByUid.get(currentUser?.uid)
