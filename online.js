@@ -116,6 +116,9 @@ const friendVirtualBattleStage = document.getElementById("friendVirtualBattleSta
 const normalCubeAreaMount = document.getElementById("normalCubeAreaMount");
 const mainCubeArea = document.getElementById("mainCubeArea");
 const friendHistoryMount = document.getElementById("friendHistoryMount");
+const battleInspectionOverlay = document.getElementById("battleInspectionOverlay");
+const battleInspectionMount = document.getElementById("battleInspectionMount");
+const opponentCubeMount = document.getElementById("opponentCubeMount");
 const battleModeLabel = document.getElementById("battleModeLabel");
 const battleRematchPanel = document.getElementById("battleRematchPanel");
 const battleRematchYou = document.getElementById("battleRematchYou");
@@ -1222,6 +1225,12 @@ function formatBattleTime(seconds) {
 }
 
 function restoreMainCubeArea() {
+  if (battleInspectionOverlay && battleInspectionMount?.parentNode && battleInspectionOverlay.previousElementSibling !== battleInspectionMount) {
+    battleInspectionMount.insertAdjacentElement("afterend", battleInspectionOverlay);
+  }
+  if (opponentCubePanel && opponentCubeMount?.parentNode && opponentCubePanel.nextElementSibling !== opponentCubeMount) {
+    opponentCubeMount.insertAdjacentElement("beforebegin", opponentCubePanel);
+  }
   if (mainCubeArea && normalCubeAreaMount?.parentNode && mainCubeArea.previousElementSibling !== normalCubeAreaMount) {
     normalCubeAreaMount.insertAdjacentElement("afterend", mainCubeArea);
   }
@@ -1242,8 +1251,16 @@ function syncFriendVirtualBattleLayout() {
     restoreMainCubeArea();
     return;
   }
+  let cubeAreaMoved = false;
   if (friendVirtualBattleStage && mainCubeArea && mainCubeArea.parentNode !== friendVirtualBattleStage) {
     friendVirtualBattleStage.appendChild(mainCubeArea);
+    cubeAreaMoved = true;
+  }
+  if (mainCubeArea && battleInspectionOverlay && battleInspectionOverlay.parentNode !== mainCubeArea) {
+    mainCubeArea.insertBefore(battleInspectionOverlay, mainCubeArea.firstChild);
+  }
+  if (friendVirtualBattleStage && opponentCubePanel && opponentCubePanel.parentNode !== friendVirtualBattleStage) {
+    friendVirtualBattleStage.appendChild(opponentCubePanel);
   }
   if (friendEnabled && friendVirtualBattleStage && friendRealHistoryPanel && friendRealHistoryPanel.parentNode !== friendVirtualBattleStage) {
     friendVirtualBattleStage.insertBefore(friendRealHistoryPanel, mainCubeArea);
@@ -1251,6 +1268,12 @@ function syncFriendVirtualBattleLayout() {
     friendHistoryMount.insertAdjacentElement("afterend", friendRealHistoryPanel);
   }
   if (friendVirtualBattleStage) friendVirtualBattleStage.hidden = false;
+  if (cubeAreaMoved) {
+    window.requestAnimationFrame(() => {
+      window.resizeMainCube?.();
+      window.applyCubeSizeScale?.(window.getCubeSizeScale?.() || 1);
+    });
+  }
 }
 
 function getMinimumAcceptedBattleTime() {
@@ -1524,6 +1547,7 @@ function renderMultiplayerRoster() {
     multiplayerRoster.classList.add("expanded");
     multiplayerRosterToggle.setAttribute("aria-expanded", "true");
   }
+  updateMultiplayerRosterToggle();
   if (multiplayerRosterHint) multiplayerRosterHint.hidden = activeRoom.cubeMode === "real";
   const activeUids = new Set(activeRoom.activePlayerUids || []);
   const players = (isMultiplayerFriendRoom()
@@ -1569,6 +1593,17 @@ function renderMultiplayerRoster() {
     row.querySelector("time").textContent = timer;
     return row;
   }));
+}
+
+function updateMultiplayerRosterToggle() {
+  if (!multiplayerRoster || !multiplayerRosterToggle) return;
+  if (activeRoom?.mode !== "friend") {
+    multiplayerRosterToggle.textContent = "Room Players";
+    return;
+  }
+  const expanded = multiplayerRoster.classList.contains("expanded");
+  multiplayerRosterToggle.textContent = `Room Players ${expanded ? "−" : "+"}`;
+  multiplayerRosterToggle.setAttribute("aria-expanded", String(expanded));
 }
 
 function getFriendRealRoomHistoryKey() {
@@ -3941,8 +3976,8 @@ function setupAuthUi() {
 
   multiplayerRosterToggle?.addEventListener("click", () => {
     if (activeRoom?.mode !== "friend") return;
-    const expanded = multiplayerRoster.classList.toggle("expanded");
-    multiplayerRosterToggle.setAttribute("aria-expanded", String(expanded));
+    multiplayerRoster.classList.toggle("expanded");
+    updateMultiplayerRosterToggle();
   });
 
   friendRealEditBtn?.addEventListener("click", event => {
