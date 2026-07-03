@@ -1249,6 +1249,33 @@ function restoreMainCubeArea() {
   if (friendVirtualBattleStage) friendVirtualBattleStage.hidden = true;
 }
 
+function resetBattleLayoutState() {
+  document.body.classList.remove(
+    "battle-mode",
+    "battle-locked",
+    "real-cube-battle",
+    "friend-real-battle",
+    "friend-virtual-battle",
+    "ranked-battle-mode",
+    "spectator-mode",
+    "touch-device"
+  );
+  cubeContainer?.classList.remove("ready-waiting");
+  opponentCubePanel?.classList.remove("ready-waiting", "opponent-unavailable");
+  restoreMainCubeArea();
+
+  const resizeNormalCube = () => {
+    window.resizeMainCube?.();
+    window.applyCubeSizeScale?.(window.getCubeSizeScale?.() || 1);
+  };
+
+  // The first frame restores the normal grid; the second measures its final size.
+  window.requestAnimationFrame(() => {
+    resizeNormalCube();
+    window.requestAnimationFrame(resizeNormalCube);
+  });
+}
+
 function syncFriendVirtualBattleLayout() {
   const virtualBattle = document.body.classList.contains("battle-mode") && activeRoom?.cubeMode === "virtual";
   const friendEnabled = virtualBattle && activeRoom?.mode === "friend";
@@ -3722,6 +3749,7 @@ function resetBattleUiAfterLeave() {
   } else {
     document.body.classList.remove("solving");
   }
+  resetBattleLayoutState();
   const url = new URL(window.location.href);
   url.searchParams.delete("room");
   url.searchParams.delete("battleRoom");
