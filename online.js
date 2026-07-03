@@ -74,7 +74,10 @@ const multiplayerRosterList = document.getElementById("multiplayerRosterList");
 const multiplayerRosterToggle = document.getElementById("multiplayerRosterToggle");
 const multiplayerRosterMount = document.getElementById("multiplayerRosterMount");
 const friendRealTimerPanel = document.getElementById("friendRealTimerPanel");
+const friendRealTimerCell = document.getElementById("friendRealTimerCell");
 const friendRealTimerDisplay = document.getElementById("friendRealTimerDisplay");
+const friendRealNextOverlay = document.getElementById("friendRealNextOverlay");
+const friendRealNextWaiting = document.getElementById("friendRealNextWaiting");
 const friendRealEditBtn = document.getElementById("friendRealEditBtn");
 const friendRealEditMenu = document.getElementById("friendRealEditMenu");
 const friendRealManualTime = document.getElementById("friendRealManualTime");
@@ -2355,10 +2358,12 @@ function renderBattleUi() {
   }
   if (friendRealNextReadyBtn) {
     const showNextReady = realFriendRoom && activeRoom.status === "finished" && !isSpectatorMode;
-    friendRealNextReadyBtn.hidden = !showNextReady;
+    friendRealNextOverlay.hidden = !showNextReady;
+    friendRealTimerCell?.classList.toggle("next-ready-active", showNextReady);
     friendRealNextReadyBtn.disabled = Boolean(you?.nextReady);
-    friendRealNextReadyBtn.textContent = you?.nextReady ? "Waiting for players..." : "Ready for Next";
-    friendRealControls.hidden = !showNextReady;
+    friendRealNextReadyBtn.textContent = you?.nextReady ? "Ready for Next ✓" : "Ready for Next";
+    if (friendRealNextWaiting) friendRealNextWaiting.hidden = !showNextReady || !you?.nextReady;
+    friendRealControls.hidden = true;
     friendRealStartBtn.hidden = true;
     friendRealAbortBtn.hidden = true;
   }

@@ -90,7 +90,13 @@
         <div class="friend-real-center-column">
           <section class="friend-real-timer-panel" id="friendRealTimerPanel" hidden aria-label="My real cube timer">
             <div class="friend-real-timer-line">
-              <div class="friend-real-timer" id="friendRealTimerDisplay">0.00</div>
+              <div class="friend-real-timer-cell" id="friendRealTimerCell">
+                <div class="friend-real-timer" id="friendRealTimerDisplay">0.00</div>
+                <div class="friend-real-next-overlay" id="friendRealNextOverlay" hidden>
+                  <button id="friendRealNextReadyBtn" type="button">Ready for Next</button>
+                  <p id="friendRealNextWaiting" hidden>Waiting for opponents</p>
+                </div>
+              </div>
               <button id="friendRealEditBtn" class="friend-real-edit-button" type="button">Edit</button>
             </div>
             <div class="friend-real-edit-menu" id="friendRealEditMenu" hidden>
@@ -115,7 +121,6 @@
           <p class="friend-real-operation" id="friendRealOperationText" hidden>Hold Space. Release to start.</p>
           <div class="friend-real-controls" id="friendRealControls" hidden>
             <button id="friendRealStartBtn">Start Solve</button>
-            <button id="friendRealNextReadyBtn" hidden>Ready for Next</button>
             <button id="friendRealAbortBtn" class="secondary-action" hidden>Abort</button>
           </div>
         </div>
