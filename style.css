@@ -1610,6 +1610,91 @@ body.friend-virtual-battle .multiplayer-roster:not(.expanded) .multiplayer-roste
 
 body.friend-virtual-battle .multiplayer-roster-toggle::after { content: none; }
 
+/* Desktop Friend Virtual Battle: keep the complete competition surface in one viewport. */
+@media (min-width: 901px) {
+  body.friend-virtual-battle .battle-screen {
+    margin-top: 8px;
+  }
+
+  body.friend-virtual-battle .battle-heading {
+    padding-bottom: 6px;
+  }
+
+  body.friend-virtual-battle .battle-heading h2 {
+    font-size: 26px;
+  }
+
+  body.friend-virtual-battle .battle-scramble {
+    min-height: 0;
+    margin: 8px auto 4px;
+    padding: 4px 12px;
+    font-size: clamp(20px, 2.2vw, 32px);
+    line-height: 1.2;
+  }
+
+  body.friend-virtual-battle .friend-virtual-battle-stage {
+    row-gap: 16px;
+    margin-top: 4px;
+  }
+
+  body.friend-virtual-battle .friend-virtual-battle-stage #cubeContainer {
+    width: clamp(300px, 35vh, 380px);
+  }
+
+  body.friend-virtual-battle .friend-virtual-battle-stage .friend-real-history-panel {
+    min-height: 0;
+    height: min(52vh, 500px);
+    max-height: min(52vh, 500px);
+    padding: 12px;
+  }
+
+  body.friend-virtual-battle .friend-real-room-stats {
+    margin-bottom: 12px;
+  }
+
+  body.friend-virtual-battle .friend-real-room-stats div {
+    padding: 7px 4px;
+  }
+
+  body.friend-virtual-battle .friend-virtual-roster-slot {
+    margin-top: 0;
+  }
+
+  body.friend-virtual-battle .multiplayer-roster {
+    padding: 8px;
+  }
+
+  body.friend-virtual-battle .multiplayer-roster-toggle {
+    min-height: 34px;
+    margin-bottom: 4px;
+    padding: 4px 8px;
+    font-size: 20px;
+  }
+
+  body.friend-virtual-battle .multiplayer-roster-hint {
+    margin: 0 0 5px;
+    font-size: 12px;
+  }
+
+  body.friend-virtual-battle .multiplayer-roster-list {
+    max-height: 112px;
+    gap: 6px;
+    padding-right: 6px;
+  }
+
+  body.friend-virtual-battle .multiplayer-roster-row {
+    min-height: 42px;
+    padding: 7px 9px;
+    font-size: 14px;
+  }
+
+  body.friend-virtual-battle .battle-notice,
+  body.friend-virtual-battle .battle-result {
+    min-height: 18px;
+    margin: 4px 0;
+  }
+}
+
 @media (max-width: 900px) {
   body.friend-real-battle .friend-real-main-layout {
     display: flex;
