@@ -114,6 +114,10 @@ const opponentCubePanel = document.getElementById("opponentCubePanel");
 const opponentCubeTitle = document.getElementById("opponentCubeTitle");
 const opponentCubeStatus = document.getElementById("opponentCubeStatus");
 const friendVirtualBattleStage = document.getElementById("friendVirtualBattleStage");
+const friendVirtualCubeRow = document.getElementById("friendVirtualCubeRow");
+const friendVirtualMainCubeSlot = document.getElementById("friendVirtualMainCubeSlot");
+const friendVirtualOpponentSlot = document.getElementById("friendVirtualOpponentSlot");
+const friendVirtualRosterSlot = document.getElementById("friendVirtualRosterSlot");
 const normalCubeAreaMount = document.getElementById("normalCubeAreaMount");
 const mainCubeArea = document.getElementById("mainCubeArea");
 const friendHistoryMount = document.getElementById("friendHistoryMount");
@@ -1288,28 +1292,32 @@ function syncFriendVirtualBattleLayout() {
     return;
   }
   let cubeAreaMoved = false;
-  if (friendVirtualBattleStage && mainCubeArea && mainCubeArea.parentNode !== friendVirtualBattleStage) {
-    friendVirtualBattleStage.appendChild(mainCubeArea);
+  const cubeAreaParent = friendEnabled ? friendVirtualMainCubeSlot : friendVirtualBattleStage;
+  if (cubeAreaParent && mainCubeArea && mainCubeArea.parentNode !== cubeAreaParent) {
+    cubeAreaParent.appendChild(mainCubeArea);
     cubeAreaMoved = true;
   }
   if (mainCubeArea && battleInspectionOverlay && battleInspectionOverlay.parentNode !== mainCubeArea) {
     mainCubeArea.insertBefore(battleInspectionOverlay, mainCubeArea.firstChild);
   }
-  if (friendVirtualBattleStage && opponentCubePanel && opponentCubePanel.parentNode !== friendVirtualBattleStage) {
-    friendVirtualBattleStage.appendChild(opponentCubePanel);
+  const opponentParent = friendEnabled ? friendVirtualOpponentSlot : friendVirtualBattleStage;
+  if (opponentParent && opponentCubePanel && opponentCubePanel.parentNode !== opponentParent) {
+    opponentParent.appendChild(opponentCubePanel);
   }
-  if (rankedEnabled && cubeContainer && battleReadyBtn && battleReadyBtn.parentNode !== cubeContainer) {
+  if (enabled && cubeContainer && battleReadyBtn && battleReadyBtn.parentNode !== cubeContainer) {
     cubeContainer.appendChild(battleReadyBtn);
-  } else if (!rankedEnabled && battleReadyMount?.parentNode && battleReadyBtn?.previousElementSibling !== battleReadyMount) {
+  } else if (!enabled && battleReadyMount?.parentNode && battleReadyBtn?.previousElementSibling !== battleReadyMount) {
     battleReadyMount.insertAdjacentElement("afterend", battleReadyBtn);
   }
-  if (rankedEnabled && mainCubeArea && multiplayerRoster && multiplayerRoster.parentNode !== mainCubeArea) {
+  if (friendEnabled && friendVirtualRosterSlot && multiplayerRoster && multiplayerRoster.parentNode !== friendVirtualRosterSlot) {
+    friendVirtualRosterSlot.appendChild(multiplayerRoster);
+  } else if (rankedEnabled && mainCubeArea && multiplayerRoster && multiplayerRoster.parentNode !== mainCubeArea) {
     mainCubeArea.appendChild(multiplayerRoster);
-  } else if (!rankedEnabled && multiplayerRosterMount?.parentNode && multiplayerRoster?.previousElementSibling !== multiplayerRosterMount) {
+  } else if (!enabled && multiplayerRosterMount?.parentNode && multiplayerRoster?.previousElementSibling !== multiplayerRosterMount) {
     multiplayerRosterMount.insertAdjacentElement("afterend", multiplayerRoster);
   }
   if (friendEnabled && friendVirtualBattleStage && friendRealHistoryPanel && friendRealHistoryPanel.parentNode !== friendVirtualBattleStage) {
-    friendVirtualBattleStage.insertBefore(friendRealHistoryPanel, mainCubeArea);
+    friendVirtualBattleStage.insertBefore(friendRealHistoryPanel, friendVirtualCubeRow);
   } else if (!friendEnabled && friendRealHistoryPanel && friendHistoryMount?.parentNode) {
     friendHistoryMount.insertAdjacentElement("afterend", friendRealHistoryPanel);
   }
@@ -2144,10 +2152,10 @@ function renderBattleReadyButton(you, opponent) {
   if (isMultiplayerFriendRoom()) {
     const activeRoundRunning = ["inspection", "solving", "finishing"].includes(activeRoom?.status) ||
       (activeRoom?.status === "ready" && (activeRoom.activePlayerUids || []).length > 0);
-    battleReadyBtn.hidden = isSpectatorMode || !you || activeRoundRunning;
+    battleReadyBtn.hidden = isSpectatorMode || !you || Boolean(you.ready) || activeRoundRunning;
     if (battleReadyBtn.hidden) return;
     battleReadyBtn.disabled = false;
-    battleReadyBtn.textContent = you.ready ? "Ready ✓" : "Ready";
+    battleReadyBtn.textContent = "Ready";
     return;
   }
   const battleEnded = activeRoom?.status === "finished" || activeRoom?.status === "finishing";
