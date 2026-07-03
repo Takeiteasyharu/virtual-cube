@@ -69,7 +69,8 @@
       <div class="battle-scramble" id="battleScramble"></div>
       <div class="friend-virtual-battle-stage" id="friendVirtualBattleStage" hidden></div>
       <div class="friend-real-main-layout">
-        <aside class="friend-real-history-panel" id="friendRealHistoryPanel" hidden aria-label="Real cube history">
+        <span id="friendHistoryMount" hidden></span>
+        <aside class="friend-real-history-panel" id="friendRealHistoryPanel" hidden aria-label="Battle solve history">
           <dl class="friend-real-room-stats" aria-label="Room statistics">
             <div><dt>PB</dt><dd id="friendRealPb">-</dd></div>
             <div><dt>AO5</dt><dd id="friendRealAo5">-</dd></div>
@@ -182,6 +183,11 @@
         <section class="battle-settings-section" id="friendOpponentSettingsSection">
           <h3>Opponent</h3>
           <label class="settings-toggle"><input id="friendShowOpponentCube" type="checkbox" /> Show Opponent Cube</label>
+        </section>
+        <section class="battle-settings-section" id="battleCubeSizeSection">
+          <h3>Cube Size</h3>
+          <label for="battleCubeSizeInput">Visual cube size: <output id="battleCubeSizeValue" for="battleCubeSizeInput">1.00x</output></label>
+          <input id="battleCubeSizeInput" type="range" min="0.5" max="2" step="0.05" value="1" />
         </section>
         <section class="battle-settings-section">
           <h3>Room</h3>

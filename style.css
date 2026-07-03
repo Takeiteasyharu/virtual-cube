@@ -1406,12 +1406,24 @@ body.friend-real-battle .battle-scramble { font-size: clamp(24px, 3vw, 44px); li
 }
 
 body.friend-virtual-battle .friend-virtual-battle-stage {
-  display: block;
+  display: grid;
+  grid-template-columns: minmax(210px, 250px) minmax(0, 1fr);
+  gap: 22px;
   width: 100%;
   margin-top: 12px;
+  align-items: start;
+}
+
+body.friend-virtual-battle .friend-virtual-battle-stage .friend-real-history-panel {
+  grid-column: 1;
+  width: 100%;
+  min-height: 420px;
+  max-height: 620px;
+  overflow-y: auto;
 }
 
 body.friend-virtual-battle .friend-virtual-battle-stage .cube-area {
+  grid-column: 2;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
   gap: 22px;
@@ -1439,6 +1451,52 @@ body.friend-virtual-battle .friend-virtual-battle-stage .opponent-cube-panel {
 body.friend-virtual-battle .multiplayer-roster {
   width: min(100%, 820px);
   margin: 14px auto 0;
+}
+
+body.ranked-battle-mode .friend-virtual-battle-stage {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+}
+
+body.ranked-battle-mode .friend-virtual-battle-stage .cube-area {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  gap: 22px;
+  width: 100%;
+  align-items: center;
+  transform: none;
+}
+
+body.ranked-battle-mode .friend-virtual-battle-stage #cubeContainer {
+  grid-column: 1;
+  width: min(100%, 620px);
+  height: min(52vw, 620px);
+  min-width: 0;
+}
+
+body.ranked-battle-mode .friend-virtual-battle-stage .opponent-cube-panel {
+  position: static;
+  grid-column: 2;
+  width: 100%;
+  max-width: 280px;
+  margin: 0;
+  transform: none;
+}
+
+body.ranked-battle-mode .multiplayer-roster {
+  width: min(100%, 820px);
+  margin: 14px auto 0;
+}
+
+body.ranked-battle-mode .multiplayer-roster-toggle:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+#battleCubeSizeInput {
+  width: 100%;
+  margin-top: 10px;
 }
 
 body.friend-virtual-battle .multiplayer-roster:not(.expanded) .multiplayer-roster-list,
@@ -1495,6 +1553,23 @@ body.friend-virtual-battle .multiplayer-roster.expanded .multiplayer-roster-togg
     gap: 12px;
   }
 
+  body.friend-virtual-battle .friend-virtual-battle-stage {
+    display: flex;
+    flex-direction: column;
+  }
+
+  body.friend-virtual-battle .friend-virtual-battle-stage .cube-area {
+    order: 1;
+    width: 100%;
+  }
+
+  body.friend-virtual-battle .friend-virtual-battle-stage .friend-real-history-panel {
+    order: 2;
+    width: 100%;
+    min-height: 0;
+    max-height: 420px;
+  }
+
   body.friend-virtual-battle .friend-virtual-battle-stage #cubeContainer,
   body.friend-virtual-battle .friend-virtual-battle-stage .opponent-cube-panel {
     grid-column: 1;
@@ -1508,6 +1583,32 @@ body.friend-virtual-battle .multiplayer-roster.expanded .multiplayer-roster-togg
 
   body.friend-virtual-battle .friend-virtual-battle-stage .opponent-cube-panel {
     width: min(92vw, 300px);
+  }
+
+  body.ranked-battle-mode .friend-virtual-battle-stage .cube-area {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  body.ranked-battle-mode .friend-virtual-battle-stage #cubeContainer,
+  body.ranked-battle-mode .friend-virtual-battle-stage .opponent-cube-panel {
+    grid-column: 1;
+    justify-self: center;
+  }
+
+  body.ranked-battle-mode .friend-virtual-battle-stage #cubeContainer {
+    width: min(94vw, 560px);
+    height: min(94vw, 560px);
+  }
+
+  body.ranked-battle-mode .friend-virtual-battle-stage .opponent-cube-panel {
+    width: min(92vw, 300px);
+  }
+
+  body.ranked-battle-mode .battle-ready-button:not([hidden]) {
+    top: min(47vw, 280px);
+    left: 50%;
+    z-index: 5;
   }
 }
 

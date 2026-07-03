@@ -108,6 +108,7 @@ function setCubeSizeScale(value) {
 
 window.getCubeAnimationSpeed = getAnimationSpeed;
 window.getCubeSizeScale = getCubeSizeScale;
+window.setCubeSizeScale = setCubeSizeScale;
 window.isRealCubeInspectionEnabled = isRealCubeInspectionEnabled;
 
 let readyToSolve = false;

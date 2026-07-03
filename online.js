@@ -94,6 +94,9 @@ const friendTimeEntrySection = document.getElementById("friendTimeEntrySection")
 const friendTimeEntryType = document.getElementById("friendTimeEntryType");
 const friendOpponentSettingsSection = document.getElementById("friendOpponentSettingsSection");
 const friendShowOpponentCube = document.getElementById("friendShowOpponentCube");
+const battleCubeSizeSection = document.getElementById("battleCubeSizeSection");
+const battleCubeSizeInput = document.getElementById("battleCubeSizeInput");
+const battleCubeSizeValue = document.getElementById("battleCubeSizeValue");
 const friendSettingsLeaveBtn = document.getElementById("friendSettingsLeaveBtn");
 const friendSettingsLogoutBtn = document.getElementById("friendSettingsLogoutBtn");
 const copyRoomUrlBtn = document.getElementById("copyRoomUrlBtn");
@@ -112,6 +115,7 @@ const opponentCubeStatus = document.getElementById("opponentCubeStatus");
 const friendVirtualBattleStage = document.getElementById("friendVirtualBattleStage");
 const normalCubeAreaMount = document.getElementById("normalCubeAreaMount");
 const mainCubeArea = document.getElementById("mainCubeArea");
+const friendHistoryMount = document.getElementById("friendHistoryMount");
 const battleModeLabel = document.getElementById("battleModeLabel");
 const battleRematchPanel = document.getElementById("battleRematchPanel");
 const battleRematchYou = document.getElementById("battleRematchYou");
@@ -1177,7 +1181,7 @@ function setBattleMode(enabled) {
   document.body.classList.toggle("battle-mode", enabled);
   if (enabled) document.body.classList.remove("normal-real-cube");
   if (!enabled) {
-    document.body.classList.remove("real-cube-battle", "friend-real-battle", "friend-virtual-battle", "spectator-mode");
+    document.body.classList.remove("real-cube-battle", "friend-real-battle", "friend-virtual-battle", "ranked-battle-mode", "spectator-mode");
     restoreMainCubeArea();
   }
   if (enabled) {
@@ -1221,19 +1225,30 @@ function restoreMainCubeArea() {
   if (mainCubeArea && normalCubeAreaMount?.parentNode && mainCubeArea.previousElementSibling !== normalCubeAreaMount) {
     normalCubeAreaMount.insertAdjacentElement("afterend", mainCubeArea);
   }
+  if (friendRealHistoryPanel && friendHistoryMount?.parentNode && friendRealHistoryPanel.previousElementSibling !== friendHistoryMount) {
+    friendHistoryMount.insertAdjacentElement("afterend", friendRealHistoryPanel);
+  }
   if (friendVirtualBattleStage) friendVirtualBattleStage.hidden = true;
 }
 
 function syncFriendVirtualBattleLayout() {
-  const enabled = document.body.classList.contains("battle-mode") &&
-    activeRoom?.mode === "friend" && activeRoom?.cubeMode === "virtual";
-  document.body.classList.toggle("friend-virtual-battle", enabled);
+  const virtualBattle = document.body.classList.contains("battle-mode") && activeRoom?.cubeMode === "virtual";
+  const friendEnabled = virtualBattle && activeRoom?.mode === "friend";
+  const rankedEnabled = virtualBattle && activeRoom?.mode === "ranked";
+  document.body.classList.toggle("friend-virtual-battle", friendEnabled);
+  document.body.classList.toggle("ranked-battle-mode", rankedEnabled);
+  const enabled = friendEnabled || rankedEnabled;
   if (!enabled) {
     restoreMainCubeArea();
     return;
   }
   if (friendVirtualBattleStage && mainCubeArea && mainCubeArea.parentNode !== friendVirtualBattleStage) {
     friendVirtualBattleStage.appendChild(mainCubeArea);
+  }
+  if (friendEnabled && friendVirtualBattleStage && friendRealHistoryPanel && friendRealHistoryPanel.parentNode !== friendVirtualBattleStage) {
+    friendVirtualBattleStage.insertBefore(friendRealHistoryPanel, mainCubeArea);
+  } else if (!friendEnabled && friendRealHistoryPanel && friendHistoryMount?.parentNode) {
+    friendHistoryMount.insertAdjacentElement("afterend", friendRealHistoryPanel);
   }
   if (friendVirtualBattleStage) friendVirtualBattleStage.hidden = false;
 }
@@ -1503,6 +1518,12 @@ function selectOpponent(uid) {
 function renderMultiplayerRoster() {
   if (!multiplayerRoster || !multiplayerRosterList) return;
   multiplayerRoster.hidden = false;
+  const rosterCanCollapse = activeRoom?.mode === "friend";
+  multiplayerRosterToggle.disabled = !rosterCanCollapse;
+  if (!rosterCanCollapse) {
+    multiplayerRoster.classList.add("expanded");
+    multiplayerRosterToggle.setAttribute("aria-expanded", "true");
+  }
   if (multiplayerRosterHint) multiplayerRosterHint.hidden = activeRoom.cubeMode === "real";
   const activeUids = new Set(activeRoom.activePlayerUids || []);
   const players = (isMultiplayerFriendRoom()
@@ -1551,8 +1572,11 @@ function renderMultiplayerRoster() {
 }
 
 function getFriendRealRoomHistoryKey() {
+  const mode = activeRoom?.cubeMode === "virtual" ? "virtual" : "real";
   return activeRoomId && currentUser?.uid
-    ? `friendRealRoomHistory:${activeRoomId}:${currentUser.uid}`
+    ? (mode === "real"
+      ? `friendRealRoomHistory:${activeRoomId}:${currentUser.uid}`
+      : `friendVirtualRoomHistory:${activeRoomId}:${currentUser.uid}`)
     : "";
 }
 
@@ -1575,7 +1599,7 @@ function writeFriendRealRoomHistory(history) {
 }
 
 function syncCurrentFriendRealResult() {
-  if (!isRealFriendRoom() || isSpectatorMode || !currentUser) return;
+  if (!isMultiplayerFriendRoom() || isSpectatorMode || !currentUser) return;
   const player = battlePlayersByUid.get(currentUser.uid);
   if (!player) return;
   const round = Number(player.round || activeRound) || 1;
@@ -1620,7 +1644,7 @@ function calculateFriendRealAverage(history, count) {
 
 function renderFriendRealHistory() {
   if (!friendRealHistoryPanel || !friendRealSolveHistoryList) return;
-  friendRealHistoryPanel.hidden = !isRealFriendRoom();
+  friendRealHistoryPanel.hidden = !isMultiplayerFriendRoom() || isSpectatorMode;
   if (friendRealHistoryPanel.hidden) return;
 
   const solves = readFriendRealRoomHistory();
@@ -2109,7 +2133,7 @@ function renderBattleUi() {
     ? "Ranked Battle"
     : `${activeRoom.cubeMode === "real" ? "Real Cube" : "Virtual Cube"} · Friend Battle`;
   copyRoomUrlBtn.hidden = activeRoom.mode === "ranked";
-  if (friendBattleSettingsBtn) friendBattleSettingsBtn.hidden = !friendRoom;
+  if (friendBattleSettingsBtn) friendBattleSettingsBtn.hidden = !(friendRoom || activeRoom.mode === "ranked");
   leaveBattleBtn.hidden = friendRoom;
   const realFriendScramblePreview = activeRoom.mode === "friend" &&
     activeRoom.cubeMode === "real" &&
@@ -3701,7 +3725,8 @@ async function loginAsGuest() {
 function renderOpponentCube(opponent) {
   if (!opponentCubePanel || !opponentCubeStatus) return;
 
-  const hiddenByPreference = activeRoom?.mode === "friend" && activeRoom?.cubeMode === "virtual" && !shouldShowFriendOpponentCube();
+  const preferenceApplies = activeRoom?.cubeMode === "virtual" && ["friend", "ranked"].includes(activeRoom?.mode);
+  const hiddenByPreference = preferenceApplies && !shouldShowFriendOpponentCube();
   opponentCubePanel.hidden = hiddenByPreference;
   if (hiddenByPreference) return;
 
@@ -3806,12 +3831,17 @@ function setupAuthUi() {
 
   friendBattleSettingsBtn?.addEventListener("click", () => {
     const player = battlePlayersByUid.get(currentUser?.uid);
+    const virtualBattle = activeRoom?.cubeMode === "virtual";
     friendDarkModeToggle.checked = document.body.classList.contains("dark");
     friendTimeEntryType.value = getFriendTimeEntryType();
     friendTimeEntryType.disabled = ["inspecting", "solving"].includes(player?.status);
-    friendTimeEntrySection.hidden = activeRoom?.cubeMode !== "real" || isSpectatorMode;
-    friendOpponentSettingsSection.hidden = activeRoom?.cubeMode !== "virtual";
+    friendTimeEntrySection.hidden = activeRoom?.mode !== "friend" || activeRoom?.cubeMode !== "real" || isSpectatorMode;
+    friendOpponentSettingsSection.hidden = !virtualBattle;
+    battleCubeSizeSection.hidden = !virtualBattle;
     friendShowOpponentCube.checked = shouldShowFriendOpponentCube();
+    const cubeSize = window.getCubeSizeScale?.() || 1;
+    battleCubeSizeInput.value = String(cubeSize);
+    battleCubeSizeValue.textContent = `${Number(cubeSize).toFixed(2)}x`;
     friendBattleSettingsModal.hidden = false;
   });
 
@@ -3844,6 +3874,13 @@ function setupAuthUi() {
   friendShowOpponentCube?.addEventListener("change", () => {
     localStorage.setItem(FRIEND_SHOW_OPPONENT_CUBE_KEY, friendShowOpponentCube.checked ? "true" : "false");
     renderBattleUi();
+  });
+
+  battleCubeSizeInput?.addEventListener("input", () => {
+    const cubeSize = window.setCubeSizeScale?.(battleCubeSizeInput.value) || 1;
+    battleCubeSizeInput.value = String(cubeSize);
+    battleCubeSizeValue.textContent = `${Number(cubeSize).toFixed(2)}x`;
+    window.resizeMainCube?.();
   });
 
   friendSettingsLeaveBtn?.addEventListener("click", () => {
@@ -3903,6 +3940,7 @@ function setupAuthUi() {
   });
 
   multiplayerRosterToggle?.addEventListener("click", () => {
+    if (activeRoom?.mode !== "friend") return;
     const expanded = multiplayerRoster.classList.toggle("expanded");
     multiplayerRosterToggle.setAttribute("aria-expanded", String(expanded));
   });
