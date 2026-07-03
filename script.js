@@ -447,6 +447,7 @@ function handleNormalRealCubeTimerAction() {
 }
 
 function handleRealCubeSpaceDown() {
+  if (window.handleRealFriendResultSpace?.()) return;
   if (window.isManualRealFriendEntry?.()) return;
   if (["joined", "inactive", "finished"].includes(battleInputState)) {
     prepareAndArmRealCubeTimer();
