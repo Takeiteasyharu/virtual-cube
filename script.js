@@ -447,7 +447,6 @@ function handleNormalRealCubeTimerAction() {
 }
 
 function handleRealCubeSpaceDown() {
-  if (window.handleRealFriendResultSpace?.()) return;
   if (window.isManualRealFriendEntry?.()) return;
   if (["joined", "inactive", "finished"].includes(battleInputState)) {
     prepareAndArmRealCubeTimer();
@@ -489,7 +488,9 @@ function isRealTimerSolving() {
 function syncRealTimerScreenState() {
   const inspecting = isRealTimerInspecting();
   const solving = isRealTimerSolving();
-  document.body.classList.toggle("real-timer-clean", shouldUseCleanRealTimer() && (inspecting || solving));
+  const delayedFriendFullscreen = inspecting && Boolean(window.isRealFriendBattle?.());
+  const showCleanTimer = solving || (inspecting && (!delayedFriendFullscreen || realTimerHoldReady));
+  document.body.classList.toggle("real-timer-clean", shouldUseCleanRealTimer() && showCleanTimer);
   document.body.classList.toggle("real-timer-inspecting", inspecting);
   document.body.classList.toggle("real-timer-solving", solving);
 }
@@ -521,6 +522,10 @@ function beginRealTimerHold(startedAt = Date.now()) {
     if (!realTimerHoldStartedAt || !isRealTimerInspecting()) return;
     realTimerHoldReady = true;
     setInspectionHoldColor("green");
+    if (window.isRealFriendBattle?.()) {
+      setBattleInspectionOverlay(true, "0.00", "");
+      syncRealTimerScreenState();
+    }
   }, Math.max(0, 300 - (Date.now() - startedAt)));
 }
 
@@ -546,9 +551,13 @@ function releaseOrQueueRealTimerHold() {
 async function prepareAndArmRealCubeTimer() {
   realTimerReleasePending = false;
   realTimerPressStartedAt = Date.now();
+  if (window.isRealFriendBattle?.()) setInspectionHoldColor("red");
   const prepared = await beginRealCubeInspection();
-  if (!prepared || !isRealTimerInspecting()) return;
-  if (isRealCubeInspectionEnabled()) {
+  if (!prepared || !isRealTimerInspecting()) {
+    clearRealTimerHold();
+    return;
+  }
+  if (isRealCubeInspectionEnabled() && !window.isRealFriendBattle?.()) {
     realTimerPressStartedAt = 0;
     realTimerReleasedAt = 0;
     realTimerReleasePending = false;
@@ -1051,7 +1060,8 @@ function startBattleRealPreparation(scrambleText, round = 1) {
   battleMoveSequence = 0;
   document.body.classList.remove("battle-locked");
   document.getElementById("cubeContainer")?.classList.remove("ready-waiting");
-  setBattleInspectionOverlay(true, "Ready", getRealTimerReadyInstruction());
+  if (window.isRealFriendBattle?.()) setBattleInspectionOverlay(false);
+  else setBattleInspectionOverlay(true, "Ready", getRealTimerReadyInstruction());
   syncRealTimerScreenState();
 }
 
