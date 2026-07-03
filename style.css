@@ -1532,6 +1532,7 @@ body.ranked-battle-mode .friend-virtual-battle-stage .battle-inspection-overlay 
 
 body.ranked-battle-mode .friend-virtual-battle-stage #cubeContainer {
   grid-column: 1;
+  position: relative;
   width: min(100%, 620px);
   height: auto;
   aspect-ratio: 1;
@@ -1547,9 +1548,12 @@ body.ranked-battle-mode .friend-virtual-battle-stage .opponent-cube-panel {
   transform: none;
 }
 
-body.ranked-battle-mode .multiplayer-roster {
-  width: min(100%, 820px);
+body.ranked-battle-mode .friend-virtual-battle-stage .cube-area > .multiplayer-roster {
+  position: static;
+  width: 100%;
+  max-width: 820px;
   margin: 14px auto 0;
+  transform: none;
 }
 
 body.ranked-battle-mode .multiplayer-roster-toggle:disabled {
@@ -1654,10 +1658,15 @@ body.friend-virtual-battle .multiplayer-roster-toggle::after { content: none; }
     width: min(92vw, 300px);
   }
 
-  body.ranked-battle-mode .battle-ready-button:not([hidden]) {
-    top: min(47vw, 280px);
+  body.ranked-battle-mode .friend-virtual-battle-stage #cubeContainer > .battle-ready-button:not([hidden]) {
+    position: absolute;
+    top: 50%;
     left: 50%;
+    width: min(78%, 360px);
+    min-height: 68px;
+    margin: 0;
     z-index: 5;
+    transform: translate(-50%, -50%);
   }
 }
 
