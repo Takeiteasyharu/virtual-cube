@@ -746,6 +746,7 @@ function startNormalSolve() {
   clearNormalInspection();
   setBattleInspectionOverlay(false);
   normalSolveState = "solving";
+  setSolvingMode(true);
   firstTurnDone = true;
   resetSolveStats();
   if (isNormalRealCubeMode()) resetTimer();
@@ -899,7 +900,7 @@ function scrambleCube() {
   resetCube();
   if (!isNormalRealCubeMode()) resetTimer();
   resetSolveStats();
-  setSolvingMode(true);
+  if (!isNormalRealCubeMode()) setSolvingMode(true);
 
   const preparedRealScramble = isNormalRealCubeMode()
     ? normalActiveScramble
