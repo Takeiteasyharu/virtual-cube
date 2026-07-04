@@ -2337,7 +2337,7 @@ function renderBattleUi() {
       ? (inspectionEnabled ? "Press Space to start inspection" : "Press Start Solve to prepare the timer")
       : "Hold and release Space to start solve";
   }
-  realCubeTimerBtn.hidden = true;
+  if (realCubeTimerBtn) realCubeTimerBtn.hidden = true;
   friendRealControls.hidden = true;
   if (friendRealTimerPanel) friendRealTimerPanel.hidden = !realFriendRoom || isSpectatorMode;
   if (friendRealOperationText) {
@@ -2743,6 +2743,7 @@ async function createBattleRoom(mode = "friend") {
   const cubeMode = mode === "friend"
     ? (document.querySelector('input[name="friendCubeMode"]:checked')?.value || "virtual")
     : "virtual";
+  const initialScramble = cubeMode === "real" ? getBattleScramble() : "";
   const room = {
     roomId,
     mode,
@@ -2750,7 +2751,7 @@ async function createBattleRoom(mode = "friend") {
     maxPlayers: mode === "friend" ? 20 : 2,
     playerCount: 1,
     activePlayerUids: [],
-    scramble: "",
+    scramble: initialScramble,
     status: "waiting",
     hostUid: currentUser.uid,
     guestUid: "",
@@ -3816,7 +3817,7 @@ function resetBattleUiAfterLeave() {
   localBattleTimerSeconds = 0;
   battleReadyBtn.hidden = true;
   hostStartBattleBtn.hidden = true;
-  realCubeTimerBtn.hidden = true;
+  if (realCubeTimerBtn) realCubeTimerBtn.hidden = true;
   friendRealControls.hidden = true;
   realCubeInstruction.hidden = true;
   multiplayerRoster.hidden = true;
