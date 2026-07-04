@@ -183,6 +183,8 @@ let friendMembershipReconciling = false;
 let battleLeaving = false;
 let friendHostExitTimeout = null;
 let displayedOpponentRatingUid = "";
+const battlePlayerRatings = new Map();
+const battlePlayerRatingRequests = new Map();
 let readyInspectionStarting = false;
 let ratingUpdateInProgress = false;
 let friendFinalizing = false;
@@ -1579,6 +1581,52 @@ function getSelectedOpponent() {
   return ensureSelectedOpponent();
 }
 
+async function ensureBattlePlayerRating(player) {
+  if (activeRoom?.mode !== "ranked" || !player?.uid) return null;
+  const confirmed = activeRoom.ratingChanges?.[player.uid];
+  if (confirmed && Number.isFinite(Number(confirmed.after))) {
+    const rating = Math.round(Number(confirmed.after));
+    battlePlayerRatings.set(player.uid, rating);
+    return rating;
+  }
+  if (battlePlayerRatings.has(player.uid)) return battlePlayerRatings.get(player.uid);
+  if (battlePlayerRatingRequests.has(player.uid)) return battlePlayerRatingRequests.get(player.uid);
+
+  const request = getDoc(userRef(player.uid))
+    .then(snapshot => {
+      const profile = snapshot.data();
+      const rating = !profile || profile.loginType === "guest"
+        ? null
+        : Math.round(getRating(profile));
+      battlePlayerRatings.set(player.uid, rating);
+      return rating;
+    })
+    .catch(error => {
+      battlePlayerRatings.set(player.uid, null);
+      console.error(error);
+      return null;
+    })
+    .finally(() => battlePlayerRatingRequests.delete(player.uid));
+  battlePlayerRatingRequests.set(player.uid, request);
+  const rating = await request;
+  if (activeRoom?.mode === "ranked") renderMultiplayerRoster();
+  return rating;
+}
+
+function getRosterRatingText(player) {
+  if (activeRoom?.mode !== "ranked") return "";
+  const change = activeRoom.ratingChanges?.[player.uid];
+  if (activeRoom.ratingApplied && change) {
+    const before = Math.round(Number(change.before) || INITIAL_RATING);
+    const after = Math.round(Number(change.after) || before);
+    const delta = Number.isFinite(Number(change.change)) ? Math.round(Number(change.change)) : after - before;
+    const signedDelta = delta > 0 ? `+${delta}` : (delta < 0 ? String(delta) : "±0");
+    return `Rating: ${before} → ${after} (${signedDelta})`;
+  }
+  const rating = battlePlayerRatings.get(player.uid);
+  return `Rating: ${Number.isFinite(rating) ? rating : "-"}`;
+}
+
 function selectOpponent(uid) {
   if (activeRoom?.cubeMode === "real" || !uid || uid === currentUser?.uid) return;
   const opponent = getBattlePlayersForSelection().find(player => player.uid === uid);
@@ -1613,6 +1661,7 @@ function renderMultiplayerRoster() {
     return aTime - bTime || String(a.name).localeCompare(String(b.name));
   });
   multiplayerRosterList.replaceChildren(...players.map((player, index) => {
+    if (activeRoom.mode === "ranked") ensureBattlePlayerRating(player);
     const row = document.createElement("div");
     row.className = "multiplayer-roster-row";
     const selectable = activeRoom.cubeMode === "virtual" && player.uid !== currentUser?.uid && !isPlayerDisconnected(player);
@@ -1639,9 +1688,12 @@ function renderMultiplayerRoster() {
       : getPlayerElapsedSeconds(player);
     const timer = hasFinalBattleTime(player) ? formatBattleTime(Number(player.finalTime)) : formatBattleTime(elapsed);
     const state = player.status || (player.ready ? "ready" : "waiting");
-    row.innerHTML = `<strong></strong><span></span><time></time>`;
+    row.innerHTML = `<div class="multiplayer-roster-identity"><strong></strong><small></small></div><span></span><time></time>`;
     const place = activeRoom.status === "finished" && isActive && hasFinalBattleTime(player) ? `#${index + 1} ` : "";
     row.querySelector("strong").textContent = `${place}${player.name || "Player"}${player.uid === activeRoom.hostUid ? " (Host)" : ""}`;
+    const ratingLabel = row.querySelector("small");
+    ratingLabel.textContent = getRosterRatingText(player);
+    ratingLabel.hidden = activeRoom.mode !== "ranked";
     const entryLabel = player.timeEntryType === "manual" ? " | MANUAL" : "";
     row.querySelector("span").textContent = `${state.toUpperCase()}${entryLabel}`;
     row.querySelector("time").textContent = timer;
@@ -2019,17 +2071,20 @@ async function loadOpponentRating(opponent) {
     display.textContent = "-";
     return;
   }
-  if (displayedOpponentRatingUid === opponent.uid) return;
+  if (displayedOpponentRatingUid === opponent.uid) {
+    const confirmed = activeRoom?.ratingChanges?.[opponent.uid];
+    if (activeRoom?.ratingApplied && confirmed) {
+      display.textContent = String(Math.round(Number(confirmed.after) || INITIAL_RATING));
+    }
+    return;
+  }
 
   displayedOpponentRatingUid = opponent.uid;
   display.textContent = "Loading...";
   try {
-    const snapshot = await getDoc(userRef(opponent.uid));
+    const rating = await ensureBattlePlayerRating(opponent);
     if (displayedOpponentRatingUid !== opponent.uid) return;
-    const profile = snapshot.data();
-    display.textContent = !profile || profile.loginType === "guest"
-      ? "-"
-      : String(Math.round(getRating(profile)));
+    display.textContent = Number.isFinite(rating) ? String(rating) : "-";
   } catch (error) {
     if (displayedOpponentRatingUid === opponent.uid) display.textContent = "-";
     console.error(error);
@@ -2450,6 +2505,8 @@ function watchPlayer(roomId, role, uid) {
 
 function watchRoom(roomId) {
   clearBattleListeners();
+  battlePlayerRatings.clear();
+  battlePlayerRatingRequests.clear();
   activeRoom = null;
   activeRound = 0;
   battlePlayersByRole = { host: null, guest: null };
