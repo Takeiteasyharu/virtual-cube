@@ -2414,7 +2414,7 @@ function syncLocalBattleState(player) {
   if (!activeRoom || !player || !document.body.classList.contains("battle-mode")) return;
 
   if (player.status === "joined" || player.status === "ready") {
-    window.prepareBattleCube?.(activeRoom.scramble, activeRound);
+    window.prepareBattleCube?.(activeRoom.scramble, activeRound, isRealFriendRoom());
   }
 
   if (player.status === "inspecting") {
@@ -2604,9 +2604,8 @@ function watchRoom(roomId) {
 }
 
 function resetFriendRoundDisplay(room) {
-  localBattleTimerSeconds = 0;
   battleMovesByRole = { host: [], guest: [], opponent: [] };
-  window.prepareBattleCube?.(room.scramble || "", activeRound);
+  window.prepareBattleCube?.(room.scramble || "", activeRound, room.cubeMode === "real");
 }
 
 async function prepareLocalRealFriendRound(room) {
@@ -2629,8 +2628,7 @@ async function prepareLocalRealFriendRound(room) {
     ["finished", "dnf", "aborted", "returned", "left", "disconnected"].includes(player.status);
 
   preparedLocalRealFriendRoundKey = roundKey;
-  localBattleTimerSeconds = 0;
-  window.prepareBattleCube?.(room.scramble || "", round);
+  window.prepareBattleCube?.(room.scramble || "", round, true);
   if (!staleState) return;
 
   await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
@@ -3355,7 +3353,7 @@ async function cancelRealCubePreparation() {
     inspectionStartTimeMs: 0,
     updatedAt: serverTimestamp()
   }).catch(console.error);
-  window.cancelCurrentSolve?.();
+  window.cancelCurrentSolve?.({ preserveTimer: true });
 }
 
 async function finalizeFriendMultiplayerIfDone() {
@@ -3528,6 +3526,7 @@ async function submitBattleSolve(time, scramble, solveStats = {}) {
     if (!(activeRoom.activePlayerUids || []).includes(currentUser.uid)) {
       throw new Error("The player is not active in this Friend Battle round.");
     }
+    localBattleTimerSeconds = Number(time);
     const localPlayer = battlePlayersByUid.get(currentUser.uid);
     if (localPlayer) Object.assign(localPlayer, finishPayload, { finishedAt: new Date(), updatedAt: new Date() });
     syncCurrentFriendRealResult();
