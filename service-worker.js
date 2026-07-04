@@ -1,4 +1,4 @@
-const CACHE_NAME = "virtual-cube-timer-v94";
+const CACHE_NAME = "virtual-cube-timer-v95";
 const BASE_PATH = "/virtual-cube/";
 
 const CACHE_URLS = [

@@ -412,7 +412,6 @@ function handleNormalRealCubeSpaceDown() {
     firstTurnDone = false;
     setSolvingMode(false);
     prepareNextNormalRealScramble();
-    resetTimer();
     renderNormalRealCubeUi();
   }
 }
@@ -511,6 +510,7 @@ function beginRealTimerHold(startedAt = Date.now()) {
     if (!realTimerHoldStartedAt || !isRealTimerInspecting()) return;
     realTimerHoldReady = true;
     setInspectionHoldColor("green");
+    if (isNormalRealCubeMode()) resetTimer();
     if (window.isRealFriendBattle?.() || isNormalRealCubeMode()) {
       setBattleInspectionOverlay(true, "0.00", "");
       syncRealTimerScreenState();
@@ -577,7 +577,7 @@ function cancelRealTimerPreparation() {
   readyToSolve = false;
   firstTurnDone = false;
   document.body.classList.remove("inspection-active");
-  resetTimer();
+  if (!isNormalRealCubeMode()) resetTimer();
   renderStats();
   renderNormalRealCubeUi();
   syncRealTimerScreenState();
@@ -748,6 +748,7 @@ function startNormalSolve() {
   normalSolveState = "solving";
   firstTurnDone = true;
   resetSolveStats();
+  if (isNormalRealCubeMode()) resetTimer();
   solveStartedAt = Date.now();
   startTimer();
   renderNormalRealCubeUi();
@@ -896,7 +897,7 @@ function scrambleCube() {
 
   clearNormalInspection();
   resetCube();
-  resetTimer();
+  if (!isNormalRealCubeMode()) resetTimer();
   resetSolveStats();
   setSolvingMode(true);
 
