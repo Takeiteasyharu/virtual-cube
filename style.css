@@ -1625,40 +1625,111 @@ body.friend-virtual-battle .multiplayer-roster-toggle::after { content: none; }
 
 /* Desktop Friend Virtual Battle: keep the complete competition surface in one viewport. */
 @media (min-width: 901px) {
+  html:has(body.friend-virtual-battle),
+  body.friend-virtual-battle {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  body.friend-virtual-battle .app {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  body.friend-virtual-battle main {
+    display: none;
+  }
+
   body.friend-virtual-battle .battle-screen {
-    margin-top: 8px;
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto auto;
+    width: min(1500px, calc(100% - 24px));
+    height: calc(100dvh - 12px);
+    min-height: 0;
+    margin: 6px auto;
+    overflow: hidden;
   }
 
   body.friend-virtual-battle .battle-heading {
-    padding-bottom: 6px;
+    min-height: 0;
+    padding: 6px 10px 7px;
   }
 
   body.friend-virtual-battle .battle-heading h2 {
-    font-size: 26px;
+    margin: 0 0 4px;
+    font-size: 24px;
   }
 
-  body.friend-virtual-battle .battle-scramble {
+  body.battle-mode.friend-virtual-battle .battle-scramble {
     min-height: 0;
-    margin: 8px auto 4px;
-    padding: 4px 12px;
-    font-size: clamp(20px, 2.2vw, 32px);
-    line-height: 1.2;
+    margin: 5px auto;
+    padding: 3px 12px;
+    font-size: clamp(20px, 2vw, 30px);
+    line-height: 1.15;
   }
 
   body.friend-virtual-battle .friend-virtual-battle-stage {
-    row-gap: 16px;
-    margin-top: 4px;
+    display: grid;
+    grid-template-columns: minmax(220px, 270px) minmax(360px, 1fr) minmax(220px, 280px);
+    grid-template-rows: minmax(0, 1fr) auto;
+    column-gap: 22px;
+    row-gap: 20px;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    margin-top: 0;
+    align-items: stretch;
+    overflow: hidden;
+  }
+
+  body.friend-virtual-battle .friend-virtual-cube-row {
+    display: contents;
+  }
+
+  body.friend-virtual-battle .friend-virtual-main-cube-slot {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+    min-height: 0;
+    align-items: flex-end;
+    justify-content: center;
+  }
+
+  body.friend-virtual-battle .friend-virtual-opponent-slot {
+    grid-column: 3;
+    grid-row: 1;
+    min-width: 0;
+    min-height: 0;
+    align-items: flex-end;
+    justify-content: center;
+  }
+
+  body.friend-virtual-battle .friend-virtual-roster-slot {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: end;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
   }
 
   body.friend-virtual-battle .friend-virtual-battle-stage #cubeContainer {
-    width: clamp(300px, 35vh, 380px);
+    width: clamp(270px, 34vh, 360px);
+    height: auto;
+    max-width: 100%;
+    max-height: 36vh;
+    aspect-ratio: 1;
   }
 
   body.friend-virtual-battle .friend-virtual-battle-stage .friend-real-history-panel {
+    grid-column: 1;
+    grid-row: 1 / span 2;
     min-height: 0;
-    height: min(52vh, 500px);
-    max-height: min(52vh, 500px);
+    height: 100%;
+    max-height: none;
     padding: 12px;
+    overflow-y: auto;
   }
 
   body.friend-virtual-battle .friend-real-room-stats {
@@ -1673,8 +1744,12 @@ body.friend-virtual-battle .multiplayer-roster-toggle::after { content: none; }
     margin-top: 0;
   }
 
-  body.friend-virtual-battle .multiplayer-roster {
+  body.battle-mode.friend-virtual-battle .multiplayer-roster {
+    width: 100%;
+    max-height: 132px;
+    margin: 0;
     padding: 8px;
+    overflow: hidden;
   }
 
   body.friend-virtual-battle .multiplayer-roster-toggle {
@@ -1689,22 +1764,44 @@ body.friend-virtual-battle .multiplayer-roster-toggle::after { content: none; }
     font-size: 12px;
   }
 
-  body.friend-virtual-battle .multiplayer-roster-list {
-    max-height: 112px;
+  body.battle-mode.friend-virtual-battle .multiplayer-roster-list {
+    max-height: 72px;
     gap: 6px;
     padding-right: 6px;
+    overflow-y: auto;
   }
 
-  body.friend-virtual-battle .multiplayer-roster-row {
+  body.battle-mode.friend-virtual-battle .multiplayer-roster-row {
     min-height: 42px;
     padding: 7px 9px;
     font-size: 14px;
   }
 
-  body.friend-virtual-battle .battle-notice,
-  body.friend-virtual-battle .battle-result {
-    min-height: 18px;
-    margin: 4px 0;
+  body.battle-mode.friend-virtual-battle .battle-notice,
+  body.battle-mode.friend-virtual-battle .battle-result {
+    min-height: 16px;
+    margin: 2px 0;
+    line-height: 1.15;
+    font-size: 14px;
+  }
+
+  body.battle-mode.friend-virtual-battle .battle-result-badge {
+    margin: 0;
+    font-size: clamp(26px, 3vh, 38px);
+    line-height: 1;
+  }
+
+  body.friend-virtual-battle .friend-virtual-battle-stage .opponent-cube-panel {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    width: 100%;
+    height: clamp(270px, 34vh, 360px);
+    max-width: 280px;
+    max-height: 36vh;
+    margin: 0;
+    align-self: flex-end;
+    align-items: center;
+    overflow: hidden;
   }
 }
 
