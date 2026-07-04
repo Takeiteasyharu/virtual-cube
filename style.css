@@ -1386,6 +1386,14 @@ body.friend-real-battle.inspection-hold-red #friendRealTimerDisplay {
 body.friend-real-battle.inspection-hold-green #friendRealTimerDisplay {
   color: #34c759 !important;
 }
+
+body.normal-real-cube:not(.battle-mode):not(.real-timer-clean).inspection-hold-red #timerDisplay {
+  color: #e53935 !important;
+}
+
+body.normal-real-cube:not(.battle-mode):not(.real-timer-clean).inspection-hold-green #timerDisplay {
+  color: #34c759 !important;
+}
 body.friend-real-battle .friend-real-edit-button {
   grid-column: 2;
   justify-self: stretch;
