@@ -78,6 +78,9 @@ const friendRealEditBtn = document.getElementById("friendRealEditBtn");
 const friendRealEditMenu = document.getElementById("friendRealEditMenu");
 const friendRealManualTime = document.getElementById("friendRealManualTime");
 const friendRealSaveTimeBtn = document.getElementById("friendRealSaveTimeBtn");
+const friendRealManualEntry = friendRealManualTime?.closest(".friend-real-manual-entry");
+const friendRealManualLabel = document.querySelector('label[for="friendRealManualTime"]');
+const friendRealEditActions = document.querySelector(".friend-real-edit-actions");
 const friendRealPlusTwoBtn = document.getElementById("friendRealPlusTwoBtn");
 const friendRealDnfBtn = document.getElementById("friendRealDnfBtn");
 const friendRealRemoveBtn = document.getElementById("friendRealRemoveBtn");
@@ -1546,6 +1549,40 @@ function isManualRealFriendEntry() {
   return isRealFriendRoom() && getFriendTimeEntryType() === "manual";
 }
 
+function parseFriendRealManualTimeInput(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+
+  let seconds;
+  if (raw.includes(".")) {
+    if (!/^\d+(?:\.\d+)?$/.test(raw)) return null;
+    seconds = Number(raw);
+  } else {
+    if (!/^\d+$/.test(raw)) return null;
+    seconds = Number(raw) / 100;
+  }
+
+  if (!Number.isFinite(seconds) || seconds < 0.01 || seconds >= 3600) return null;
+  return Number(seconds.toFixed(2));
+}
+
+function renderFriendRealEntryUi() {
+  if (!friendRealEditMenu) return;
+  const realFriendRoom = isRealFriendRoom();
+  const manualEntry = isManualRealFriendEntry();
+  const player = battlePlayersByUid.get(currentUser?.uid);
+  const editingBlocked = ["inspecting", "solving"].includes(player?.status);
+  const showManualInput = realFriendRoom && manualEntry && !isSpectatorMode;
+  const showScreenActions = realFriendRoom && !manualEntry && !isSpectatorMode && !editingBlocked;
+
+  if (friendRealManualLabel) friendRealManualLabel.hidden = true;
+  if (friendRealManualEntry) friendRealManualEntry.hidden = !showManualInput;
+  if (friendRealSaveTimeBtn) friendRealSaveTimeBtn.hidden = true;
+  if (friendRealEditActions) friendRealEditActions.hidden = !showScreenActions;
+  if (showManualInput) friendRealEditMenu.hidden = false;
+  if (!realFriendRoom || isSpectatorMode || (!manualEntry && !showScreenActions)) friendRealEditMenu.hidden = true;
+}
+
 async function syncOwnFriendPreferences() {
   if (!currentUser || !activeRoomId || activeRoom?.mode !== "friend" || isSpectatorMode) return;
   const player = battlePlayersByUid.get(currentUser.uid);
@@ -2360,8 +2397,8 @@ function renderBattleUi() {
   if (friendRealEditBtn) {
     const manualEntry = isManualRealFriendEntry();
     friendRealEditBtn.hidden = manualEntry || !realFriendRoom || isSpectatorMode || ["inspecting", "solving"].includes(you?.status);
-    if (friendRealEditMenu && realFriendRoom && manualEntry && !isSpectatorMode) friendRealEditMenu.hidden = false;
   }
+  renderFriendRealEntryUi();
 
   if (activeRoom.status === "finished") {
     if (activeRoom.mode === "ranked" && !activeRoom.ratingUpdated) {
@@ -3283,17 +3320,22 @@ async function beginRealCubeInspection() {
 
 async function updateRealFriendManualResult(action, enteredTime = null) {
   if (!currentUser || !isRealFriendRoom() || isSpectatorMode) return;
+  const timeEntryType = getFriendTimeEntryType();
+  if (timeEntryType === "manual" && action !== "enter") return;
+  if (timeEntryType !== "manual" && action === "enter") return;
+
   const player = battlePlayersByUid.get(currentUser.uid);
   if (["inspecting", "solving"].includes(player?.status)) return;
   let finalTime = Number(player?.finalTime);
   let status = "finished";
   let penalty = "manual";
   if (action === "enter") {
-    finalTime = Number(enteredTime);
-    if (!Number.isFinite(finalTime) || finalTime < 0.01 || finalTime >= 3600) {
+    finalTime = parseFriendRealManualTimeInput(enteredTime);
+    if (!Number.isFinite(finalTime)) {
       setBattleStatus("Enter a valid time between 0.01 and 3599.99 seconds.");
       return;
     }
+    if (friendRealManualTime) friendRealManualTime.value = finalTime.toFixed(2);
   } else if (action === "plus2") {
     if (!Number.isFinite(finalTime) || finalTime < 0.01) return;
     finalTime += 2;
@@ -3308,20 +3350,21 @@ async function updateRealFriendManualResult(action, enteredTime = null) {
     penalty = "removed";
     localBattleTimerSeconds = 0;
   } else return;
+  if (Number.isFinite(finalTime)) localBattleTimerSeconds = Number(finalTime.toFixed(2));
 
   await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
     status,
     ready: false,
     active: status !== "ready",
     finalTime: Number.isFinite(finalTime) ? Number(finalTime.toFixed(2)) : null,
-    manual: action !== "remove",
-    timeEntryType: getFriendTimeEntryType(),
+    manual: action === "enter",
+    timeEntryType,
     penalty,
     endTime: status === "ready" ? null : serverTimestamp(),
     finishedAt: status === "ready" ? null : serverTimestamp(),
     updatedAt: serverTimestamp()
   });
-  friendRealEditMenu.hidden = getFriendTimeEntryType() !== "manual";
+  friendRealEditMenu.hidden = timeEntryType !== "manual";
   finalizeFriendMultiplayerIfDone().catch(console.error);
 }
 
@@ -4032,7 +4075,7 @@ function setupAuthUi() {
     }
     const value = friendTimeEntryType.value === "manual" ? "manual" : "screen";
     localStorage.setItem(FRIEND_TIME_ENTRY_TYPE_KEY, value);
-    if (friendRealEditMenu) friendRealEditMenu.hidden = value !== "manual";
+    renderFriendRealEntryUi();
     syncOwnFriendPreferences().catch(console.error);
     renderBattleUi();
   });
@@ -4113,12 +4156,21 @@ function setupAuthUi() {
 
   friendRealEditBtn?.addEventListener("click", event => {
     event.stopPropagation();
+    renderFriendRealEntryUi();
     friendRealEditMenu.hidden = !friendRealEditMenu.hidden;
-    if (!friendRealEditMenu.hidden) friendRealManualTime?.focus();
+    if (!friendRealEditMenu.hidden && isManualRealFriendEntry()) friendRealManualTime?.focus();
   });
   friendRealSaveTimeBtn?.addEventListener("click", event => {
     event.stopPropagation();
     updateRealFriendManualResult("enter", friendRealManualTime?.value).catch(console.error);
+  });
+  friendRealManualTime?.addEventListener("keydown", event => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    updateRealFriendManualResult("enter", friendRealManualTime.value).catch(console.error);
+  });
+  friendRealManualTime?.addEventListener("change", () => {
+    updateRealFriendManualResult("enter", friendRealManualTime.value).catch(console.error);
   });
   friendRealPlusTwoBtn?.addEventListener("click", event => {
     event.stopPropagation();

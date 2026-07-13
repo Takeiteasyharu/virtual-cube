@@ -1271,6 +1271,10 @@ body.battle-mode .opponent-cube-panel.opponent-unavailable {
 .friend-real-edit-button { width: auto; min-width: 72px; margin: 0; }
 .friend-real-edit-menu { width: min(100%, 520px); margin: 12px auto 0; padding: 14px; border: 2px solid #286a96; border-radius: 6px; background: rgba(255, 255, 255, 0.94); }
 .friend-real-manual-entry, .friend-real-edit-actions { display: flex; gap: 10px; margin-top: 10px; }
+.friend-real-edit-menu label[hidden],
+.friend-real-manual-entry[hidden],
+.friend-real-edit-actions[hidden],
+.friend-real-manual-entry button[hidden] { display: none; }
 .friend-real-manual-entry input { flex: 1; min-width: 0; }
 .friend-real-manual-entry button, .friend-real-edit-actions button { margin: 0; }
 .friend-real-edit-actions button { flex: 1; }
