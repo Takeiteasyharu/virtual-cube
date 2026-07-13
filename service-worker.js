@@ -1,5 +1,6 @@
-const CACHE_NAME = "virtual-cube-timer-v100";
+const CACHE_NAME = "virtual-cube-timer-v101";
 const BASE_PATH = "/virtual-cube/";
+const APP_FILE_EXTENSIONS = [".html", ".css", ".js", ".json"];
 
 const CACHE_URLS = [
   BASE_PATH,
@@ -35,6 +36,10 @@ self.addEventListener("install", event => {
   );
 });
 
+self.addEventListener("message", event => {
+  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
+});
+
 self.addEventListener("activate", event => {
   event.waitUntil(
     caches.keys()
@@ -51,11 +56,36 @@ self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;
 
   const requestUrl = new URL(event.request.url);
+  const isSameOrigin = requestUrl.origin === self.location.origin;
+  const isAppFile = isSameOrigin &&
+    requestUrl.pathname.startsWith(BASE_PATH) &&
+    (event.request.mode === "navigate" || APP_FILE_EXTENSIONS.some(extension => requestUrl.pathname.endsWith(extension)));
   const isFirebase = requestUrl.hostname.includes("firebase") ||
     requestUrl.hostname.includes("googleapis") ||
     requestUrl.hostname.includes("gstatic");
 
   if (isFirebase && !requestUrl.href.includes("firebasejs")) {
+    return;
+  }
+
+  if (isAppFile) {
+    event.respondWith(
+      fetch(new Request(event.request, { cache: "no-store" }))
+        .then(response => {
+          const copy = response.clone();
+          if (response.ok) {
+            caches.open(CACHE_NAME).then(cache => cache.put(event.request, copy));
+          }
+          return response;
+        })
+        .catch(() =>
+          caches.match(event.request).then(cached => {
+            if (cached) return cached;
+            if (event.request.mode === "navigate") return caches.match(`${BASE_PATH}index.html`);
+            return new Response("", { status: 504, statusText: "Offline" });
+          })
+        )
+    );
     return;
   }
 
