@@ -1919,10 +1919,10 @@ body.friend-virtual-battle .multiplayer-roster-toggle::after { content: none; }
   }
 
 	  body.friend-virtual-battle .friend-virtual-battle-stage #cubeContainer {
-	    width: clamp(430px, 50vh, 620px);
+	    width: clamp(645px, 75vh, 930px);
 	    height: auto;
 	    max-width: 100%;
-	    max-height: 58vh;
+	    max-height: 75vh;
 	    aspect-ratio: 1;
 	  }
 
