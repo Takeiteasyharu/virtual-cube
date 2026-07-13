@@ -125,6 +125,7 @@ let normalInspectionActive = false;
 let normalSolveState = "idle";
 let lockedScramble = "";
 let normalActiveScramble = "";
+let normalScramblePreparing = false;
 let battleMaxCompletionScore = 0;
 let battleCurrentCompletionScore = 0;
 let rankedBattleTimeLimitTimeout = null;
@@ -389,8 +390,11 @@ function setNormalRealScramble(scrambleText) {
   }
 }
 
-function prepareNextNormalRealScramble() {
-  setNormalRealScramble(generateScramble(20).join(" "));
+async function prepareNextNormalRealScramble() {
+  const scrambleText = typeof window.generateScrambleText === "function"
+    ? await window.generateScrambleText(20)
+    : generateScramble(20).join(" ");
+  setNormalRealScramble(scrambleText);
 }
 
 function applyNormalTimerMode() {
@@ -891,37 +895,47 @@ function setupMoveInput() {
   });
 }
 
-function scrambleCube() {
+async function scrambleCube() {
   if (typeof window.isBattleMode === "function" && window.isBattleMode()) return;
   if (["inspecting", "solving"].includes(normalSolveState)) return;
+  if (normalScramblePreparing) return;
 
-  clearNormalInspection();
-  resetCube();
-  if (!isNormalRealCubeMode()) resetTimer();
-  resetSolveStats();
-  if (!isNormalRealCubeMode()) setSolvingMode(true);
+  normalScramblePreparing = true;
+  try {
+    clearNormalInspection();
+    resetCube();
+    if (!isNormalRealCubeMode()) resetTimer();
+    resetSolveStats();
+    if (!isNormalRealCubeMode()) setSolvingMode(true);
 
-  const preparedRealScramble = isNormalRealCubeMode()
-    ? normalActiveScramble
-    : "";
-  const scrambleText = lockedScramble || preparedRealScramble || generateScramble(20).join(" ");
-  const scramble = scrambleText.split(" ").filter(Boolean);
+    const preparedRealScramble = isNormalRealCubeMode()
+      ? normalActiveScramble
+      : "";
+    const scrambleText = lockedScramble || preparedRealScramble || (
+      typeof window.generateScrambleText === "function"
+        ? await window.generateScrambleText(20)
+        : generateScramble(20).join(" ")
+    );
+    const scramble = scrambleText.split(" ").filter(Boolean);
 
-  document.getElementById("scrambleText").textContent = scrambleText;
-  document.getElementById("lastMove").textContent = "-";
+    document.getElementById("scrambleText").textContent = scrambleText;
+    document.getElementById("lastMove").textContent = "-";
 
-  if (isNormalRealCubeMode()) {
-    setNormalRealScramble(scrambleText);
-  } else {
-    setCurrentScramble(scrambleText);
-    normalActiveScramble = scrambleText;
+    if (isNormalRealCubeMode()) {
+      setNormalRealScramble(scrambleText);
+    } else {
+      setCurrentScramble(scrambleText);
+      normalActiveScramble = scrambleText;
+    }
+    readyToSolve = true;
+    firstTurnDone = false;
+
+    if (!isNormalRealCubeMode()) applyScramble(scramble);
+    if (isNormalRealCubeMode()) startNormalRealPreparation();
+    else startNormalInspection();
+  } finally {
+    normalScramblePreparing = false;
   }
-  readyToSolve = true;
-  firstTurnDone = false;
-
-  if (!isNormalRealCubeMode()) applyScramble(scramble);
-  if (isNormalRealCubeMode()) startNormalRealPreparation();
-  else startNormalInspection();
 }
 
 function abortNormalSolve() {

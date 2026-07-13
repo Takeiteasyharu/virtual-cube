@@ -1054,7 +1054,11 @@ function createPlayer(role) {
   };
 }
 
-function getBattleScramble() {
+async function getBattleScramble() {
+  if (typeof window.generateScrambleText === "function") {
+    return window.generateScrambleText(20);
+  }
+
   if (typeof window.generateScramble !== "function") {
     return "";
   }
@@ -1910,7 +1914,7 @@ async function autoPrepareInitialRealFriendRound() {
     .filter(isFriendRoomParticipant)
     .slice(0, Number(activeRoom.maxPlayers || 20));
   if (players.length < 2) return;
-  const scramble = activeRoom.scramble || getBattleScramble();
+  const scramble = activeRoom.scramble || await getBattleScramble();
   if (!scramble) return;
   realFriendInitialRoundPreparing = true;
   try {
@@ -2019,7 +2023,7 @@ async function ensureRealFriendScrambleForReadyPlayers() {
     .filter(player => player.ready && isFriendRoomParticipant(player));
   if (readyPlayers.length < 2) return;
 
-  const scramble = getBattleScramble();
+  const scramble = await getBattleScramble();
   if (!scramble) return;
   realFriendScramblePreparing = true;
   try {
@@ -2741,7 +2745,7 @@ async function createBattleRoom(mode = "friend") {
   const cubeMode = mode === "friend"
     ? (document.querySelector('input[name="friendCubeMode"]:checked')?.value || "virtual")
     : "virtual";
-  const initialScramble = cubeMode === "real" ? getBattleScramble() : "";
+  const initialScramble = cubeMode === "real" ? await getBattleScramble() : "";
   const room = {
     roomId,
     mode,
@@ -3127,7 +3131,7 @@ async function readyBattleRoom() {
 
   let scramble = room.scramble;
   if (!scramble && activeRoomRole === "host") {
-    scramble = getBattleScramble();
+    scramble = await getBattleScramble();
     if (!scramble) {
       setBattleStatus("Scramble generator is not ready.");
       return;
@@ -3224,7 +3228,7 @@ async function startFriendMultiplayerGame() {
     setBattleStatus("Waiting for the synchronized scramble.");
     return;
   }
-  const scramble = isRealCube ? activeRoom.scramble : getBattleScramble();
+  const scramble = isRealCube ? activeRoom.scramble : await getBattleScramble();
   if (!scramble) {
     setBattleStatus("Scramble generator is not ready.");
     return;
@@ -3377,7 +3381,7 @@ async function finalizeFriendMultiplayerIfDone() {
       const participants = [...battlePlayersByUid.values()]
         .filter(isFriendRoomParticipant)
         .slice(0, Number(activeRoom.maxPlayers || 20));
-      const scramble = getBattleScramble();
+      const scramble = await getBattleScramble();
       if (participants.length < 2 || !scramble) return;
       await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId), {
         status: "ready",
