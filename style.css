@@ -1920,10 +1920,10 @@ body.friend-virtual-battle .multiplayer-roster-toggle::after { content: none; }
   }
 
   body.friend-virtual-battle .friend-virtual-battle-stage #cubeContainer {
-    width: clamp(430px, 58vh, 680px);
+    width: clamp(645px, 75vh, 930px);
     height: auto;
     max-width: 100%;
-    max-height: 62vh;
+    max-height: 75vh;
     aspect-ratio: 1;
   }
 
@@ -2400,6 +2400,10 @@ body.battle-mode .multiplayer-roster-row {
 }
 
 .normal-manual-entry[hidden] {
+  display: none;
+}
+
+body.battle-mode .normal-manual-entry {
   display: none;
 }
 

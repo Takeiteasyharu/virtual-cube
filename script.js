@@ -363,14 +363,15 @@ function setVirtualCubeVisible(visible) {
 
 function renderNormalRealCubeUi() {
   const scrambleNetPanel = document.getElementById("normalScrambleNetPanel");
+  const manualPanel = document.getElementById("normalManualEntryPanel");
   if (isBattleModeActive()) {
     if (scrambleNetPanel) scrambleNetPanel.hidden = true;
+    if (manualPanel) manualPanel.hidden = true;
     return;
   }
   const realMode = getNormalTimerMode() === "real";
   const manualEntry = isNormalManualEntryEnabled();
   const instruction = document.getElementById("realCubeInstruction");
-  const manualPanel = document.getElementById("normalManualEntryPanel");
   document.body.classList.toggle("normal-real-cube", realMode);
   setVirtualCubeVisible(!realMode);
   if (scrambleNetPanel) scrambleNetPanel.hidden = !realMode || !normalActiveScramble;
