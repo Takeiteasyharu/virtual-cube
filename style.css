@@ -1896,8 +1896,9 @@ body.friend-virtual-battle .multiplayer-roster-toggle::after { content: none; }
     grid-row: 1;
     min-width: 0;
     min-height: 0;
-    align-items: flex-end;
+    align-items: center;
     justify-content: center;
+    align-self: center;
   }
 
   body.friend-virtual-battle .friend-virtual-opponent-slot {
@@ -1918,13 +1919,13 @@ body.friend-virtual-battle .multiplayer-roster-toggle::after { content: none; }
     margin: 0;
   }
 
-	  body.friend-virtual-battle .friend-virtual-battle-stage #cubeContainer {
-	    width: clamp(645px, 75vh, 930px);
-	    height: auto;
-	    max-width: 100%;
-	    max-height: 75vh;
-	    aspect-ratio: 1;
-	  }
+  body.friend-virtual-battle .friend-virtual-battle-stage #cubeContainer {
+    width: clamp(430px, 58vh, 680px);
+    height: auto;
+    max-width: 100%;
+    max-height: 62vh;
+    aspect-ratio: 1;
+  }
 
   body.friend-virtual-battle .friend-virtual-battle-stage .friend-real-history-panel {
     grid-column: 1;
