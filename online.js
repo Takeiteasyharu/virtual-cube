@@ -193,6 +193,7 @@ let ratingUpdateInProgress = false;
 let friendFinalizing = false;
 let realFriendScramblePreparing = false;
 let friendRematchStarting = false;
+let isSubmittingManualTime = false;
 let preparedLocalRealFriendRoundKey = "";
 let completionScoreWriteTimeout = null;
 let pendingCompletionScore = null;
@@ -1045,6 +1046,11 @@ function createPlayer(role) {
     endTime: null,
     finishedAt: null,
     finalTime: null,
+    previousRoundNumber: 0,
+    previousRoundStatus: "",
+    previousRoundFinalTime: null,
+    previousRoundPenalty: "",
+    previousRoundManual: false,
     tps: null,
     moveCount: 0,
     currentCompletionScore: 0,
@@ -1347,6 +1353,50 @@ function hasFinalBattleTime(player) {
   if (!player || player.finalTime === null || player.finalTime === undefined) return false;
   const finalTime = Number(player.finalTime);
   return Number.isFinite(finalTime) && finalTime >= getMinimumAcceptedBattleTime() && finalTime < 3600;
+}
+
+function hasPreviousBattleTime(player) {
+  if (!player || player.previousRoundFinalTime === null || player.previousRoundFinalTime === undefined) return false;
+  const finalTime = Number(player.previousRoundFinalTime);
+  return Number.isFinite(finalTime) && finalTime >= getMinimumAcceptedBattleTime() && finalTime < 3600;
+}
+
+function getPreviousBattleResultFields(player) {
+  if (!player) return {};
+  const round = Number(player.round || activeRound) || activeRound;
+  if (hasFinalBattleTime(player)) {
+    return {
+      previousRoundNumber: round,
+      previousRoundStatus: "finished",
+      previousRoundFinalTime: Number(Number(player.finalTime).toFixed(2)),
+      previousRoundPenalty: player.penalty || "",
+      previousRoundManual: Boolean(player.manual)
+    };
+  }
+  if (player.status === "dnf") {
+    return {
+      previousRoundNumber: round,
+      previousRoundStatus: "dnf",
+      previousRoundFinalTime: null,
+      previousRoundPenalty: player.penalty || "dnf",
+      previousRoundManual: Boolean(player.manual)
+    };
+  }
+  return {};
+}
+
+function getRosterTimeText(player) {
+  if (player?.status === "dnf") return "DNF";
+  if (hasFinalBattleTime(player)) return formatBattleTime(Number(player.finalTime));
+  if (player?.status === "solving") {
+    const elapsed = player.uid === currentUser?.uid
+      ? localBattleTimerSeconds
+      : getPlayerElapsedSeconds(player);
+    return formatBattleTime(elapsed);
+  }
+  if (player?.previousRoundStatus === "dnf") return "DNF";
+  if (hasPreviousBattleTime(player)) return formatBattleTime(Number(player.previousRoundFinalTime));
+  return formatBattleTime(null);
 }
 
 function getPlayerElapsedSeconds(player) {
@@ -1724,10 +1774,6 @@ function renderMultiplayerRoster() {
     const isActive = activeUids.size > 0
       ? activeUids.has(player.uid)
       : ["inspecting", "solving", "finished", "dnf", "time_limit"].includes(player.status);
-    const elapsed = player.uid === currentUser?.uid
-      ? localBattleTimerSeconds
-      : getPlayerElapsedSeconds(player);
-    const timer = hasFinalBattleTime(player) ? formatBattleTime(Number(player.finalTime)) : formatBattleTime(elapsed);
     const state = player.status || (player.ready ? "ready" : "waiting");
     row.innerHTML = `<div class="multiplayer-roster-identity"><strong></strong><small></small></div><span></span><time></time>`;
     const place = activeRoom.status === "finished" && isActive && hasFinalBattleTime(player) ? `#${index + 1} ` : "";
@@ -1737,7 +1783,7 @@ function renderMultiplayerRoster() {
     ratingLabel.hidden = activeRoom.mode !== "ranked";
     const entryLabel = player.timeEntryType === "manual" ? " | MANUAL" : "";
     row.querySelector("span").textContent = `${state.toUpperCase()}${entryLabel}`;
-    row.querySelector("time").textContent = timer;
+    row.querySelector("time").textContent = getRosterTimeText(player);
     return row;
   }));
 }
@@ -2477,6 +2523,7 @@ async function startInspectionForReadyPlayer() {
     const playerRef = doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid);
     const snapshot = await getDoc(playerRef);
     if (!snapshot.exists() || snapshot.data().status !== "ready") return;
+    const player = snapshot.data();
 
     const inspectionStartTimeMs = isMultiplayerFriendRoom()
       ? Number(activeRoom.inspectionStartTimeMs || Date.now())
@@ -2487,13 +2534,14 @@ async function startInspectionForReadyPlayer() {
       active: true,
       round: activeRound,
       inspectionStartTime: serverTimestamp(),
-      inspectionStartTimeMs,
-      startTime: null,
-      startTimeMs: 0,
-      endTime: null,
-      finishedAt: null,
-      finalTime: null,
-      tps: null,
+	      inspectionStartTimeMs,
+	      startTime: null,
+	      startTimeMs: 0,
+	      endTime: null,
+	      finishedAt: null,
+	      finalTime: null,
+	      ...getPreviousBattleResultFields(player),
+	      tps: null,
       moveCount: 0,
       currentCompletionScore: 0,
       maxCompletionScore: 0,
@@ -2684,6 +2732,7 @@ async function prepareLocalRealFriendRound(room) {
     endTime: null,
     finishedAt: null,
     finalTime: null,
+    ...getPreviousBattleResultFields(player),
     tps: null,
     moveCount: 0,
     lastMove: "",
@@ -2694,6 +2743,7 @@ async function prepareLocalRealFriendRound(room) {
 async function beginNextBattleRound(room) {
   if (!currentUser || !activeRoomId || room.round !== activeRound) return;
 
+  const player = battlePlayersByUid.get(currentUser.uid) || getDisplayPlayer(activeRoomRole);
   localBattleTimerSeconds = 0;
   battleMovesByRole = { host: [], guest: [] };
   await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
@@ -2704,6 +2754,7 @@ async function beginNextBattleRound(room) {
     startTimeMs: 0,
     endTime: null,
     finalTime: null,
+    ...getPreviousBattleResultFields(player),
     tps: null,
     moveCount: 0,
     currentCompletionScore: 0,
@@ -3144,6 +3195,7 @@ async function readyBattleRoom() {
       endTime: null,
       finishedAt: null,
       finalTime: null,
+      ...getPreviousBattleResultFields(player),
       tps: null,
       moveCount: 0,
       currentCompletionScore: 0,
@@ -3205,6 +3257,7 @@ async function readyBattleRoom() {
 
 async function notifyBattleSolveStarted() {
   if (!currentUser || !activeRoomId || !activeRoomRole || !document.body.classList.contains("battle-mode")) return;
+  const player = battlePlayersByUid.get(currentUser.uid) || getDisplayPlayer(activeRoomRole);
 
   await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
     status: "solving",
@@ -3212,6 +3265,7 @@ async function notifyBattleSolveStarted() {
     startTimeMs: Date.now(),
     finishedAt: null,
     finalTime: null,
+    ...getPreviousBattleResultFields(player),
     updatedAt: serverTimestamp()
   }).catch(console.error);
   if (!isMultiplayerFriendRoom() || currentUser.uid === activeRoom.hostUid) {
@@ -3310,6 +3364,7 @@ async function beginRealCubeInspection() {
     endTime: null,
     finishedAt: null,
     finalTime: null,
+    ...getPreviousBattleResultFields(player),
     tps: null,
     moveCount: 0,
     updatedAt: serverTimestamp()
@@ -3319,13 +3374,13 @@ async function beginRealCubeInspection() {
 }
 
 async function updateRealFriendManualResult(action, enteredTime = null) {
-  if (!currentUser || !isRealFriendRoom() || isSpectatorMode) return;
+  if (!currentUser || !isRealFriendRoom() || isSpectatorMode) return false;
   const timeEntryType = getFriendTimeEntryType();
-  if (timeEntryType === "manual" && action !== "enter") return;
-  if (timeEntryType !== "manual" && action === "enter") return;
+  if (timeEntryType === "manual" && action !== "enter") return false;
+  if (timeEntryType !== "manual" && action === "enter") return false;
 
   const player = battlePlayersByUid.get(currentUser.uid);
-  if (["inspecting", "solving"].includes(player?.status)) return;
+  if (["inspecting", "solving"].includes(player?.status)) return false;
   let finalTime = Number(player?.finalTime);
   let status = "finished";
   let penalty = "manual";
@@ -3333,11 +3388,10 @@ async function updateRealFriendManualResult(action, enteredTime = null) {
     finalTime = parseFriendRealManualTimeInput(enteredTime);
     if (!Number.isFinite(finalTime)) {
       setBattleStatus("Enter a valid time between 0.01 and 3599.99 seconds.");
-      return;
+      return false;
     }
-    if (friendRealManualTime) friendRealManualTime.value = finalTime.toFixed(2);
   } else if (action === "plus2") {
-    if (!Number.isFinite(finalTime) || finalTime < 0.01) return;
+    if (!Number.isFinite(finalTime) || finalTime < 0.01) return false;
     finalTime += 2;
     penalty = "+2";
   } else if (action === "dnf") {
@@ -3349,7 +3403,7 @@ async function updateRealFriendManualResult(action, enteredTime = null) {
     status = "ready";
     penalty = "removed";
     localBattleTimerSeconds = 0;
-  } else return;
+  } else return false;
   if (Number.isFinite(finalTime)) localBattleTimerSeconds = Number(finalTime.toFixed(2));
 
   await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid), {
@@ -3357,6 +3411,11 @@ async function updateRealFriendManualResult(action, enteredTime = null) {
     ready: false,
     active: status !== "ready",
     finalTime: Number.isFinite(finalTime) ? Number(finalTime.toFixed(2)) : null,
+    previousRoundNumber: activeRound,
+    previousRoundStatus: status === "dnf" ? "dnf" : (status === "finished" ? "finished" : "removed"),
+    previousRoundFinalTime: Number.isFinite(finalTime) ? Number(finalTime.toFixed(2)) : null,
+    previousRoundPenalty: penalty,
+    previousRoundManual: action === "enter",
     manual: action === "enter",
     timeEntryType,
     penalty,
@@ -3366,6 +3425,23 @@ async function updateRealFriendManualResult(action, enteredTime = null) {
   });
   friendRealEditMenu.hidden = timeEntryType !== "manual";
   finalizeFriendMultiplayerIfDone().catch(console.error);
+  return true;
+}
+
+async function submitFriendRealManualTime() {
+  if (!friendRealManualTime || isSubmittingManualTime) return;
+  const rawValue = friendRealManualTime.value;
+  isSubmittingManualTime = true;
+  if (friendRealSaveTimeBtn) friendRealSaveTimeBtn.disabled = true;
+  try {
+    const saved = await updateRealFriendManualResult("enter", rawValue);
+    if (!saved) return;
+    friendRealManualTime.value = "";
+    if (!friendRealEditMenu?.hidden && isManualRealFriendEntry()) friendRealManualTime.focus();
+  } finally {
+    isSubmittingManualTime = false;
+    if (friendRealSaveTimeBtn) friendRealSaveTimeBtn.disabled = false;
+  }
 }
 
 async function abortRealCubeBattle() {
@@ -3380,6 +3456,11 @@ async function abortRealCubeBattle() {
     status: "dnf",
     ready: false,
     finalTime: null,
+    previousRoundNumber: activeRound,
+    previousRoundStatus: "dnf",
+    previousRoundFinalTime: null,
+    previousRoundPenalty: "dnf",
+    previousRoundManual: false,
     endTime: serverTimestamp(),
     updatedAt: serverTimestamp()
   });
@@ -3562,6 +3643,11 @@ async function submitBattleSolve(time, scramble, solveStats = {}) {
     endTime: serverTimestamp(),
     finishedAt: serverTimestamp(),
     finalTime: time,
+    previousRoundNumber: activeRound,
+    previousRoundStatus: "finished",
+    previousRoundFinalTime: Number(Number(time).toFixed(2)),
+    previousRoundPenalty: "",
+    previousRoundManual: false,
     tps: Number.isFinite(solveStats.tps) ? solveStats.tps : null,
     moveCount: Math.max(0, Math.floor(Number(solveStats.moveCount) || 0)),
     currentCompletionScore: Math.max(0, Math.min(54, Math.floor(Number(solveStats.currentCompletionScore) || 0))),
@@ -4162,15 +4248,12 @@ function setupAuthUi() {
   });
   friendRealSaveTimeBtn?.addEventListener("click", event => {
     event.stopPropagation();
-    updateRealFriendManualResult("enter", friendRealManualTime?.value).catch(console.error);
+    submitFriendRealManualTime().catch(console.error);
   });
   friendRealManualTime?.addEventListener("keydown", event => {
     if (event.key !== "Enter") return;
     event.preventDefault();
-    updateRealFriendManualResult("enter", friendRealManualTime.value).catch(console.error);
-  });
-  friendRealManualTime?.addEventListener("change", () => {
-    updateRealFriendManualResult("enter", friendRealManualTime.value).catch(console.error);
+    submitFriendRealManualTime().catch(console.error);
   });
   friendRealPlusTwoBtn?.addEventListener("click", event => {
     event.stopPropagation();
