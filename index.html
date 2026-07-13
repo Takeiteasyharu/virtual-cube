@@ -241,6 +241,10 @@
       <div class="cube-area" id="mainCubeArea">
         <div id="cubeContainer"></div>
         <div id="realCubeInstruction" class="real-cube-instruction" hidden>Press Space to start inspection</div>
+        <div class="normal-manual-entry" id="normalManualEntryPanel" hidden>
+          <input id="normalManualTimeInput" type="number" min="0.01" max="3599.99" step="0.01" inputmode="decimal" placeholder="12.34" aria-label="Enter time" />
+          <button id="normalManualTimeSaveBtn" type="button">Save Time</button>
+        </div>
         <section class="scramble-net-panel normal-real-scramble-net" id="normalScrambleNetPanel" hidden aria-label="Current scramble cube net">
           <h3>Scramble Preview</h3>
           <div class="cube-net" id="normalScrambleCubeNet"></div>
@@ -404,6 +408,11 @@
           <option value="virtual">Virtual Cube</option>
           <option value="real">Real Cube</option>
         </select>
+        <label class="settings-toggle normal-manual-entry-setting">
+          <input id="normalManualEntryToggle" type="checkbox" />
+          Enable Manual Entry
+        </label>
+        <p class="settings-hint" id="normalManualEntryHint">Manual Entry is available in Real Cube Mode only.</p>
       </section>
       <section class="settings-section">
         <h3>Animation Speed</h3>

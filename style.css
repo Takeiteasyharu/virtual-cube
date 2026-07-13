@@ -1918,13 +1918,13 @@ body.friend-virtual-battle .multiplayer-roster-toggle::after { content: none; }
     margin: 0;
   }
 
-  body.friend-virtual-battle .friend-virtual-battle-stage #cubeContainer {
-    width: clamp(270px, 34vh, 360px);
-    height: auto;
-    max-width: 100%;
-    max-height: 36vh;
-    aspect-ratio: 1;
-  }
+	  body.friend-virtual-battle .friend-virtual-battle-stage #cubeContainer {
+	    width: clamp(430px, 50vh, 620px);
+	    height: auto;
+	    max-width: 100%;
+	    max-height: 58vh;
+	    aspect-ratio: 1;
+	  }
 
   body.friend-virtual-battle .friend-virtual-battle-stage .friend-real-history-panel {
     grid-column: 1;
@@ -2385,6 +2385,33 @@ body.battle-mode .multiplayer-roster-row {
 .settings-toggle input {
   width: 22px;
   height: 22px;
+}
+
+.normal-manual-entry-setting {
+  margin-top: 12px;
+}
+
+.normal-manual-entry {
+  display: flex;
+  gap: 10px;
+  width: min(92vw, 420px);
+  margin: 12px auto 0;
+}
+
+.normal-manual-entry[hidden] {
+  display: none;
+}
+
+.normal-manual-entry input {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.normal-manual-entry button {
+  width: auto;
+  margin: 0;
+  white-space: nowrap;
 }
 
 .settings-hint {

@@ -54,6 +54,7 @@ const BEGINNER_TIP_KEY = "cubeOnboardingDismissed";
 const NORMAL_TIMER_MODE_KEY = "normalTimerMode";
 const CUBE_SIZE_SCALE_KEY = "cubeSizeScale";
 const REAL_CUBE_INSPECTION_KEY = "realCubeInspectionEnabled";
+const NORMAL_MANUAL_ENTRY_KEY = "normalRealManualEntryEnabled";
 const BACKGROUND_IMAGE_MAX_BYTES = 3 * 1024 * 1024;
 let keyMap = { ...DEFAULT_KEY_MAP };
 let selectedBindingKey = "";
@@ -99,6 +100,10 @@ function isRealCubeInspectionEnabled() {
   return localStorage.getItem(REAL_CUBE_INSPECTION_KEY) === "true";
 }
 
+function isNormalManualEntryEnabled() {
+  return getNormalTimerMode() === "real" && localStorage.getItem(NORMAL_MANUAL_ENTRY_KEY) === "true";
+}
+
 function setCubeSizeScale(value) {
   const normalized = Math.min(2, Math.max(0.5, Number(value) || 1));
   localStorage.setItem(CUBE_SIZE_SCALE_KEY, String(normalized));
@@ -110,6 +115,7 @@ window.getCubeAnimationSpeed = getAnimationSpeed;
 window.getCubeSizeScale = getCubeSizeScale;
 window.setCubeSizeScale = setCubeSizeScale;
 window.isRealCubeInspectionEnabled = isRealCubeInspectionEnabled;
+window.isNormalManualEntryEnabled = isNormalManualEntryEnabled;
 
 let readyToSolve = false;
 let firstTurnDone = false;
@@ -362,15 +368,18 @@ function renderNormalRealCubeUi() {
     return;
   }
   const realMode = getNormalTimerMode() === "real";
+  const manualEntry = isNormalManualEntryEnabled();
   const instruction = document.getElementById("realCubeInstruction");
+  const manualPanel = document.getElementById("normalManualEntryPanel");
   document.body.classList.toggle("normal-real-cube", realMode);
   setVirtualCubeVisible(!realMode);
   if (scrambleNetPanel) scrambleNetPanel.hidden = !realMode || !normalActiveScramble;
   if (realMode && normalActiveScramble) {
     window.renderScrambleNet?.(normalActiveScramble, document.getElementById("normalScrambleCubeNet"));
   }
+  if (manualPanel) manualPanel.hidden = !realMode || !manualEntry;
   if (!instruction) return;
-  instruction.hidden = !realMode;
+  instruction.hidden = !realMode || manualEntry;
   if (!realMode) return;
 
   instruction.textContent = normalSolveState === "solving"
@@ -390,6 +399,46 @@ function setNormalRealScramble(scrambleText) {
   }
 }
 
+function parseNormalManualTimeInput(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  let seconds;
+  if (raw.includes(".")) {
+    if (!/^\d+(?:\.\d+)?$/.test(raw)) return null;
+    seconds = Number(raw);
+  } else {
+    if (!/^\d+$/.test(raw)) return null;
+    seconds = Number(raw) / 100;
+  }
+  if (!Number.isFinite(seconds) || seconds < 0.01 || seconds >= 3600) return null;
+  return Number(seconds.toFixed(2));
+}
+
+async function submitNormalManualTime() {
+  const input = document.getElementById("normalManualTimeInput");
+  if (!input || !isNormalManualEntryEnabled()) return;
+  if (!normalActiveScramble) {
+    await prepareNextNormalRealScramble();
+  }
+  const finalTime = parseNormalManualTimeInput(input.value);
+  if (!Number.isFinite(finalTime)) return;
+  saveSolve(finalTime, normalActiveScramble, {
+    mode: "real",
+    rankingEligible: false,
+    tps: null,
+    moveCount: 0,
+    moves: []
+  });
+  renderStats();
+  input.value = "";
+  input.focus();
+  normalSolveState = "idle";
+  readyToSolve = false;
+  firstTurnDone = false;
+  await prepareNextNormalRealScramble();
+  renderNormalRealCubeUi();
+}
+
 async function prepareNextNormalRealScramble() {
   const scrambleText = typeof window.generateScrambleText === "function"
     ? await window.generateScrambleText(20)
@@ -405,6 +454,12 @@ function applyNormalTimerMode() {
 }
 
 function handleNormalRealCubeSpaceDown() {
+  if (isNormalManualEntryEnabled()) {
+    if (["idle", "aborted", "finished"].includes(normalSolveState) && !normalActiveScramble) {
+      prepareNextNormalRealScramble();
+    }
+    return;
+  }
   if (["idle", "aborted", "finished"].includes(normalSolveState)) {
     prepareAndArmNormalRealCubeTimer();
   } else if (normalSolveState === "inspecting") {
@@ -422,6 +477,10 @@ function handleNormalRealCubeSpaceDown() {
 
 function handleNormalRealCubeTimerAction() {
   if (!isNormalRealCubeMode()) return;
+  if (isNormalManualEntryEnabled()) {
+    if (!normalActiveScramble) scrambleCube();
+    return;
+  }
   if (["idle", "aborted", "finished"].includes(normalSolveState)) {
     scrambleCube();
   } else if (normalSolveState === "inspecting") {
@@ -931,7 +990,11 @@ async function scrambleCube() {
     firstTurnDone = false;
 
     if (!isNormalRealCubeMode()) applyScramble(scramble);
-    if (isNormalRealCubeMode()) startNormalRealPreparation();
+    if (isNormalRealCubeMode() && isNormalManualEntryEnabled()) {
+      normalSolveState = "idle";
+      readyToSolve = false;
+      renderNormalRealCubeUi();
+    } else if (isNormalRealCubeMode()) startNormalRealPreparation();
     else startNormalInspection();
   } finally {
     normalScramblePreparing = false;
@@ -1260,6 +1323,10 @@ function renderKeyBindings() {
 function setupSettingsUi() {
   const speedSelect = document.getElementById("animationSpeedSelect");
   const timerModeSelect = document.getElementById("normalTimerModeSelect");
+  const manualEntryToggle = document.getElementById("normalManualEntryToggle");
+  const manualEntryHint = document.getElementById("normalManualEntryHint");
+  const manualTimeInput = document.getElementById("normalManualTimeInput");
+  const manualTimeSaveBtn = document.getElementById("normalManualTimeSaveBtn");
   const cubeSizeInput = document.getElementById("cubeSizeInput");
   const cubeSizeValue = document.getElementById("cubeSizeValue");
   const resetButton = document.getElementById("resetKeyBindingsBtn");
@@ -1278,11 +1345,26 @@ function setupSettingsUi() {
     cubeSizeInput.addEventListener("input", () => renderCubeSize(cubeSizeInput.value));
   }
   if (timerModeSelect) {
+    const syncManualEntrySetting = () => {
+      const realMode = timerModeSelect.value === "real";
+      if (!realMode) localStorage.setItem(NORMAL_MANUAL_ENTRY_KEY, "false");
+      if (manualEntryToggle) {
+        manualEntryToggle.disabled = !realMode;
+        manualEntryToggle.checked = realMode && localStorage.getItem(NORMAL_MANUAL_ENTRY_KEY) === "true";
+      }
+      if (manualEntryHint) {
+        manualEntryHint.textContent = realMode
+          ? "Use Manual Entry to type real-cube solve times instead of using the screen timer."
+          : "Manual Entry is available in Real Cube Mode only.";
+      }
+    };
     timerModeSelect.value = getNormalTimerMode();
+    syncManualEntrySetting();
     timerModeSelect.addEventListener("change", () => {
       if (isBattleModeActive()) return;
       abortNormalSolve();
       localStorage.setItem(NORMAL_TIMER_MODE_KEY, timerModeSelect.value === "real" ? "real" : "virtual");
+      syncManualEntrySetting();
       if (timerModeSelect.value === "real") {
         lockedScramble = "";
         normalActiveScramble = "";
@@ -1291,7 +1373,26 @@ function setupSettingsUi() {
       applyNormalTimerMode();
       renderStats();
     });
+    manualEntryToggle?.addEventListener("change", () => {
+      if (timerModeSelect.value !== "real") {
+        localStorage.setItem(NORMAL_MANUAL_ENTRY_KEY, "false");
+        syncManualEntrySetting();
+        return;
+      }
+      localStorage.setItem(NORMAL_MANUAL_ENTRY_KEY, manualEntryToggle.checked ? "true" : "false");
+      abortNormalSolve();
+      normalSolveState = "idle";
+      applyNormalTimerMode();
+    });
   }
+  manualTimeSaveBtn?.addEventListener("click", () => {
+    submitNormalManualTime().catch(console.error);
+  });
+  manualTimeInput?.addEventListener("keydown", event => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    submitNormalManualTime().catch(console.error);
+  });
   resetButton?.addEventListener("click", () => {
     if (isBattleModeActive()) {
       setKeyBindingStatus("Key bindings cannot be changed during a battle.");
