@@ -101,7 +101,7 @@ function isRealCubeInspectionEnabled() {
 }
 
 function isNormalManualEntryEnabled() {
-  return getNormalTimerMode() === "real" && localStorage.getItem(NORMAL_MANUAL_ENTRY_KEY) === "true";
+  return false;
 }
 
 function setCubeSizeScale(value) {
@@ -334,7 +334,7 @@ function handleRealCubeTimerAction() {
 }
 
 function getNormalTimerMode() {
-  return localStorage.getItem(NORMAL_TIMER_MODE_KEY) === "real" ? "real" : "virtual";
+  return "virtual";
 }
 window.getNormalTimerMode = getNormalTimerMode;
 
@@ -1354,9 +1354,7 @@ function setupSettingsUi() {
         manualEntryToggle.checked = realMode && localStorage.getItem(NORMAL_MANUAL_ENTRY_KEY) === "true";
       }
       if (manualEntryHint) {
-        manualEntryHint.textContent = realMode
-          ? "Use Manual Entry to type real-cube solve times instead of using the screen timer."
-          : "Manual Entry is available in Real Cube Mode only.";
+        manualEntryHint.textContent = "STcube now uses the virtual cube for every solve.";
       }
     };
     timerModeSelect.value = getNormalTimerMode();

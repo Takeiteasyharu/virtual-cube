@@ -2366,7 +2366,7 @@ function renderBattleUi() {
   }
   battleModeLabel.textContent = activeRoom.mode === "ranked"
     ? "Ranked Battle"
-    : `${activeRoom.cubeMode === "real" ? "Real Cube" : "Virtual Cube"} · Friend Battle`;
+    : "Friend Battle";
   copyRoomUrlBtn.hidden = activeRoom.mode === "ranked";
   if (friendBattleSettingsBtn) friendBattleSettingsBtn.hidden = !(friendRoom || activeRoom.mode === "ranked");
   leaveBattleBtn.hidden = friendRoom || activeRoom.mode === "ranked";
@@ -2614,7 +2614,10 @@ function watchRoom(roomId) {
       return;
     }
 
-    const room = snapshot.data();
+    const room = {
+      cubeMode: "virtual",
+      ...snapshot.data()
+    };
     const previousHostUid = activeRoom?.hostUid;
     const previousGuestUid = activeRoom?.guestUid;
     const previousRound = activeRound;
@@ -2830,10 +2833,8 @@ async function createBattleRoom(mode = "friend") {
   }
 
   const roomId = createRoomId();
-  const cubeMode = mode === "friend"
-    ? (document.querySelector('input[name="friendCubeMode"]:checked')?.value || "virtual")
-    : "virtual";
-  const initialScramble = cubeMode === "real" ? await getBattleScramble() : "";
+  const cubeMode = "virtual";
+  const initialScramble = "";
   const room = {
     roomId,
     mode,
@@ -2869,7 +2870,7 @@ async function createBattleRoom(mode = "friend") {
   roomUrlOutput.value = getRoomUrl(roomId);
   if (mode === "friend") {
     clearFriendLobby();
-    setBattleStatus(`${cubeMode === "real" ? "Real Cube" : "Virtual Cube"} room created. Share the invite link.`);
+    setBattleStatus("Friend room created. Share the invite link.");
     watchRoom(roomId);
   } else {
     watchRoom(roomId);
@@ -2998,6 +2999,7 @@ async function startRankedBattle() {
   const room = {
     roomId,
     mode: "ranked",
+    cubeMode: "virtual",
     scramble: "",
     status: "waiting",
     hostUid: currentUser.uid,
@@ -3072,13 +3074,20 @@ async function joinBattleRoom(roomId, allowRankedMatch = false, asSpectator = fa
     return;
   }
 
-  let room = snapshot.data();
+  let room = {
+    cubeMode: "virtual",
+    ...snapshot.data()
+  };
   if (room.status === "cancelled" || (room.status === "finished" && room.mode !== "friend")) {
     setBattleStatus("This room is no longer available.");
     return;
   }
   if (room.mode === "ranked" && !allowRankedMatch) {
     setBattleStatus("Ranked Battle is available through matchmaking only.");
+    return;
+  }
+  if (room.mode === "friend" && room.cubeMode === "real") {
+    setBattleStatus("This battle mode is no longer supported. Please create a new Friend Battle room.");
     return;
   }
 
@@ -4128,9 +4137,11 @@ function setupAuthUi() {
     const player = battlePlayersByUid.get(currentUser?.uid);
     const virtualBattle = activeRoom?.cubeMode === "virtual";
     friendDarkModeToggle.checked = document.body.classList.contains("dark");
-    friendTimeEntryType.value = getFriendTimeEntryType();
-    friendTimeEntryType.disabled = ["inspecting", "solving"].includes(player?.status);
-    friendTimeEntrySection.hidden = activeRoom?.mode !== "friend" || activeRoom?.cubeMode !== "real" || isSpectatorMode;
+    if (friendTimeEntryType) {
+      friendTimeEntryType.value = getFriendTimeEntryType();
+      friendTimeEntryType.disabled = ["inspecting", "solving"].includes(player?.status);
+    }
+    if (friendTimeEntrySection) friendTimeEntrySection.hidden = true;
     friendOpponentSettingsSection.hidden = !virtualBattle;
     battleCubeSizeSection.hidden = !virtualBattle;
     friendShowOpponentCube.checked = shouldShowFriendOpponentCube();

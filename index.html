@@ -181,14 +181,6 @@
           <h3>Appearance</h3>
           <label class="settings-toggle"><input id="friendDarkModeToggle" type="checkbox" /> Dark Mode</label>
         </section>
-        <section class="battle-settings-section" id="friendTimeEntrySection">
-          <h3>Gameplay</h3>
-          <label for="friendTimeEntryType">Time Entry Type</label>
-          <select id="friendTimeEntryType">
-            <option value="screen">Screen Timer</option>
-            <option value="manual">Manual Entry</option>
-          </select>
-        </section>
         <section class="battle-settings-section" id="friendOpponentSettingsSection">
           <h3>Opponent</h3>
           <label class="settings-toggle"><input id="friendShowOpponentCube" type="checkbox" /> Show Opponent Cube</label>
@@ -241,10 +233,6 @@
       <div class="cube-area" id="mainCubeArea">
         <div id="cubeContainer"></div>
         <div id="realCubeInstruction" class="real-cube-instruction" hidden>Press Space to start inspection</div>
-        <div class="normal-manual-entry" id="normalManualEntryPanel" hidden>
-          <input id="normalManualTimeInput" type="number" min="0.01" max="3599.99" step="0.01" inputmode="decimal" placeholder="12.34" aria-label="Enter time" />
-          <button id="normalManualTimeSaveBtn" type="button">Save Time</button>
-        </div>
         <section class="scramble-net-panel normal-real-scramble-net" id="normalScrambleNetPanel" hidden aria-label="Current scramble cube net">
           <h3>Scramble Preview</h3>
           <div class="cube-net" id="normalScrambleCubeNet"></div>
@@ -322,7 +310,7 @@
       <h3>Ranking Rules</h3>
       <p>Only valid solves are submitted. Suspicious solves are excluded. Log in to join the online rankings.</p>
       <h3>Battle Mode</h3>
-      <p>Friend Battle supports Virtual Cube and Real Cube rooms. The host starts each round with the players who are Ready. Ranked Battle matches another player automatically.</p>
+      <p>Friend Battle lets players solve the same virtual scramble together. The host starts each round with the players who are Ready. Ranked Battle matches another player automatically.</p>
       <h3>Keyboard Controls</h3>
       <p>Keyboard shortcuts for every move are shown below.<br />You can also customize all key bindings anytime from the Settings menu.</p>
       <figure class="keyboard-controls-figure">
@@ -373,11 +361,6 @@
         <button class="battle-choice-tab" data-battle-choice="ranked">Ranked Battle</button>
       </div>
       <div id="friendBattleControls">
-        <fieldset class="cube-mode-selector">
-          <legend>Cube Mode</legend>
-          <label><input type="radio" name="friendCubeMode" value="virtual" checked /> Virtual Cube</label>
-          <label><input type="radio" name="friendCubeMode" value="real" /> Real Cube</label>
-        </fieldset>
         <div class="buttons battle-buttons"><button id="createRoomBtn">Create Friend Room</button></div>
         <input id="roomIdInput" type="text" maxlength="12" placeholder="Room ID" />
         <div class="buttons battle-buttons">
@@ -401,19 +384,6 @@
   <div class="app-modal feature-modal" id="settingsModal" hidden role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
     <section class="modal-content feature-content settings-content">
       <div class="modal-heading"><h2 id="settingsTitle">Settings</h2><button class="modal-close" data-close-modal="settingsModal" aria-label="Close Settings">Close</button></div>
-      <section class="settings-section">
-        <h3>Normal Timer Mode</h3>
-        <label for="normalTimerModeSelect">Timer type</label>
-        <select id="normalTimerModeSelect">
-          <option value="virtual">Virtual Cube</option>
-          <option value="real">Real Cube</option>
-        </select>
-        <label class="settings-toggle normal-manual-entry-setting">
-          <input id="normalManualEntryToggle" type="checkbox" />
-          Enable Manual Entry
-        </label>
-        <p class="settings-hint" id="normalManualEntryHint">Manual Entry is available in Real Cube Mode only.</p>
-      </section>
       <section class="settings-section">
         <h3>Animation Speed</h3>
         <label for="animationSpeedSelect">Rotation speed</label>
