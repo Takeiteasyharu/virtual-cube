@@ -35,6 +35,8 @@ jobs:
             cube-net.js \
             cube.js \
             firebase-config.js \
+            game-ui.css \
+            game-ui.js \
             index.html \
             manifest.json \
             online.js \

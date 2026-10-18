@@ -23,6 +23,8 @@
   <link rel="icon" type="image/png" href="images/favicon.png">
   <link rel="apple-touch-icon" href="images/icon-192.png">
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="game-ui.css" />
+  <script src="game-ui.js" defer></script>
   <link rel="canonical" href="https://takeiteasyharu.github.io/virtual-cube/">
   <meta name="google-site-verification" content="7IjdF9-mUBmC39GA9dpwrLpdu674KJkCRvziJruWiXM" />
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3246601183860920" crossorigin="anonymous"></script>
@@ -42,13 +44,14 @@
 <body>
   <div class="app">
     <header>
-      <h1>Virtual Cube Timer</h1>
+      <h1>STcube</h1>
       <div class="scramble" id="scrambleText">Scramble will appear here</div>
       <div class="header-actions" aria-label="Main actions">
-        <button id="howToPlayBtn" class="header-action">How to Play</button>
-        <button id="openRankingBtn" class="header-action">Online Ranking</button>
-        <button id="openBattleBtn" class="header-action">Battle</button>
-        <button id="openSettingsBtn" class="header-action">Settings</button>
+        <button id="practiceBtn" class="btn-card" type="button"><span aria-hidden="true">&#9655;</span>Practice</button>
+        <button id="openBattleBtn" class="header-action primary-action">Battle</button>
+        <button id="howToPlayBtn" class="header-action secondary-action">How to Play</button>
+        <button id="openRankingBtn" class="header-action secondary-action">Online Ranking</button>
+        <button id="openSettingsBtn" class="header-action secondary-action">Settings</button>
       </div>
     </header>
 
@@ -61,7 +64,7 @@
         </div>
         <div class="battle-mode-actions">
           <button id="hostStartBattleBtn" class="host-start-button" hidden>Start Game</button>
-          <button id="copyRoomUrlBtn" title="Copy room URL">Copy Room URL</button>
+          <button id="copyRoomUrlBtn" class="secondary-action" title="Copy room ID">Copy Room ID</button>
           <button id="friendBattleSettingsBtn" class="battle-settings-button" hidden>Settings</button>
           <button id="leaveBattleBtn" class="secondary-action">Return to Normal Mode</button>
         </div>
@@ -358,17 +361,25 @@
       <div class="modal-heading"><h2 id="battleTitle">Battle</h2><button class="modal-close" data-close-modal="battleModal" aria-label="Close Battle">Close</button></div>
       <div class="battle-choice-tabs" role="tablist">
         <button class="battle-choice-tab active" data-battle-choice="friend">Friend Battle</button>
-        <button class="battle-choice-tab" data-battle-choice="ranked">Ranked Battle</button>
+        <button class="battle-choice-tab" data-battle-choice="ranked">Random Battle</button>
       </div>
-      <div id="friendBattleControls">
-        <div class="buttons battle-buttons"><button id="createRoomBtn">Create Friend Room</button></div>
-        <input id="roomIdInput" type="text" maxlength="12" placeholder="Room ID" />
-        <div class="buttons battle-buttons">
-          <button id="joinRoomBtn">Join Friend Room</button>
-          <button id="spectateRoomBtn">Watch as Spectator</button>
-          <button id="copyInviteBtn">Copy Invite Link</button>
-        </div>
-        <input id="roomUrlOutput" type="text" readonly placeholder="Invite URL" />
+      <div id="friendBattleControls" class="friend-battle-flow">
+        <section class="friend-battle-card friend-create-card" aria-label="Create a friend room">
+          <h3>Create Room</h3>
+          <button id="createRoomBtn" class="primary-action">Create Room</button>
+        </section>
+        <div class="friend-battle-divider"><span>OR</span></div>
+        <section class="friend-battle-card" aria-label="Join a friend room">
+          <h3>Join a Room</h3>
+          <input id="roomIdInput" type="text" maxlength="12" placeholder="Room ID" />
+          <button id="joinRoomBtn" class="primary-action">Join Room</button>
+        </section>
+        <section class="friend-room-share" id="friendRoomSharePanel" hidden aria-label="Current room">
+          <div class="friend-room-id-label">ROOM ID</div>
+          <div class="friend-room-id" id="friendRoomIdDisplay">-</div>
+          <button id="copyRoomIdBtn" class="secondary-action" type="button">Copy ID</button>
+          <input id="roomUrlOutput" type="text" readonly placeholder="Invite URL" hidden />
+        </section>
       </div>
       <div id="randomBattleControls" hidden>
         <div class="buttons battle-buttons">

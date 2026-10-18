@@ -1,0 +1,117 @@
+/* Game presentation overrides; no timing or cube behavior is changed. */
+body,body.dark { --bg:#101626;--surface:#1b2438;--surface-2:#25314a;--border:#3b4760;--text:#f3f6ff;--text-muted:#aab7cf;--primary:#67dfef;--primary-hover:#9aeef8; background-color:var(--bg);color:var(--text);font-family:"Segoe UI",Arial,sans-serif; }
+*,*::before,*::after { box-sizing:border-box;letter-spacing:0; }
+body header { display:grid;grid-template-columns:minmax(120px,1fr) auto;gap:20px;align-items:center;width:min(1500px,100%);margin:auto;padding:24px 28px 8px;text-align:left; }
+body h1 { font-size:32px;margin:0; }
+body .header-actions { display:flex;gap:10px;max-width:none;margin:0;align-items:center; }
+body .scramble { grid-column:1/-1;grid-row:2;width:min(850px,100%);margin:0 auto;padding:12px;font-size:19px;font-weight:500;color:#c3d1e8;text-align:center; }
+body button,body.dark button { min-height:44px;border:1px solid var(--border);border-radius:14px;padding:10px 16px;background:var(--surface-2);color:var(--text);font-size:14px;line-height:1.3;transition:transform .15s,background .15s; }
+body button:hover { transform:translateY(-2px);opacity:1;border-color:#8a9fbd; }
+body button:active { transform:translateY(1px); }
+body button:disabled { opacity:.4;cursor:not-allowed;transform:none; }
+button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible { outline:3px solid #f6d56c;outline-offset:4px; }
+body #practiceBtn,body #openBattleBtn { width:140px;height:108px;display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;font-size:18px;border:0;border-radius:18px;background:#67dfef;color:#102331; }
+body #openBattleBtn { background:#b9a1fa;color:#231a40; }
+body #openBattleBtn::before { content:"\2694";font-size:26px; }
+body #practiceBtn span { font-size:26px; }
+body #howToPlayBtn,body #openSettingsBtn,body #openRankingBtn { background:transparent;border-color:transparent;color:var(--text-muted);width:auto; }
+body:not(.battle-mode) main { display:grid;grid-template-columns:210px minmax(0,1fr) 280px;gap:24px;align-items:start;width:min(1500px,100%);margin:auto;padding:16px 28px 32px;min-height:0; }
+body:not(.battle-mode) .left-panel,body:not(.battle-mode) .panel { position:static;width:100%;max-height:none;margin:0;padding:12px 0;background:transparent;border:0;border-radius:0;box-shadow:none;overflow:visible; }
+body:not(.battle-mode) .cube-area { grid-column:2;grid-row:1;transform:none;width:100%;align-self:center; }
+body:not(.battle-mode):not(.normal-real-cube) #cubeContainer { width:100%;height:auto;aspect-ratio:1;max-width:760px;max-height:none;min-width:0; }
+body:not(.battle-mode) .panel { grid-column:3;grid-row:1; }
+body:not(.battle-mode) .left-panel { grid-column:1;grid-row:1; }
+body .timer { color:#f6d56c;font-size:52px;margin-bottom:20px; }
+body .account-greeting { font-size:17px; }
+body .account-rank,body .account-rating,body .auth-status,body .user-count,body .last-move { color:var(--text-muted); }
+body .tps-display,body .moves-display { color:var(--text-muted);font-size:14px; }
+body .stats { font-size:12px;gap:8px; }
+body .stats div,body.dark .stats div { background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 5px; }
+body .stats span { display:block;font-size:18px;color:#f6d56c;margin-top:6px; }
+body #scrambleBtn,body #createRoomBtn,body #joinRoomBtn,body #playAgainBtn { min-height:52px;background:#67dfef;color:#102331;border:0; }
+body #randomBattleBtn { min-height:58px;background:#b9a1fa;color:#231a40; }
+body #clearTimesBtn,body #resetBtn,body .danger-action { background:transparent;color:#ff9cb0;border-color:#794555; }
+body .buttons { gap:10px; }
+body .panel .buttons { display:grid;grid-template-columns:1fr 1fr; }
+body #scrambleBtn { grid-column:1/-1; }
+body .profile-button { width:auto; }
+body input:not([type=checkbox]):not([type=range]),body select,body.dark input:not([type=checkbox]):not([type=range]),body.dark select { min-height:48px;max-width:100%;border:1px solid var(--border);border-radius:12px;background:#111a2b;color:var(--text);padding:10px 12px; }
+body .game-history { border-top:1px solid var(--border);padding:16px 0;margin-top:20px; }
+body summary { cursor:pointer;min-height:36px;font-weight:650; }
+body #timeList,body #scrambleHistoryList { max-height:200px;font-size:14px;margin-top:12px; }
+body .app-modal { padding:20px;background:#060a14c9; }
+body .modal-content,body.dark .modal-content { width:min(800px,100%);min-height:0;max-height:92dvh;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:20px;padding:24px; }
+body .app-modal:not([hidden]) .modal-content { animation:game-enter .18s ease-out; }
+body .modal-heading { border-color:var(--border);padding-bottom:16px; }
+body .modal-close { min-width:44px;width:auto;min-height:44px; }
+body .battle-choice-tabs { background:transparent;border:0;padding:0;gap:14px;margin:22px 0; }
+body .battle-choice-tab,body.dark .battle-choice-tab { height:88px;background:var(--surface-2);color:var(--text);border:2px solid var(--border);border-radius:16px;font-size:18px; }
+body .battle-choice-tab.active,body.dark .battle-choice-tab.active { background:#b9a1fa;color:#231a40;border-color:#d7c9ff; }
+body .friend-battle-flow { grid-template-columns:1fr 1fr;gap:24px; }
+body .friend-battle-card,body.dark .friend-battle-card { background:transparent;border:0;padding:0;border-radius:0; }
+body .friend-battle-divider { display:none; }
+body .friend-room-share { grid-column:1/-1;background:transparent;border:0;border-top:1px solid var(--border);border-radius:0; }
+body .friend-room-share button { width:auto; }
+body .battle-status,body.dark .battle-status { color:var(--text-muted);background:transparent;border:0;padding:14px 0; }
+body .settings-section { border-bottom:1px solid var(--border);padding-bottom:20px; }
+body .key-binding-row,body.dark .key-binding-row,body .key-binding-key,body .key-map span { background:var(--surface-2);color:var(--text);border-color:var(--border); }
+body .ranking-tab.active,body .ranking-type-tab.active { background:#f6d56c;color:#30260d; }
+body .profile-grid { gap:18px; }
+body .profile-grid div { border-color:#b9a1fa; }
+body.battle-mode,body.dark.battle-mode { background:var(--bg); }
+body .battle-heading { border-color:var(--border); }
+body .battle-mode-label { background:#b9a1fa;color:#231a40; }
+body .battle-notice { color:#67dfef; }
+body .multiplayer-roster { background:var(--surface);border:1px solid var(--border);border-radius:16px; }
+body .multiplayer-roster-row { background:var(--surface-2);border:1px solid var(--border);border-radius:10px; }
+body .battle-ready-button,body.dark .battle-ready-button { min-height:60px;max-width:260px;background:#67dfef;color:#102331;border:2px solid #c0f4fa;border-radius:16px; }
+body .opponent-cube-panel,body.dark.battle-mode .opponent-cube-panel,body .battle-player-card,body .battle-rematch { background:var(--surface);border:1px solid var(--border);border-radius:16px; }
+body .friend-real-history-panel { background:transparent!important;border:0!important; }
+body .friend-real-room-stats div { background:var(--surface);border:1px solid var(--border);border-radius:10px; }
+body .battle-result-badge.winner { color:#f6d56c; }
+body .battle-result-badge.loser { color:#ff9cb0; }
+body.battle-mode .battle-screen { animation:game-enter .18s ease-out; }
+@keyframes game-enter { from { opacity:0;transform:translateY(6px); } to { opacity:1;transform:none; } }
+@media(max-width:1100px) {
+ body header { grid-template-columns:1fr;text-align:center;padding:18px 16px 8px; }
+ body .header-actions { justify-content:center;flex-wrap:wrap; }
+ body .scramble { grid-row:auto; }
+ body:not(.battle-mode) main { grid-template-columns:minmax(0,1fr) 250px;padding:12px 20px;gap:20px; }
+ body:not(.battle-mode) .cube-area { grid-column:1; }
+ body:not(.battle-mode) .panel { grid-column:2; }
+ body:not(.battle-mode) .left-panel { grid-column:1/-1;grid-row:2;max-width:500px;margin:auto; }
+}
+@media(max-width:700px) {
+ body .header-actions { display:grid;grid-template-columns:repeat(6,minmax(0,1fr));width:100%;gap:8px; }
+ body #practiceBtn,body #openBattleBtn { grid-column:span 3;width:100%;height:104px; }
+ body #howToPlayBtn,body #openSettingsBtn,body #openRankingBtn { grid-column:span 2;font-size:12px;padding:8px 3px; }
+ body:not(.battle-mode) main { display:flex;gap:14px;padding:0 12px 24px; }
+ body:not(.battle-mode) .cube-area { order:1;width:100%; }
+ body:not(.battle-mode) #cubeContainer { width:min(100%,440px);height:auto;aspect-ratio:1; }
+ body:not(.battle-mode) .panel { order:2;width:100%;padding:0 8px; }
+ body:not(.battle-mode) .left-panel { order:3;width:100%;padding:20px 8px; }
+ body .move-input { width:100%;max-width:360px; }
+ body .app-modal { padding:12px; }
+ body .modal-content,body .feature-content { padding:18px;min-height:0;max-height:94dvh;border-radius:18px; }
+ body .friend-battle-flow { grid-template-columns:1fr;gap:22px; }
+ body .battle-choice-tab { font-size:15px;padding:10px; }
+ body .battle-mode-actions { flex-direction:row;flex-wrap:wrap; }
+}
+@media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important;transition:none!important;scroll-behavior:auto!important; } }
+body header>*,body main>*,body .header-actions { min-width:0; }
+body .header-actions { flex-wrap:wrap;justify-content:flex-end; }
+body:not(.battle-mode) .cube-area { min-width:0; }
+body.battle-mode #timerDisplay { display:none; }
+body #playerNameInput,body.dark #playerNameInput,body #roomIdInput,body.dark #roomIdInput { background:#111a2b;color:var(--text);border-color:var(--border); }
+body .cube-area>.timer { margin:0;line-height:1.1; }
+body:not(.battle-mode):not(.normal-real-cube) #cubeContainer { overflow:hidden; }
+body:not(.battle-mode) #cubeContainer canvas { position:absolute;inset:0;width:100%!important;height:100%!important; }
+body:not(.battle-mode) #cubeContainer canvas { transform:scale(1.45);transform-origin:center; }
+body .feature-modal { place-items:center; }
+body .feature-modal>.modal-content { align-self:center; }
+body #randomBattleControls .battle-buttons { flex-direction:row;flex-wrap:wrap;align-items:center; }
+body #randomBattleControls .battle-buttons button { width:auto; }
+body #randomBattleBtn { flex:1; }
+body .btn-primary { min-height:52px;background:#67dfef;color:#102331; }
+body .btn-secondary,body .btn-utility { min-height:44px;background:var(--surface-2);color:var(--text); }
+body .btn-danger { background:transparent;color:#ff9cb0;border-color:#794555; }

@@ -51,6 +51,9 @@ const createRoomBtn = document.getElementById("createRoomBtn");
 const joinRoomBtn = document.getElementById("joinRoomBtn");
 const copyInviteBtn = document.getElementById("copyInviteBtn");
 const spectateRoomBtn = document.getElementById("spectateRoomBtn");
+const copyRoomIdBtn = document.getElementById("copyRoomIdBtn");
+const friendRoomSharePanel = document.getElementById("friendRoomSharePanel");
+const friendRoomIdDisplay = document.getElementById("friendRoomIdDisplay");
 const randomBattleBtn = document.getElementById("randomBattleBtn");
 const cancelMatchBtn = document.getElementById("cancelMatchBtn");
 const battleChoiceButtons = document.querySelectorAll(".battle-choice-tab");
@@ -1017,18 +1020,42 @@ function getRoomUrl(roomId) {
   return url.toString();
 }
 
+function renderFriendRoomShare(roomId) {
+  const show = Boolean(roomId && activeRoom?.mode === "friend");
+  if (friendRoomSharePanel) friendRoomSharePanel.hidden = !show;
+  if (friendRoomIdDisplay) friendRoomIdDisplay.textContent = show ? roomId : "-";
+}
+
 async function copyRoomUrl(roomId, onCopied) {
   const roomUrl = getRoomUrl(roomId);
 
   try {
     await navigator.clipboard.writeText(roomUrl);
   } catch (error) {
+    if (!roomUrlOutput) throw error;
+    roomUrlOutput.hidden = false;
     roomUrlOutput.value = roomUrl;
     roomUrlOutput.select();
     document.execCommand("copy");
+    roomUrlOutput.hidden = true;
   }
 
   onCopied("Invite link copied.");
+}
+
+async function copyRoomId(roomId, onCopied) {
+  if (!roomId) return;
+  try {
+    await navigator.clipboard.writeText(roomId);
+  } catch (error) {
+    if (!roomIdInput) throw error;
+    const previousValue = roomIdInput.value;
+    roomIdInput.value = roomId;
+    roomIdInput.select();
+    document.execCommand("copy");
+    roomIdInput.value = previousValue;
+  }
+  onCopied("Room ID copied.");
 }
 
 function createPlayer(role) {
@@ -2334,7 +2361,10 @@ function renderRematchPanel(you, opponent) {
 }
 
 function renderBattleUi() {
-  if (!activeRoomId || !activeRoom) return;
+  if (!activeRoomId || !activeRoom) {
+    renderFriendRoomShare("");
+    return;
+  }
 
   const you = getDisplayPlayer(activeRoomRole);
   const opponent = activeRoom.cubeMode === "virtual"
@@ -2345,7 +2375,8 @@ function renderBattleUi() {
     : [getDisplayPlayer("host"), getDisplayPlayer("guest")].filter(Boolean).length;
 
   roomIdInput.value = activeRoomId;
-  roomUrlOutput.value = getRoomUrl(activeRoomId);
+  if (roomUrlOutput) roomUrlOutput.value = getRoomUrl(activeRoomId);
+  renderFriendRoomShare(activeRoomId);
   const friendRoom = activeRoom.mode === "friend";
   const realFriendRoom = friendRoom && activeRoom.cubeMode === "real";
   syncFriendVirtualBattleLayout();
@@ -2368,6 +2399,7 @@ function renderBattleUi() {
     ? "Ranked Battle"
     : "Friend Battle";
   copyRoomUrlBtn.hidden = activeRoom.mode === "ranked";
+  copyRoomUrlBtn.textContent = activeRoom.mode === "friend" ? "Copy Room ID" : "Copy Room URL";
   if (friendBattleSettingsBtn) friendBattleSettingsBtn.hidden = !(friendRoom || activeRoom.mode === "ranked");
   leaveBattleBtn.hidden = friendRoom || activeRoom.mode === "ranked";
   const realFriendScramblePreview = activeRoom.mode === "friend" &&
@@ -2867,10 +2899,11 @@ async function createBattleRoom(mode = "friend") {
   activeRoomRole = "host";
   isSpectatorMode = false;
   roomIdInput.value = roomId;
-  roomUrlOutput.value = getRoomUrl(roomId);
+  if (roomUrlOutput) roomUrlOutput.value = getRoomUrl(roomId);
+  renderFriendRoomShare(roomId);
   if (mode === "friend") {
     clearFriendLobby();
-    setBattleStatus("Friend room created. Share the invite link.");
+    setBattleStatus("Friend room created. Share the Room ID.");
     watchRoom(roomId);
   } else {
     watchRoom(roomId);
@@ -3171,7 +3204,8 @@ async function joinBattleRoom(roomId, allowRankedMatch = false, asSpectator = fa
 
   activeRoomId = normalizedRoomId;
   roomIdInput.value = normalizedRoomId;
-  roomUrlOutput.value = getRoomUrl(normalizedRoomId);
+  if (roomUrlOutput) roomUrlOutput.value = getRoomUrl(normalizedRoomId);
+  renderFriendRoomShare(normalizedRoomId);
   setBattleStatus(asSpectator ? "Joined as spectator." : "Joined room.");
   watchRoom(normalizedRoomId);
 }
@@ -3949,6 +3983,7 @@ function resetBattleUiAfterLeave() {
   activeRoom = null;
   activeRoomId = "";
   activeRoomRole = "";
+  renderFriendRoomShare("");
   isSpectatorMode = false;
   battlePlayersByUid = new Map();
   activeRound = 1;
@@ -4210,13 +4245,25 @@ function setupAuthUi() {
     });
   });
 
-  copyInviteBtn.addEventListener("click", () => {
+  copyInviteBtn?.addEventListener("click", () => {
     if (!activeRoomId) {
       setBattleStatus("Create or join a friend room first.");
       return;
     }
 
     copyRoomUrl(activeRoomId, setBattleStatus);
+  });
+
+  copyRoomIdBtn?.addEventListener("click", () => {
+    const roomId = activeRoomId || roomIdInput.value.trim().toUpperCase();
+    if (!roomId) {
+      setBattleStatus("Create or join a friend room first.");
+      return;
+    }
+    copyRoomId(roomId, setBattleStatus).catch(error => {
+      setBattleStatus("Room ID could not be copied.");
+      console.error(error);
+    });
   });
 
   randomBattleBtn.addEventListener("click", () => {
@@ -4304,8 +4351,13 @@ function setupAuthUi() {
   copyRoomUrlBtn.addEventListener("click", async () => {
     if (!activeRoomId) return;
 
-    copyRoomUrl(activeRoomId, message => {
+    const copyAction = activeRoom?.mode === "friend" ? copyRoomId : copyRoomUrl;
+    copyAction(activeRoomId, message => {
       battleNotice.textContent = message;
+      setBattleStatus(message);
+    }).catch(error => {
+      battleNotice.textContent = "Room info could not be copied.";
+      console.error(error);
     });
   });
 
