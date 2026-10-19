@@ -10,9 +10,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const cubeArea = document.getElementById("mainCubeArea");
   const timer = document.getElementById("timerDisplay");
   if (cubeArea && timer) cubeArea.prepend(timer);
-  document.getElementById("practiceBtn")?.addEventListener("click", () => {
-    document.getElementById("mainCubeArea")?.scrollIntoView({ block: "center" });
-  });
   const history = document.getElementById("timeList");
   if (history) {
     const heading = history.previousElementSibling;
