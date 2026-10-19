@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://takeiteasyharu.github.io/virtual-cube/sitemap.xml
+Sitemap: https://stcube3d.com/sitemap.xml
