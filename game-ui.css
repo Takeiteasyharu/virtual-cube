@@ -236,3 +236,10 @@ body #settingsModal .settings-save-note { margin:0; }
   body .battle-choice-tabs { gap:10px;margin:14px 0; }
   body .battle-choice-tab { height:64px; }
 }
+
+/* Ready is a centered overlay. Generic button hover/active translations must
+   not replace its positioning transform or animate it away from the pointer. */
+body.battle-mode #battleReadyBtn {
+  transform:translate(-50%,-50%);
+  transition:background-color .12s ease,border-color .12s ease;
+}
