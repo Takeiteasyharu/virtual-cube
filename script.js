@@ -127,11 +127,13 @@ let battleInspectionInterval = null;
 let battleInspectionRound = 0;
 let battleMoveSequence = 0;
 let normalInspectionInterval = null;
+let normalInspectionHideTimeout = null;
 let normalInspectionActive = false;
 let normalSolveState = "idle";
 let lockedScramble = "";
 let normalActiveScramble = "";
 let normalScramblePreparing = false;
+let normalScrambleRequest = 0;
 let battleMaxCompletionScore = 0;
 let battleCurrentCompletionScore = 0;
 let rankedBattleTimeLimitTimeout = null;
@@ -181,12 +183,17 @@ document.addEventListener("DOMContentLoaded", () => {
     scrambleCube();
   });
 
-  document.getElementById("resetBtn").addEventListener("click", () => {
+  document.getElementById("resetBtn").addEventListener("click", event => {
     if (isBattleModeActive() && window.isRealCubeBattle?.()) {
       window.abortRealCubeBattle?.();
       return;
     }
     abortNormalSolve();
+    // Return only this action's focus to the play area. Other buttons and form
+    // fields retain their native Space/Enter behavior.
+    if (!isBattleModeActive() && document.activeElement === event.currentTarget) {
+      event.currentTarget.blur();
+    }
   });
 
   document.getElementById("clearTimesBtn").addEventListener("click", () => {
@@ -265,6 +272,7 @@ function getMoveFromKey(key) {
 }
 
 function performMove(move) {
+  if (!isBattleModeActive() && normalScramblePreparing) return;
   if (isRealCubeTimerMode()) return;
   if (isBattleInputLocked()) return;
 
@@ -784,7 +792,10 @@ function startNormalInspection() {
       clearNormalInspection();
       startNormalSolve();
       setBattleInspectionOverlay(true, "Go!");
-      window.setTimeout(() => setBattleInspectionOverlay(false), 650);
+      normalInspectionHideTimeout = window.setTimeout(() => {
+        normalInspectionHideTimeout = null;
+        setBattleInspectionOverlay(false);
+      }, 650);
     }
   };
 
@@ -820,6 +831,10 @@ function startNormalSolve() {
 }
 
 function clearNormalInspection() {
+  if (normalInspectionHideTimeout) {
+    window.clearTimeout(normalInspectionHideTimeout);
+    normalInspectionHideTimeout = null;
+  }
   if (normalInspectionInterval) {
     window.clearInterval(normalInspectionInterval);
     normalInspectionInterval = null;
@@ -912,6 +927,7 @@ function setupMoveInput() {
 
     if (event.code === "Space") {
       event.preventDefault();
+      if (event.repeat) return;
       scrambleCube();
       input.value = "";
       return;
@@ -961,6 +977,8 @@ async function scrambleCube() {
   if (normalScramblePreparing) return;
 
   normalScramblePreparing = true;
+  const request = ++normalScrambleRequest;
+  const startedAt = performance.now();
   try {
     clearNormalInspection();
     resetCube();
@@ -972,10 +990,10 @@ async function scrambleCube() {
       ? normalActiveScramble
       : "";
     const scrambleText = lockedScramble || preparedRealScramble || (
-      typeof window.generateScrambleText === "function"
-        ? await window.generateScrambleText(20)
-        : generateScramble(20).join(" ")
+      await window.takePreparedSoloScramble()
     );
+    if (request !== normalScrambleRequest || isBattleModeActive()) return;
+    recordScrambleDuration("stcube:solo-scramble:wait", startedAt);
     const scramble = scrambleText.split(" ").filter(Boolean);
 
     document.getElementById("scrambleText").textContent = scrambleText;
@@ -990,21 +1008,34 @@ async function scrambleCube() {
     readyToSolve = true;
     firstTurnDone = false;
 
+    const applyStartedAt = performance.now();
     if (!isNormalRealCubeMode()) applyScramble(scramble);
+    recordScrambleDuration("stcube:solo-scramble:apply", applyStartedAt);
     if (isNormalRealCubeMode() && isNormalManualEntryEnabled()) {
       normalSolveState = "idle";
       readyToSolve = false;
       renderNormalRealCubeUi();
     } else if (isNormalRealCubeMode()) startNormalRealPreparation();
     else startNormalInspection();
+    recordScrambleDuration("stcube:solo-scramble:total", startedAt);
+  } catch (error) {
+    if (request === normalScrambleRequest && !isBattleModeActive()) {
+      abortNormalSolve();
+      document.getElementById("scrambleText").textContent = "Scramble could not be generated. Press Space to retry.";
+      console.error("Solo scramble preparation failed.", error);
+    }
   } finally {
-    normalScramblePreparing = false;
+    if (request === normalScrambleRequest) normalScramblePreparing = false;
   }
 }
 
 function abortNormalSolve() {
   if (isBattleModeActive()) return;
 
+  // Invalidate pending generation before releasing the input lock. A late
+  // result must not restart inspection after Abort or overwrite a newer solve.
+  normalScrambleRequest++;
+  normalScramblePreparing = false;
   clearRealTimerHold();
 
   if (["inspecting", "solving"].includes(normalSolveState) && normalActiveScramble) {
@@ -1189,6 +1220,8 @@ function setSolvingMode(isSolving) {
 }
 
 function cancelCurrentSolve({ preserveTimer = false } = {}) {
+  normalScrambleRequest++;
+  normalScramblePreparing = false;
   clearRealTimerHold();
   clearRankedBattleTimeLimit();
   clearBattleInspection();

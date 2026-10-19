@@ -2,6 +2,8 @@ let scene, camera, renderer;
 let moveQueue = [];
 let cubies = [];
 let isAnimating = false;
+let rotationGeneration = 0;
+let activeRotationGroup = null;
 
 const CUBE_SIZE = 0.95;
 const GAP = 0.32;
@@ -187,6 +189,11 @@ window.resizeMainCube = onResize;
 window.applyCubeSizeScale = applyCubeSizeScale;
 
 function resetCube() {
+  rotationGeneration++;
+  moveQueue = [];
+  isAnimating = false;
+  if (activeRotationGroup) scene.remove(activeRotationGroup);
+  activeRotationGroup = null;
   cubies.forEach(cubie => scene.remove(cubie));
   cubies = [];
   createCubies();
@@ -272,8 +279,10 @@ function parseMove(move) {
 
 function rotateLayer(axis, layers, angle, durationMs = 100) {
   isAnimating = true;
+  const generation = rotationGeneration;
 
   const group = new THREE.Group();
+  activeRotationGroup = group;
   scene.add(group);
 
   const selected = cubies.filter(cubie => {
@@ -287,6 +296,7 @@ function rotateLayer(axis, layers, angle, durationMs = 100) {
   let startedAt = 0;
 
   function animate(now = performance.now()) {
+    if (generation !== rotationGeneration) return;
     if (!startedAt) startedAt = now;
     const progress = Math.min(1, (now - startedAt) / durationMs);
     group.rotation[axis] = angle * progress;
@@ -301,6 +311,7 @@ function rotateLayer(axis, layers, angle, durationMs = 100) {
       });
 
       scene.remove(group);
+      activeRotationGroup = null;
       isAnimating = false;
       callAfterMoveCallback();
       runNextMove();
