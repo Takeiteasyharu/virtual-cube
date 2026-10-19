@@ -155,6 +155,7 @@ const FRIEND_SHOW_OPPONENT_CUBE_KEY = "friendShowOpponentCube";
 let auth = null;
 let db = null;
 let currentUser = null;
+let googleLoginPending = false;
 let activePeriod = "today";
 let activeRankingType = "single";
 let activeRoomId = "";
@@ -4043,9 +4044,42 @@ async function leaveBattleMode(options = {}) {
 }
 
 async function loginWithGoogle() {
+  if (googleLoginPending) return;
+
+  googleLoginPending = true;
+  googleLoginBtn.disabled = true;
+  setStatus("Opening Google login...");
   const provider = new GoogleAuthProvider();
-  await signInWithPopup(auth, provider);
-  window.trackCubeEvent?.("login", { method: "google" });
+
+  try {
+    const credential = await signInWithPopup(auth, provider);
+    window.trackCubeEvent?.("login", { method: "google" });
+    return credential;
+  } finally {
+    googleLoginPending = false;
+    googleLoginBtn.disabled = false;
+  }
+}
+
+function getGoogleLoginErrorMessage(error) {
+  switch (error?.code) {
+    case "auth/popup-closed-by-user":
+      return "Google login was cancelled before it completed.";
+    case "auth/unauthorized-domain":
+      return `Google login is not enabled for ${window.location.hostname}. Add this domain to Firebase Authentication's authorized domains.`;
+    case "auth/cancelled-popup-request":
+      return "Another Google login request was already in progress. Please try again.";
+    case "auth/popup-blocked":
+      return "The Google login popup was blocked. Allow popups for this site and try again.";
+    case "auth/network-request-failed":
+      return "Google login could not reach Firebase. Check your connection and try again.";
+    case "auth/operation-not-allowed":
+      return "Google login is disabled in Firebase Authentication.";
+    case "auth/account-exists-with-different-credential":
+      return "An account already exists with this email using a different login method.";
+    default:
+      return "Google login failed. Please try again.";
+  }
 }
 
 async function loginAsGuest() {
@@ -4135,8 +4169,11 @@ function setupModalUi() {
 function setupAuthUi() {
   googleLoginBtn.addEventListener("click", () => {
     loginWithGoogle().catch(error => {
-      setStatus("Google login failed.");
-      console.error(error);
+      setStatus(getGoogleLoginErrorMessage(error));
+      console.error("Google login failed.", {
+        code: error?.code || "unknown",
+        message: error?.message || String(error)
+      });
     });
   });
 
