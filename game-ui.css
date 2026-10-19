@@ -165,3 +165,74 @@ body #randomBattleBtn { flex:1; }
   body .battle-choice-tab { font-size:15px;padding:10px; }
 }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important;transition:none!important;scroll-behavior:auto!important; } }
+
+/* Honor application visibility even when a component uses grid or flex. */
+body [hidden] { display:none!important; }
+body #randomBattleControls .battle-buttons {
+  flex-direction:column;justify-content:center;align-items:center;gap:12px;margin:16px 0;
+}
+body #randomBattleControls #randomBattleBtn { flex:none;width:min(360px,100%);min-height:56px; }
+body #randomBattleControls .random-status { text-align:center;color:var(--text-muted); }
+body #randomBattleControls .random-status:empty { display:none; }
+
+/* Shared button states retain the cyan, purple and yellow accents. */
+body,body.dark {
+  --button-border:#718299;--button-disabled-bg:#dce3eb;--button-disabled-text:#526174;
+}
+body.dark { --button-border:#8294b1;--button-disabled-bg:#334156;--button-disabled-text:#b3bfd0; }
+body button,body.dark button { border-color:var(--button-border);opacity:1; }
+body button:hover:not(:disabled) { filter:brightness(.94); }
+body.dark button:hover:not(:disabled) { filter:brightness(1.08); }
+body button:active:not(:disabled) { filter:brightness(.88); }
+body button:focus-visible { outline:3px solid var(--accent);outline-offset:3px; }
+body button:disabled,body.dark button:disabled {
+  opacity:1;background:var(--button-disabled-bg)!important;color:var(--button-disabled-text)!important;
+  border:1px dashed var(--button-border)!important;box-shadow:none;filter:none;transform:none;cursor:not-allowed;
+}
+body .ranking-tab.active,body .ranking-type-tab.active,
+body.dark .ranking-tab.active,body.dark .ranking-type-tab.active { background:#f4df92;color:#433600; }
+body #randomBattleBtn,body.dark #randomBattleBtn,
+body #randomBattleBtn:is(:hover,:active),body.dark #randomBattleBtn:is(:hover,:active) { background:#d8cdf6;color:#382460;border-color:#ad92df; }
+body #openBattleBtn:is(:hover,:active),body.dark #openBattleBtn:is(:hover,:active) { background:#d8cdf6;color:#382460; }
+body :is(#clearTimesBtn,#friendRealDnfBtn,#friendRealRemoveBtn):hover,
+body.dark :is(#clearTimesBtn,#friendRealDnfBtn,#friendRealRemoveBtn):hover,
+body .danger-action:hover,body.dark .danger-action:hover { background:var(--surface-2);color:var(--danger); }
+body #howToPlayBtn:hover,body.dark #howToPlayBtn:hover { background:var(--surface-2);color:var(--text); }
+body .key-binding-change.is-listening,body.dark .key-binding-change.is-listening { background:#6249a3;color:#fff; }
+body #themeToggleBtn,body.dark #themeToggleBtn,
+body #removeBackgroundBtn,body.dark #removeBackgroundBtn,
+body #resetKeyBindingsBtn,body.dark #resetKeyBindingsBtn { background:var(--surface-2);color:var(--text);border-color:var(--button-border); }
+body :is(#cancelMatchBtn,#openSettingsBtn,#openRankingBtn,#copyRoomIdBtn,#copyRoomUrlBtn),
+body.dark :is(#cancelMatchBtn,#openSettingsBtn,#openRankingBtn,#copyRoomIdBtn,#copyRoomUrlBtn),
+body :is(#cancelMatchBtn,#openSettingsBtn,#openRankingBtn,#copyRoomIdBtn,#copyRoomUrlBtn):hover,
+body.dark :is(#cancelMatchBtn,#openSettingsBtn,#openRankingBtn,#copyRoomIdBtn,#copyRoomUrlBtn):hover { background:var(--surface-2);color:var(--text);border-color:var(--button-border); }
+body #settingsModal .settings-content { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 20px;overflow-y:auto; }
+body #settingsModal .modal-heading,body #settingsModal .key-bindings-settings,
+body #settingsModal .settings-save-note { grid-column:1/-1; }
+body #settingsModal .modal-heading { margin:0;padding-bottom:12px; }
+body #settingsModal .settings-section { margin:0;padding:0 0 12px;min-width:0; }
+body #settingsModal .settings-section h3 { margin:0 0 8px;font-size:16px; }
+body #settingsModal .settings-section button { margin:4px 0 0;min-height:44px; }
+body #settingsModal .settings-section select { width:100%; }
+body #settingsModal .settings-hint { opacity:1;color:var(--text-muted);line-height:1.4; }
+body #settingsModal .key-bindings-settings,body.dark #settingsModal .key-bindings-settings {
+  border:1px solid var(--border);border-radius:12px;padding:0;background:var(--surface);
+}
+body #settingsModal summary {
+  display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:48px;
+  padding:12px;list-style:none;border-radius:12px;background:var(--surface-2);color:var(--text);
+}
+body #settingsModal summary::-webkit-details-marker { display:none; }
+body #settingsModal summary::after { content:"";width:9px;height:9px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(45deg);margin-right:4px; }
+body #settingsModal details[open]>summary::after { transform:rotate(225deg); }
+body #settingsModal .key-bindings-settings>p,body #settingsModal .key-bindings-list { margin:12px; }
+body #settingsModal .key-bindings-settings>#resetKeyBindingsBtn { margin:12px;max-width:calc(100% - 24px); }
+body #settingsModal .settings-callout { padding:0;background:transparent; }
+body #settingsModal .key-binding-row { padding:6px;gap:6px; }
+body #settingsModal .settings-save-note { margin:0; }
+@media(max-width:600px) {
+  body #settingsModal .settings-content { grid-template-columns:minmax(0,1fr);gap:12px; }
+  body #settingsModal .key-bindings-list { grid-template-columns:minmax(0,1fr); }
+  body .battle-choice-tabs { gap:10px;margin:14px 0; }
+  body .battle-choice-tab { height:64px; }
+}

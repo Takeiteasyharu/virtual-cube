@@ -417,13 +417,13 @@
         <label for="cubeSizeInput">Visual cube size: <output id="cubeSizeValue" for="cubeSizeInput">1.00x</output></label>
         <input id="cubeSizeInput" type="range" min="0.5" max="2" step="0.05" value="1" />
       </section>
-      <section class="settings-section key-bindings-settings">
-        <h3>Keyboard Controls</h3>
+      <details class="settings-section key-bindings-settings" id="keyboardControls">
+        <summary>Keyboard Controls</summary>
         <p class="settings-callout">Customize the virtual cube controls to match the keyboard layout that feels fastest for you.</p>
         <p class="settings-hint" id="keyBindingStatus">Select Change beside a move, then press the new key.</p>
         <div id="keyBindingsList" class="key-bindings-list" aria-label="Key bindings"></div>
         <button id="resetKeyBindingsBtn" class="secondary-action reset-key-bindings">Reset to Default</button>
-      </section>
+      </details>
       <section class="settings-section">
         <h3>Theme</h3>
         <button id="themeToggleBtn" class="theme-toggle">Dark</button>
@@ -440,6 +440,7 @@
         <h3>Account</h3>
         <button id="logoutBtn" class="danger-action">Logout</button>
       </section>
+      <p class="settings-hint settings-save-note">Changes are saved automatically. Press Escape to cancel a key change.</p>
     </section>
   </div>
 

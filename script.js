@@ -1331,6 +1331,13 @@ function setupSettingsUi() {
   const cubeSizeInput = document.getElementById("cubeSizeInput");
   const cubeSizeValue = document.getElementById("cubeSizeValue");
   const resetButton = document.getElementById("resetKeyBindingsBtn");
+  document.getElementById("keyboardControls")?.addEventListener("toggle", event => {
+    if (!event.currentTarget.open && selectedBindingKey) {
+      selectedBindingKey = "";
+      setKeyBindingStatus("Key binding change cancelled.");
+      renderKeyBindings();
+    }
+  });
   if (!speedSelect) return;
 
   speedSelect.value = getAnimationSpeed();
