@@ -114,7 +114,7 @@
           </section>
           <span id="multiplayerRosterMount" hidden></span>
           <section class="multiplayer-roster" id="multiplayerRoster" hidden aria-label="Room players">
-            <button class="multiplayer-roster-toggle" id="multiplayerRosterToggle" type="button" aria-expanded="false">Room Players</button>
+            <button class="multiplayer-roster-toggle" id="multiplayerRosterToggle" type="button" aria-expanded="false" aria-controls="multiplayerRosterList multiplayerRosterHint">Room Players</button>
             <p class="multiplayer-roster-hint" id="multiplayerRosterHint">Click a player to watch their cube.</p>
             <div class="multiplayer-roster-list" id="multiplayerRosterList"></div>
           </section>
@@ -235,6 +235,7 @@
       </div>
       <div id="normalCubeAreaMount" hidden></div>
       <div class="cube-area" id="mainCubeArea">
+        <button id="soloSpaceHint" class="solo-space-hint" type="button" aria-label="Start scramble. Press Space or tap here.">Press Space to scramble</button>
         <div id="cubeContainer"></div>
         <div id="realCubeInstruction" class="real-cube-instruction" hidden>Press Space to start inspection</div>
         <section class="scramble-net-panel normal-real-scramble-net" id="normalScrambleNetPanel" hidden aria-label="Current scramble cube net">
@@ -275,8 +276,8 @@
           </div>
 
           <div class="buttons">
-            <button id="scrambleBtn">Scramble</button>
-            <button id="resetBtn">Abort</button>
+            <button id="scrambleBtn" hidden>Scramble</button>
+            <button id="resetBtn" hidden>Abort</button>
             <button id="clearTimesBtn">Clear Times</button>
           </div>
 
@@ -303,6 +304,15 @@
       </nav>
     </footer>
   </div>
+
+  <dialog id="clearTimesDialog" class="clear-times-dialog" aria-labelledby="clearTimesTitle" aria-describedby="clearTimesDescription">
+    <h2 id="clearTimesTitle">Clear saved times?</h2>
+    <p id="clearTimesDescription">Delete all times for this mode on this device? This cannot be undone. Online rankings will not be changed.</p>
+    <form method="dialog" class="confirm-times-actions">
+      <button value="no" autofocus>No, keep times</button>
+      <button value="yes" class="danger-action">Yes, clear times</button>
+    </form>
+  </dialog>
 
   <div class="app-modal" id="howToPlayModal" hidden role="dialog" aria-modal="true" aria-labelledby="howToPlayTitle">
     <section class="modal-content how-to-play-content">
@@ -385,7 +395,7 @@
       <div id="randomBattleControls" hidden>
         <div class="buttons battle-buttons">
           <button id="randomBattleBtn">Find Ranked Match</button>
-          <button id="cancelMatchBtn">Cancel</button>
+          <button id="cancelMatchBtn" hidden>Cancel</button>
         </div>
         <div class="random-status" id="randomStatus"></div>
       </div>

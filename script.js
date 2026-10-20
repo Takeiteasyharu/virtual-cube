@@ -182,6 +182,7 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("scrambleBtn").addEventListener("click", () => {
     scrambleCube();
   });
+  document.getElementById("soloSpaceHint")?.addEventListener("click", () => scrambleCube());
 
   document.getElementById("resetBtn").addEventListener("click", event => {
     if (isBattleModeActive() && window.isRealCubeBattle?.()) {
@@ -197,13 +198,20 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   document.getElementById("clearTimesBtn").addEventListener("click", () => {
-    clearTimes();
+    const dialog = document.getElementById("clearTimesDialog");
+    dialog.returnValue = "no";
+    dialog.showModal();
   });
+  document.getElementById("clearTimesDialog")?.addEventListener("close", event => {
+    if (event.currentTarget.returnValue === "yes") clearTimes();
+  });
+  renderSoloActions();
 
   setupMobileRealTimerControls();
 });
 
 document.addEventListener("keydown", event => {
+  if (document.getElementById("clearTimesDialog")?.open) return;
   const openModal = document.querySelector(".app-modal:not([hidden])");
   if (openModal) {
     if (event.code === "Escape") {
@@ -828,6 +836,7 @@ function startNormalSolve() {
   startTimer();
   renderNormalRealCubeUi();
   syncRealTimerScreenState();
+  renderSoloActions();
 }
 
 function clearNormalInspection() {
@@ -1217,6 +1226,15 @@ function setBattleInspectionOverlay(visible, count = "15", label = "Inspection")
 
 function setSolvingMode(isSolving) {
   document.body.classList.toggle("solving", isSolving);
+  renderSoloActions();
+}
+
+function renderSoloActions() {
+  const active = normalScramblePreparing || normalInspectionActive || isTimerRunning();
+  const abort = document.getElementById("resetBtn");
+  const hint = document.getElementById("soloSpaceHint");
+  if (abort) abort.hidden = isBattleModeActive() || !active;
+  if (hint) hint.hidden = isBattleModeActive() || active;
 }
 
 function cancelCurrentSolve({ preserveTimer = false } = {}) {

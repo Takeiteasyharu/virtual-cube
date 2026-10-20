@@ -1123,11 +1123,15 @@ function stopRankedSearchTimer() {
   if (rankedSearchInterval) window.clearInterval(rankedSearchInterval);
   rankedSearchInterval = null;
   rankedSearchStartedAt = 0;
+  if (cancelMatchBtn) cancelMatchBtn.hidden = true;
+  if (randomBattleBtn) randomBattleBtn.disabled = false;
 }
 
 function startRankedSearchTimer() {
   stopRankedSearchTimer();
   rankedSearchStartedAt = Date.now();
+  if (cancelMatchBtn) cancelMatchBtn.hidden = false;
+  if (randomBattleBtn) randomBattleBtn.disabled = true;
 
   const render = () => {
     setRandomStatus(`Opponent searching... ${formatRankedSearchElapsed(Date.now() - rankedSearchStartedAt)}`);
@@ -1144,6 +1148,10 @@ function setBattleChoice(choice) {
   });
   friendBattleControls.hidden = choice !== "friend";
   randomBattleControls.hidden = choice !== "ranked";
+  if (!activeRoomId) {
+    setBattleStatus(!currentUser ? "Log in to start a battle."
+      : choice === "ranked" && currentUser.isAnonymous ? "Ranked Battle requires Google Login." : "");
+  }
 }
 
 function clearFriendLobby() {
@@ -1260,6 +1268,7 @@ function setBattleMode(enabled) {
     window.clearInterval(battlePresenceInterval);
     battlePresenceInterval = null;
   }
+  window.renderSoloActions?.();
 }
 
 function sendBattleHeartbeat() {
@@ -1749,7 +1758,12 @@ function getRosterRatingText(player) {
 function selectOpponent(uid) {
   if (activeRoom?.cubeMode === "real" || !uid || uid === currentUser?.uid) return;
   const opponent = getBattlePlayersForSelection().find(player => player.uid === uid);
-  if (!opponent || selectedOpponentUid === uid) return;
+  if (!opponent) return;
+  localStorage.setItem(FRIEND_SHOW_OPPONENT_CUBE_KEY, "true");
+  if (selectedOpponentUid === uid) {
+    renderBattleUi();
+    return;
+  }
   selectedOpponentUid = uid;
   if (friendOpponentMovesUnsubscribe) friendOpponentMovesUnsubscribe();
   friendOpponentMovesUnsubscribe = null;
@@ -1762,12 +1776,7 @@ function selectOpponent(uid) {
 function renderMultiplayerRoster() {
   if (!multiplayerRoster || !multiplayerRosterList) return;
   multiplayerRoster.hidden = false;
-  const rosterCanCollapse = activeRoom?.mode === "friend";
-  multiplayerRosterToggle.disabled = !rosterCanCollapse;
-  if (!rosterCanCollapse) {
-    multiplayerRoster.classList.add("expanded");
-    multiplayerRosterToggle.setAttribute("aria-expanded", "true");
-  }
+  multiplayerRosterToggle.disabled = false;
   updateMultiplayerRosterToggle();
   if (multiplayerRosterHint) multiplayerRosterHint.hidden = activeRoom.cubeMode === "real";
   const activeUids = new Set(activeRoom.activePlayerUids || []);
@@ -1779,9 +1788,14 @@ function renderMultiplayerRoster() {
     const bTime = hasFinalBattleTime(b) ? Number(b.finalTime) : Infinity;
     return aTime - bTime || String(a.name).localeCompare(String(b.name));
   });
-  multiplayerRosterList.replaceChildren(...players.map((player, index) => {
+  const existingRows = new Map([...multiplayerRosterList.children].map(row => [row.dataset.uid, row]));
+  const setText = (node, text) => { if (node.textContent !== text) node.textContent = text; };
+  players.forEach((player, index) => {
     if (activeRoom.mode === "ranked") ensureBattlePlayerRating(player);
-    const row = document.createElement("div");
+    const row = existingRows.get(player.uid) || document.createElement("div");
+    existingRows.delete(player.uid);
+    const isNew = !row.dataset.uid;
+    row.dataset.uid = player.uid;
     row.className = "multiplayer-roster-row";
     const selectable = activeRoom.cubeMode === "virtual" && player.uid !== currentUser?.uid && !isPlayerDisconnected(player);
     row.classList.toggle("opponent-selectable", selectable);
@@ -1791,37 +1805,47 @@ function renderMultiplayerRoster() {
       row.setAttribute("role", "button");
       row.setAttribute("aria-pressed", player.uid === selectedOpponentUid ? "true" : "false");
       row.setAttribute("aria-label", `Watch ${player.name || "player"}'s cube`);
-      row.addEventListener("click", () => selectOpponent(player.uid));
+    } else {
+      row.removeAttribute("tabindex");
+      row.removeAttribute("role");
+      row.removeAttribute("aria-pressed");
+      row.removeAttribute("aria-label");
+    }
+    if (isNew) {
+      row.addEventListener("click", () => selectOpponent(row.dataset.uid));
       row.addEventListener("keydown", event => {
         if (event.key !== "Enter" && event.code !== "Space") return;
         event.preventDefault();
         event.stopPropagation();
-        selectOpponent(player.uid);
+        selectOpponent(row.dataset.uid);
       });
+      row.innerHTML = `<div class="multiplayer-roster-identity"><strong></strong><small></small></div><span></span><time></time>`;
     }
     const isActive = activeUids.size > 0
       ? activeUids.has(player.uid)
       : ["inspecting", "solving", "finished", "dnf", "time_limit"].includes(player.status);
     const state = player.status || (player.ready ? "ready" : "waiting");
-    row.innerHTML = `<div class="multiplayer-roster-identity"><strong></strong><small></small></div><span></span><time></time>`;
     const place = activeRoom.status === "finished" && isActive && hasFinalBattleTime(player) ? `#${index + 1} ` : "";
-    row.querySelector("strong").textContent = `${place}${player.name || "Player"}${player.uid === activeRoom.hostUid ? " (Host)" : ""}`;
+    setText(row.querySelector("strong"), `${place}${player.name || "Player"}${player.uid === activeRoom.hostUid ? " (Host)" : ""}`);
     const ratingLabel = row.querySelector("small");
-    ratingLabel.textContent = getRosterRatingText(player);
+    setText(ratingLabel, getRosterRatingText(player));
     ratingLabel.hidden = activeRoom.mode !== "ranked";
     const entryLabel = player.timeEntryType === "manual" ? " | MANUAL" : "";
-    row.querySelector("span").textContent = `${state.toUpperCase()}${entryLabel}`;
-    row.querySelector("time").textContent = getRosterTimeText(player);
-    return row;
-  }));
+    setText(row.querySelector("span"), `${state.toUpperCase()}${entryLabel}`);
+    setText(row.querySelector("time"), getRosterTimeText(player));
+    if (multiplayerRosterList.children[index] !== row) multiplayerRosterList.insertBefore(row, multiplayerRosterList.children[index] || null);
+  });
+  existingRows.forEach(row => row.remove());
+  if (multiplayerRosterHint && activeRoom.cubeMode === "virtual") {
+    const selected = getSelectedOpponent();
+    multiplayerRosterHint.textContent = selected
+      ? `Watching ${selected.name || "Player"}. Select another player to switch.`
+      : "Waiting for opponent...";
+  }
 }
 
 function updateMultiplayerRosterToggle() {
   if (!multiplayerRoster || !multiplayerRosterToggle) return;
-  if (activeRoom?.mode !== "friend") {
-    multiplayerRosterToggle.textContent = "Room Players";
-    return;
-  }
   const expanded = multiplayerRoster.classList.contains("expanded");
   multiplayerRosterToggle.textContent = `Room Players ${expanded ? "−" : "+"}`;
   multiplayerRosterToggle.setAttribute("aria-expanded", String(expanded));
@@ -1951,12 +1975,15 @@ function syncFriendOpponentMovesListener() {
   if (canShowRound) {
     window.opponentCube?.setScramble(activeRoom.scramble, activeRound);
   }
+  const watchedRoomId = activeRoomId;
+  const watchedRound = activeRound;
   const movesQuery = query(
     collection(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", uid, "moves"),
     where("round", "==", activeRound),
     orderBy("moveIndex", "asc")
   );
   friendOpponentMovesUnsubscribe = onSnapshot(movesQuery, snapshot => {
+    if (friendOpponentMovesUid !== uid || activeRoomId !== watchedRoomId || activeRound !== watchedRound) return;
     battleMovesByRole.opponent = snapshot.docs.map(entry => entry.data());
     window.opponentCube?.applyMoves(battleMovesByRole.opponent);
     renderBattleUi();
@@ -2218,7 +2245,12 @@ function renderBattleNotice() {
         battleNotice.textContent = "Waiting for another player.";
         return;
       }
-      battleNotice.textContent = "Press Ready. The round starts automatically when all players are ready.";
+      const opponents = getBattlePlayersForSelection();
+      const you = battlePlayersByUid.get(currentUser?.uid);
+      battleNotice.textContent = !opponents.length
+        ? "Waiting for opponent. Share the room ID to invite a player."
+        : you?.ready ? "Waiting for other players to be ready..."
+          : "Press Ready. The round starts when everyone is ready.";
       return;
     }
     if (activeRoom.status === "inspection") {
@@ -2267,6 +2299,24 @@ function renderBattleNotice() {
     return;
   }
   const activeStates = ["inspecting", "solving"];
+  const you = getDisplayPlayer(activeRoomRole);
+  const opponent = getDisplayPlayer(getOpponentRole());
+  if (!opponent) {
+    battleNotice.textContent = "Waiting for opponent...";
+    return;
+  }
+  if (you?.status === "ready") {
+    battleNotice.textContent = "Waiting for opponent to be ready...";
+    return;
+  }
+  if (you?.status === "inspecting") {
+    battleNotice.textContent = "Inspection: make your first move to start.";
+    return;
+  }
+  if (you?.status === "solving") {
+    battleNotice.textContent = "Solve in progress.";
+    return;
+  }
   battleNotice.textContent = activeStates.includes(host?.status) && activeStates.includes(guest?.status)
     ? "Both players are ready."
     : "Press Ready to begin inspection.";
@@ -4109,15 +4159,15 @@ function renderOpponentCube(opponent) {
   opponentCubePanel.classList.toggle("opponent-unavailable", !opponent || disconnected || waitingForReady);
   opponentCubePanel.classList.toggle("ready-waiting", waitingForReady);
   if (opponentCubeTitle) {
-    opponentCubeTitle.textContent = opponent ? `Opponent cube - ${opponent.name || "Player"}` : "Opponent cube";
+    opponentCubeTitle.textContent = opponent ? `Watching: ${opponent.name || "Player"}` : "Opponent cube";
   }
   opponentCubePanel.setAttribute("aria-label", opponent ? `Opponent cube for ${opponent.name || "Player"}` : "Opponent cube");
   if (!opponent) {
-    opponentCubeStatus.textContent = "No opponent selected";
+    opponentCubeStatus.textContent = "Waiting for opponent...";
   } else if (disconnected) {
     opponentCubeStatus.textContent = "Opponent left";
   } else if (waitingForReady) {
-    opponentCubeStatus.textContent = "Opponent cube locked until you are ready.";
+    opponentCubeStatus.textContent = "Press Ready to start.";
   } else {
     const opponentTime = hasFinalBattleTime(opponent)
       ? Number(opponent.finalTime)
@@ -4167,6 +4217,7 @@ function setupModalUi() {
 }
 
 function setupAuthUi() {
+  document.getElementById("openBattleBtn")?.addEventListener("click", () => setBattleChoice(selectedBattleMode));
   googleLoginBtn.addEventListener("click", () => {
     loginWithGoogle().catch(error => {
       setStatus(getGoogleLoginErrorMessage(error));
@@ -4330,7 +4381,6 @@ function setupAuthUi() {
   });
 
   multiplayerRosterToggle?.addEventListener("click", () => {
-    if (activeRoom?.mode !== "friend") return;
     multiplayerRoster.classList.toggle("expanded");
     updateMultiplayerRosterToggle();
   });

@@ -243,3 +243,47 @@ body.battle-mode #battleReadyBtn {
   transform:translate(-50%,-50%);
   transition:background-color .12s ease,border-color .12s ease;
 }
+
+/* Dim only the rendered cube, never its Ready overlay or controls. */
+body.battle-mode.battle-locked #cubeContainer,
+body.battle-mode #cubeContainer.ready-waiting { opacity:1; }
+body.battle-mode.battle-locked #cubeContainer>canvas,
+body.battle-mode #cubeContainer.ready-waiting>canvas { opacity:.35; }
+body.battle-mode #cubeContainer>canvas {
+  position:absolute;inset:0;width:100%;height:100%;pointer-events:none;
+}
+body.friend-virtual-battle #cubeContainer,
+body.ranked-battle-mode #cubeContainer { pointer-events:none; }
+body.battle-mode #battleReadyBtn { pointer-events:auto; }
+body.battle-mode #multiplayerRoster { position:relative;z-index:6; }
+body.battle-mode #multiplayerRoster.expanded {
+  height:min(40dvh,280px);max-height:min(40dvh,280px);overflow:auto;
+}
+body.battle-mode #multiplayerRosterList { max-height:min(24dvh,180px); }
+body.battle-mode #multiplayerRosterToggle { position:sticky;top:0;z-index:1; }
+body.battle-mode .multiplayer-roster:not(.expanded) :is(.multiplayer-roster-list,.multiplayer-roster-hint) { display:none; }
+body.battle-mode .multiplayer-roster-toggle::after { content:none; }
+body.battle-mode .multiplayer-roster-toggle { margin-bottom:0; }
+body.battle-mode .multiplayer-roster.expanded .multiplayer-roster-toggle { margin-bottom:8px; }
+body.battle-mode .multiplayer-roster-hint { margin:0 0 8px;font-size:13px;color:var(--text-muted); }
+body .battle-status:empty { display:none; }
+body.battle-mode #soloSpaceHint { display:none; }
+body:not(.battle-mode) #resetBtn[hidden]~#clearTimesBtn { grid-column:1/-1; }
+body:not(.battle-mode) #soloSpaceHint {
+  position:absolute;top:58px;left:50%;transform:translateX(-50%);z-index:2;
+  width:max-content;max-width:100%;min-height:44px;margin:0;padding:6px 10px;
+  background:transparent;color:var(--text-muted);border-color:transparent;font-size:14px;font-weight:500;
+}
+body:not(.battle-mode) #soloSpaceHint:is(:hover,:active) { transform:translateX(-50%);color:var(--text); }
+body .clear-times-dialog {
+  width:min(440px,calc(100% - 24px));max-height:90dvh;overflow:auto;padding:24px;
+  background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:16px;
+}
+body .clear-times-dialog::backdrop { background:#09132399; }
+body .clear-times-dialog h2 { margin:0 0 12px;font-size:22px; }
+body .clear-times-dialog p { margin:0 0 20px;color:var(--text-muted);line-height:1.5; }
+body .confirm-times-actions { display:flex;flex-wrap:wrap;gap:10px; }
+body .confirm-times-actions button { flex:1;min-width:140px;min-height:44px; }
+@media(max-width:600px) {
+  body.battle-mode #multiplayerRosterList { grid-template-columns:1fr; }
+}
