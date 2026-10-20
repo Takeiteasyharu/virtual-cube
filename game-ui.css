@@ -327,7 +327,29 @@ body.battle-mode #multiplayerRosterPanel {
   border-radius:12px;box-shadow:0 8px 24px #09132333;
 }
 body.battle-mode #multiplayerRoster:not(.expanded) #multiplayerRosterPanel { display:none; }
-body.battle-mode #multiplayerRosterList { max-height:none;overflow:visible; }
+/* A dropdown needs full-width rows, not the old two-column room cards.
+   Keep the name above status/time so long names cannot collapse to one glyph. */
+body.battle-mode #multiplayerRosterList {
+  grid-template-columns:minmax(0,1fr);align-items:start;align-content:start;
+  gap:6px;padding:0;max-height:none;overflow:visible;
+}
+body.battle-mode #multiplayerRosterList .multiplayer-roster-row {
+  grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto;
+  align-content:start;align-items:center;gap:4px 12px;
+  min-width:0;min-height:64px;height:auto;padding:9px 12px;font-size:14px;line-height:1.35;
+}
+body.battle-mode #multiplayerRosterList .multiplayer-roster-identity {
+  grid-column:1/-1;min-width:0;
+}
+body.battle-mode #multiplayerRosterList .multiplayer-roster-identity strong {
+  white-space:normal;word-break:normal;overflow-wrap:anywhere;
+}
+body.battle-mode #multiplayerRosterList .multiplayer-roster-row>span {
+  min-width:0;font-size:12px;color:var(--text-muted);overflow-wrap:anywhere;
+}
+body.battle-mode #multiplayerRosterList .multiplayer-roster-row>time {
+  white-space:nowrap;font-size:13px;
+}
 /* An explicitly opened menu must remain operable; otherwise the cube is above
    ordinary header/scramble content. This changes no cube scale or camera. */
 body.battle-mode .battle-heading:has(#multiplayerRoster.expanded) { z-index:30; }
