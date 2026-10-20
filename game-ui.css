@@ -287,3 +287,62 @@ body .confirm-times-actions button { flex:1;min-width:140px;min-height:44px; }
 @media(max-width:600px) {
   body.battle-mode #multiplayerRosterList { grid-template-columns:1fr; }
 }
+
+/* Inspection is an overlay, not a flex item: every phase uses the same cube
+   bounds. Keep it above the canvas and inside the visible stage. */
+body:is(.friend-virtual-battle,.ranked-battle-mode) #mainCubeArea {
+  position:relative;z-index:10;overflow:visible;
+}
+body:is(.friend-virtual-battle,.ranked-battle-mode) .friend-virtual-battle-stage {
+  overflow:visible;
+}
+body:is(.friend-virtual-battle,.ranked-battle-mode) #battleInspectionOverlay {
+  position:absolute;top:8px;left:50%;margin:0;transform:translateX(-50%);z-index:20;
+}
+body.battle-mode .battle-heading {
+  position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;
+  gap:8px;padding:6px 10px;
+}
+body.battle-mode .battle-heading>div:first-child {
+  display:flex;align-items:center;flex-wrap:wrap;gap:8px;min-width:0;
+}
+body.battle-mode #battleRoomMeta { display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0;font-size:14px; }
+body.battle-mode #battleRoomMeta strong { font-size:20px;padding:3px 8px;border-width:1px; }
+body.battle-mode #battleRoomMeta :is(span,small) { font-size:13px; }
+body.battle-mode #battleModeLabel { margin:0;padding:4px 8px;font-size:13px; }
+body.battle-mode .battle-mode-actions { display:flex;flex-direction:row;align-items:center;flex-wrap:wrap;gap:8px; }
+body.battle-mode .battle-mode-actions button { width:auto;min-height:44px;margin:0;padding:8px 12px;font-size:14px; }
+body.battle-mode #battleScramble { position:relative;z-index:0; }
+body.battle-mode #friendVirtualRosterSlot { display:none; }
+body.battle-mode #multiplayerRoster,
+body.battle-mode #multiplayerRoster.expanded {
+  position:relative;z-index:auto;width:auto;height:auto;max-height:none;overflow:visible;
+  margin:0;padding:0;border:0;background:transparent;
+}
+body.battle-mode #multiplayerRosterToggle { position:static;width:auto;margin:0; }
+body.battle-mode #multiplayerRosterPanel {
+  position:absolute;top:calc(100% + 8px);right:0;width:min(440px,calc(100vw - 32px));
+  max-height:min(50dvh,440px);height:auto;overflow:auto;padding:12px;
+  background:var(--surface);color:var(--text);border:1px solid var(--border);
+  border-radius:12px;box-shadow:0 8px 24px #09132333;
+}
+body.battle-mode #multiplayerRoster:not(.expanded) #multiplayerRosterPanel { display:none; }
+body.battle-mode #multiplayerRosterList { max-height:none;overflow:visible; }
+/* An explicitly opened menu must remain operable; otherwise the cube is above
+   ordinary header/scramble content. This changes no cube scale or camera. */
+body.battle-mode .battle-heading:has(#multiplayerRoster.expanded) { z-index:30; }
+@media(min-width:1101px) {
+  body.friend-virtual-battle .friend-virtual-battle-stage { grid-template-rows:minmax(0,1fr);row-gap:0; }
+  body.friend-virtual-battle .friend-virtual-battle-stage .friend-real-history-panel { grid-row:1; }
+}
+@media(max-width:600px) {
+  body.battle-mode .battle-heading { flex-direction:row;flex-wrap:wrap; }
+  body.battle-mode .battle-mode-actions { width:100%; }
+  body.battle-mode .battle-mode-actions button { padding:8px 10px;font-size:13px; }
+  body.battle-mode .battle-roster-slot { position:static; }
+  body.battle-mode #multiplayerRoster,
+  body.battle-mode #multiplayerRoster.expanded { position:static; }
+  body.battle-mode #multiplayerRosterPanel { right:8px; }
+  body:is(.friend-virtual-battle,.ranked-battle-mode) #battleInspectionOverlay { min-width:110px;padding:8px 12px; }
+  body:is(.friend-virtual-battle,.ranked-battle-mode) #battleInspectionCount { font-size:32px; }
+}

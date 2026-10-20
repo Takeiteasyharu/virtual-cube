@@ -1110,7 +1110,7 @@ function prepareBattleCube(scrambleText, round = 1, preserveRealFriendTimer = fa
 
 function startBattleInspection(scrambleText, inspectionStartMs = Date.now(), round = 1) {
   if (!isBattleModeActive()) return;
-  if (battleInputState === "inspecting" && battleInspectionRound === round) return;
+  if (["inspecting", "solving", "finished", "time_limit"].includes(battleInputState) && battleInspectionRound === round) return;
 
   clearBattleInspection();
   const scramble = (scrambleText || "").split(" ").filter(Boolean);
@@ -1145,7 +1145,7 @@ function startBattleInspection(scrambleText, inspectionStartMs = Date.now(), rou
   };
 
   updateInspection();
-  battleInspectionInterval = window.setInterval(updateInspection, 100);
+  if (battleInputState === "inspecting") battleInspectionInterval = window.setInterval(updateInspection, 100);
 }
 
 function startBattleRealPreparation(scrambleText, round = 1) {

@@ -59,11 +59,11 @@
     <section class="battle-screen" aria-label="Real-time battle">
       <div class="battle-heading">
         <div>
-          <h2>Real-time Battle</h2>
           <div class="battle-mode-label" id="battleModeLabel">Friend Battle</div>
           <p id="battleRoomMeta"><span>Room ID</span> <strong>-</strong> <small>Players: 0/2</small></p>
         </div>
         <div class="battle-mode-actions">
+          <div id="battleRosterSlot" class="battle-roster-slot"></div>
           <button id="hostStartBattleBtn" class="host-start-button" hidden>Start Game</button>
           <button id="copyRoomUrlBtn" class="secondary-action" title="Copy room ID">Copy Room ID</button>
           <button id="friendBattleSettingsBtn" class="battle-settings-button" hidden>Settings</button>
@@ -114,9 +114,11 @@
           </section>
           <span id="multiplayerRosterMount" hidden></span>
           <section class="multiplayer-roster" id="multiplayerRoster" hidden aria-label="Room players">
-            <button class="multiplayer-roster-toggle" id="multiplayerRosterToggle" type="button" aria-expanded="false" aria-controls="multiplayerRosterList multiplayerRosterHint">Room Players</button>
+            <button class="multiplayer-roster-toggle" id="multiplayerRosterToggle" type="button" aria-expanded="false" aria-controls="multiplayerRosterPanel">Room Players</button>
+            <div id="multiplayerRosterPanel">
             <p class="multiplayer-roster-hint" id="multiplayerRosterHint">Click a player to watch their cube.</p>
             <div class="multiplayer-roster-list" id="multiplayerRosterList"></div>
+            </div>
           </section>
           <p class="friend-real-operation" id="friendRealOperationText" hidden>Hold Space. Release to start.</p>
           <div class="friend-real-controls" id="friendRealControls" hidden>

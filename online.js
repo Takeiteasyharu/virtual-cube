@@ -1293,7 +1293,7 @@ function restoreMainCubeArea() {
   if (battleReadyBtn && battleReadyMount?.parentNode && battleReadyBtn.previousElementSibling !== battleReadyMount) {
     battleReadyMount.insertAdjacentElement("afterend", battleReadyBtn);
   }
-  if (multiplayerRoster && multiplayerRosterMount?.parentNode && multiplayerRoster.previousElementSibling !== multiplayerRosterMount) {
+  if (!document.body.classList.contains("battle-mode") && multiplayerRoster && multiplayerRosterMount?.parentNode && multiplayerRoster.previousElementSibling !== multiplayerRosterMount) {
     multiplayerRosterMount.insertAdjacentElement("afterend", multiplayerRoster);
   }
   if (mainCubeArea && normalCubeAreaMount?.parentNode && mainCubeArea.previousElementSibling !== normalCubeAreaMount) {
@@ -1333,6 +1333,10 @@ function resetBattleLayoutState() {
 }
 
 function syncFriendVirtualBattleLayout() {
+  const rosterSlot = document.getElementById("battleRosterSlot");
+  if (document.body.classList.contains("battle-mode") && rosterSlot && multiplayerRoster && multiplayerRoster.parentNode !== rosterSlot) {
+    rosterSlot.appendChild(multiplayerRoster);
+  }
   const virtualBattle = document.body.classList.contains("battle-mode") && activeRoom?.cubeMode === "virtual";
   const friendEnabled = virtualBattle && activeRoom?.mode === "friend";
   const rankedEnabled = virtualBattle && activeRoom?.mode === "ranked";
@@ -1360,13 +1364,6 @@ function syncFriendVirtualBattleLayout() {
     cubeContainer.appendChild(battleReadyBtn);
   } else if (!enabled && battleReadyMount?.parentNode && battleReadyBtn?.previousElementSibling !== battleReadyMount) {
     battleReadyMount.insertAdjacentElement("afterend", battleReadyBtn);
-  }
-  if (friendEnabled && friendVirtualRosterSlot && multiplayerRoster && multiplayerRoster.parentNode !== friendVirtualRosterSlot) {
-    friendVirtualRosterSlot.appendChild(multiplayerRoster);
-  } else if (rankedEnabled && mainCubeArea && multiplayerRoster && multiplayerRoster.parentNode !== mainCubeArea) {
-    mainCubeArea.appendChild(multiplayerRoster);
-  } else if (!enabled && multiplayerRosterMount?.parentNode && multiplayerRoster?.previousElementSibling !== multiplayerRosterMount) {
-    multiplayerRosterMount.insertAdjacentElement("afterend", multiplayerRoster);
   }
   if (friendEnabled && friendVirtualBattleStage && friendRealHistoryPanel && friendRealHistoryPanel.parentNode !== friendVirtualBattleStage) {
     friendVirtualBattleStage.insertBefore(friendRealHistoryPanel, friendVirtualCubeRow);
@@ -2004,9 +2001,10 @@ function watchFriendPlayers(roomId) {
       if (localPlayer && activeRoom?.mode === "friend" && !isSpectatorMode) {
         syncOwnFriendPreferences().catch(console.error);
       }
-      if (localPlayer && activeRoom?.status === "waiting") {
+      if (localPlayer && ["joined", "ready"].includes(localPlayer.status) && activeRoom?.status === "waiting") {
         window.prepareBattleCube?.("", activeRound);
       }
+      syncFriendInspectionState(localPlayer);
       if (localPlayer?.status === "ready" && activeRoom?.status === "inspection") {
         startInspectionForReadyPlayer().catch(console.error);
       }
@@ -2569,7 +2567,20 @@ function refreshRatingAfterBattle() {
 }
 
 function getInspectionStartMs(player) {
+  if (isMultiplayerFriendRoom() && activeRoom.cubeMode === "virtual" && activeRoom.inspectionStartTimeMs) {
+    return Number(activeRoom.inspectionStartTimeMs);
+  }
   return player?.inspectionStartTime?.toMillis?.() || player?.inspectionStartTimeMs || Date.now();
+}
+
+// Room and player snapshots may arrive in either order. Restore the local
+// countdown after round preparation, without restarting a solve or old round.
+function syncFriendInspectionState(player) {
+  if (!isMultiplayerFriendRoom() || activeRoom.cubeMode !== "virtual" || isSpectatorMode ||
+      activeRoom.status !== "inspection" || !activeRoom.scramble ||
+      !(activeRoom.activePlayerUids || []).includes(currentUser?.uid) ||
+      player?.status !== "inspecting" || Number(player.round) !== activeRound) return;
+  syncLocalBattleState(player);
 }
 
 function startLocalBattleInspection(scramble, inspectionStartTimeMs, round) {
@@ -2766,6 +2777,7 @@ function watchRoom(roomId) {
     }
 
     renderBattleUi();
+    syncFriendInspectionState(localPlayer);
     if (isMultiplayerFriendRoom()) finalizeFriendMultiplayerIfDone().catch(console.error);
     if (
       localPlayer?.status === "ready" &&
