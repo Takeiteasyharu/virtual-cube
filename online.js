@@ -1735,7 +1735,10 @@ async function ensureBattlePlayerRating(player) {
     .finally(() => battlePlayerRatingRequests.delete(player.uid));
   battlePlayerRatingRequests.set(player.uid, request);
   const rating = await request;
-  if (activeRoom?.mode === "ranked") renderMultiplayerRoster();
+  if (activeRoom?.mode === "ranked") {
+    renderMultiplayerRoster();
+    renderRankedVersus();
+  }
   return rating;
 }
 
@@ -2418,6 +2421,29 @@ function renderRankedExperience(you, opponent) {
   }
 }
 
+function renderRankedVersus() {
+  const panel = document.getElementById("rankedVersus");
+  if (!panel) return;
+  panel.hidden = activeRoom?.mode !== "ranked" || activeRoom.cubeMode !== "virtual";
+  if (panel.hidden) return;
+  for (const [prefix, player] of [["rankedYou", getDisplayPlayer(activeRoomRole)], ["rankedOpponent", getDisplayPlayer(getOpponentRole())]]) {
+    const change = activeRoom.ratingApplied && activeRoom.ratingChanges?.[player?.uid];
+    const cached = battlePlayerRatings.get(player?.uid);
+    const rating = change && Number.isFinite(Number(change.after)) ? Math.round(Number(change.after)) : cached;
+    const values = {
+      Name: player?.name || "Waiting for opponent…",
+      Rating: Number.isFinite(rating) ? String(rating) : "—",
+      RatingChange: change && Number.isFinite(Number(change.change))
+        ? `${Number(change.change) >= 0 ? "+" : ""}${Number(change.change)} this match` : ""
+    };
+    for (const [suffix, value] of Object.entries(values)) {
+      const node = document.getElementById(prefix + suffix);
+      if (node.textContent !== value) node.textContent = value;
+      if (suffix === "Name") node.title = value;
+    }
+  }
+}
+
 function renderBattleReadyButton(you, opponent) {
   if (isRealFriendRoom()) {
     battleReadyBtn.hidden = true;
@@ -2530,6 +2556,7 @@ function renderBattleUi() {
   renderBattleReadyButton(you, opponent);
   renderRematchPanel(you, opponent);
   renderMultiplayerRoster();
+  renderRankedVersus();
   renderFriendRealHistory();
   document.body.classList.toggle("real-cube-battle", activeRoom.cubeMode === "real");
   document.body.classList.toggle("friend-real-battle", realFriendRoom);
