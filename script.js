@@ -79,7 +79,11 @@ function loadKeyBindings() {
 
 function saveKeyBindings() {
   localStorage.setItem(KEY_BINDINGS_KEY, JSON.stringify(keyMap));
+  window.dispatchEvent(new CustomEvent("stcube:keymap-changed"));
 }
+window.getGuidedKeys = move => Object.entries(keyMap)
+  .filter(([,binding]) => displayMove(binding) === move)
+  .map(([key]) => formatBindingKey(key));
 
 function getAnimationSpeed() {
   const value = localStorage.getItem(ANIMATION_SPEED_KEY);
@@ -244,6 +248,7 @@ document.addEventListener("keydown", event => {
   }
 
   if (event.code === "Escape") {
+    if (window.GuidedSolve?.active) {event.preventDefault();window.GuidedSolve.exit();return;}
     if (isBattleModeActive()) {
       event.preventDefault();
       return;
@@ -280,6 +285,7 @@ function getMoveFromKey(key) {
 }
 
 function performMove(move) {
+  if (window.GuidedSolve?.handleMove(move)) return;
   if (!isBattleModeActive() && normalScramblePreparing) return;
   if (isRealCubeTimerMode()) return;
   if (isBattleInputLocked()) return;
@@ -944,6 +950,7 @@ function setupMoveInput() {
 
     if (event.code === "Escape") {
       event.preventDefault();
+      if (window.GuidedSolve?.active) {window.GuidedSolve.exit();input.value="";return;}
       if (isBattleModeActive()) {
         input.value = "";
         return;
@@ -1035,6 +1042,7 @@ async function scrambleCube() {
     }
   } finally {
     if (request === normalScrambleRequest) normalScramblePreparing = false;
+    window.GuidedSolve?.refresh();
   }
 }
 
@@ -1235,7 +1243,23 @@ function renderSoloActions() {
   const hint = document.getElementById("soloSpaceHint");
   if (abort) abort.hidden = isBattleModeActive() || !active;
   if (hint) hint.hidden = isBattleModeActive() || active;
+  window.GuidedSolve?.refresh();
 }
+
+// Practice enters/exits without resetting the cube or calling stopTimer(),
+// whose normal purpose is to save and submit a solve.
+window.beginGuidedPractice = () => {
+  clearRealTimerHold();clearNormalInspection();resetTimer();resetSolveStats();
+  readyToSolve=false;firstTurnDone=false;normalSolveState="guided";
+  lockedScramble="";normalActiveScramble="";
+  setBattleInspectionOverlay(false);setSolvingMode(false);
+};
+window.endGuidedPractice = () => {
+  clearRealTimerHold();clearNormalInspection();resetTimer();resetSolveStats();
+  readyToSolve=false;firstTurnDone=false;normalSolveState="idle";
+  lockedScramble="";normalActiveScramble="";
+  setBattleInspectionOverlay(false);setSolvingMode(false);
+};
 
 function cancelCurrentSolve({ preserveTimer = false } = {}) {
   normalScrambleRequest++;

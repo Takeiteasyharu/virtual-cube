@@ -115,6 +115,7 @@ function applyScramble(scramble) {
       applyMoveInstant(move);
     }
   });
+  window.dispatchEvent(new CustomEvent("stcube:scramble-applied", { detail:{ moves:[...scramble] } }));
 }
 
 window.generateScramble = generateScramble;

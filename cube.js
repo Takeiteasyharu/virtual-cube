@@ -183,6 +183,7 @@ function applyCubeSizeScale(scale = null) {
   camera.zoom = normalizedScale;
   camera.updateProjectionMatrix();
   if (renderer && scene) renderer.render(scene, camera);
+  window.dispatchEvent(new CustomEvent("stcube:cube-view"));
 }
 
 window.resizeMainCube = onResize;
@@ -197,6 +198,7 @@ function resetCube() {
   cubies.forEach(cubie => scene.remove(cubie));
   cubies = [];
   createCubies();
+  window.dispatchEvent(new CustomEvent("stcube:cube-reset"));
 }
 
 function rotateMove(move) {
@@ -220,6 +222,10 @@ function getRotationDuration() {
 }
 
 function parseMove(move) {
+  if (typeof move === "string" && move.endsWith("2")) {
+    const base = parseMove(move.slice(0, -1));
+    return base ? { ...base, angle:base.angle * 2 } : null;
+  }
   const q = Math.PI / 2;
 
   const map = {
@@ -277,7 +283,7 @@ function parseMove(move) {
   return map[move] || null;
 }
 
-function rotateLayer(axis, layers, angle, durationMs = 100) {
+function rotateLayer(axis, layers, angle, durationMs = 100, move = "") {
   isAnimating = true;
   const generation = rotationGeneration;
 
@@ -313,7 +319,7 @@ function rotateLayer(axis, layers, angle, durationMs = 100) {
       scene.remove(group);
       activeRotationGroup = null;
       isAnimating = false;
-      callAfterMoveCallback();
+      callAfterMoveCallback(move);
       runNextMove();
     }
   }
@@ -323,8 +329,10 @@ function rotateLayer(axis, layers, angle, durationMs = 100) {
 
 function updateCoord(cubie, axis, angle) {
   let { x, y, z } = cubie.userData.coord;
-  const dir = Math.round(angle / (Math.PI / 2));
+  const turns = Math.round(angle / (Math.PI / 2));
+  const dir = Math.sign(turns);
 
+  for (let turn = 0; turn < Math.abs(turns); turn++) {
   if (axis === "x") {
     if (dir === 1) [y, z] = [-z, y];
     if (dir === -1) [y, z] = [z, -y];
@@ -338,6 +346,7 @@ function updateCoord(cubie, axis, angle) {
   if (axis === "z") {
     if (dir === 1) [x, y] = [-y, x];
     if (dir === -1) [x, y] = [y, -x];
+  }
   }
 
   cubie.userData.coord = { x, y, z };
@@ -515,7 +524,8 @@ function setAfterMoveCallback(callback) {
   afterMoveCallback = callback;
 }
 
-function callAfterMoveCallback() {
+function callAfterMoveCallback(move = "") {
+  window.dispatchEvent(new CustomEvent("stcube:move-complete", { detail:{ move } }));
   if (typeof afterMoveCallback === "function") {
     afterMoveCallback();
   }
@@ -535,12 +545,36 @@ function runNextMove() {
   const durationMs = getRotationDuration();
   if (durationMs === 0) {
     applyParsedMoveInstant(parsed);
-    callAfterMoveCallback();
+    callAfterMoveCallback(nextMove);
     requestAnimationFrame(runNextMove);
     return;
   }
 
-  rotateLayer(parsed.axis, parsed.layers, parsed.angle, durationMs);
+  rotateLayer(parsed.axis, parsed.layers, parsed.angle, durationMs, nextMove);
 }
 
 window.getCubeCompletionScore = getCubeCompletionScore;
+
+// Read only: canonical sticker coordinates + outward normals, independent of
+// camera/zoom and of the identities of same-colour stickers.
+window.getCubeSnapshot = () => {
+  if (isAnimating) throw new Error("Wait for the cube to finish turning.");
+  return cubies.flatMap(cubie => cubie.children.map(sticker => {
+    const normal = sticker.position.clone().normalize().applyQuaternion(cubie.quaternion);
+    return { p:[cubie.userData.coord.x,cubie.userData.coord.y,cubie.userData.coord.z],
+      n:[normal.x,normal.y,normal.z].map(Math.round), c:sticker.material.color.getHex() };
+  }));
+};
+window.isCubeBusy = () => isAnimating || moveQueue.length > 0;
+window.getCubeMoveSpec = parseMove;
+window.getCubeHintBounds = () => {
+  const box=new THREE.Box3();cubies.forEach(cubie=>box.expandByObject(cubie));
+  camera.updateMatrixWorld(true);
+  const points=[];
+  for(const x of [box.min.x,box.max.x])for(const y of [box.min.y,box.max.y])for(const z of [box.min.z,box.max.z]) {
+    const p=new THREE.Vector3(x,y,z).project(camera);points.push([(p.x+1)*50,(1-p.y)*50]);
+  }
+  const left=Math.max(3,Math.min(...points.map(p=>p[0]))),right=Math.min(97,Math.max(...points.map(p=>p[0])));
+  const top=Math.max(3,Math.min(...points.map(p=>p[1]))),bottom=Math.min(95,Math.max(...points.map(p=>p[1])));
+  return {left,right,top,bottom};
+};

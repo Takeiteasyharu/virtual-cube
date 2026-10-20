@@ -22,6 +22,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Test guided solve state engine
+        run: node --test tests/guided-solver.test.cjs
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
@@ -37,6 +40,8 @@ jobs:
             firebase-config.js \
             game-ui.css \
             game-ui.js \
+            guided-solver.js \
+            guided-solve.js \
             index.html \
             manifest.json \
             online.js \

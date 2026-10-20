@@ -10,6 +10,7 @@ const VIRTUAL_SOLVES_KEY = "virtualCubeSolveHistory";
 const REAL_SOLVES_KEY = "realCubeSolveHistory";
 
 function startTimer() {
+  if (window.GuidedSolve?.isPractice) return;
   if (timerRunning) return;
 
   timerRunning = true;
@@ -23,6 +24,7 @@ function startTimer() {
 }
 
 function stopTimer() {
+  if (window.GuidedSolve?.isPractice) {resetTimer();return;}
   if (!timerRunning) return;
 
   timerRunning = false;
@@ -165,6 +167,7 @@ function getSolves(mode = getHistoryMode()) {
 }
 
 function saveSolve(time, scramble, solveStats = {}) {
+  if (window.GuidedSolve?.isPractice) return;
   if (window.isBattleMode?.()) return;
   const mode = solveStats.mode === "real" ? "real" : "virtual";
   const solves = readModeSolves(mode);

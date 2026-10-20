@@ -1,4 +1,56 @@
 /* Theme preferences remain owned by loadTheme/toggleTheme in script.js. */
+/* Guided practice reuses the scramble header and timer row; no cube resizing. */
+body #guidedStartBtn { grid-column:1/-1;background:#c6efff;color:#16435e;border-color:#2386ae; }
+body #guidedNotice { color:var(--danger);font-size:13px;line-height:1.4; }
+body #guidedSteps {
+  grid-column:1/-1;grid-row:2;width:min(780px,100%);height:68px;justify-self:center;
+  padding:0 12px;color:var(--text);font-size:12px;
+}
+body #guidedSteps[hidden],body #guidedControls[hidden],body #guidedArrows[hidden],body #guidedStartBtn[hidden] { display:none; }
+body.guided-mode #scrambleText { visibility:hidden; }
+body .guided-caption { display:flex;justify-content:space-between;gap:8px;color:var(--text-muted);line-height:16px; }
+body #guidedSteps.guided-correction .guided-caption { color:var(--danger);font-weight:700; }
+body #guidedMoves { display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;height:44px;align-items:center; }
+body .guided-step { display:grid;text-align:center;font-size:14px;line-height:1.2; }
+body .guided-step small { font-size:10px;overflow-wrap:anywhere; }
+body .guided-step-current { background:#c6efff;color:#16435e;border:1px solid #2386ae;border-radius:9px;padding:2px; }
+body .guided-step-current b { font-size:22px; }
+body .guided-step-done { opacity:.4; }
+body .guided-step-empty { visibility:hidden; }
+body #guidedProgress { display:block;width:100%;height:5px;accent-color:#1686b8; }
+body #guidedControls {
+  position:absolute;top:0;left:50%;transform:translateX(-50%);z-index:12;
+  display:flex;align-items:center;justify-content:center;gap:8px;height:58px;width:100%;
+}
+body #guidedControls button { min-height:40px;padding:8px 12px;font-size:13px; }
+body.guided-mode #mainCubeArea>.timer { visibility:hidden; }
+body #guidedArrows { position:absolute;inset:0;z-index:8;pointer-events:none; }
+body #guidedArrows .guided-arrow {
+  position:absolute;transform:translateX(-50%);display:grid;gap:2px;place-items:center;
+  min-width:52px;max-width:120px;min-height:44px;margin:0;padding:5px 8px;
+  background:#d6f4ff;color:#104765;border:2px solid #1988bd;border-radius:12px;
+  box-shadow:0 0 0 3px #33b6ed33,0 0 15px #189ee880;pointer-events:auto;
+}
+body #guidedArrows .guided-arrow:is(:hover,:active) { transform:translateX(-50%); }
+body #guidedArrows .guided-arrow b { font-size:28px;line-height:1; }
+body #guidedArrows .guided-arrow small { font-size:10px;line-height:1.3; }
+body #guidedArrows .guided-arrow.guided-whole { min-width:38px;max-width:42px;padding:4px; }
+body #guidedArrows .guided-arrow.guided-whole small { font-size:9px; }
+body #guidedArrows .guided-arrow:disabled { box-shadow:none; }
+body.dark #guidedArrows .guided-arrow { background:#174b6e;color:#e0f7ff;border-color:#77d6ff; }
+body.battle-mode :is(#guidedSteps,#guidedControls,#guidedArrows,#guidedStartBtn) { display:none!important; }
+@media(max-width:1100px) {
+  body #guidedSteps { grid-row:3;height:76px; }
+}
+@media(max-width:600px) {
+  body #guidedSteps { padding:0 4px; }
+  body .guided-caption { font-size:10px; }
+  body #guidedMoves { gap:2px; }
+  body .guided-step small { font-size:9px; }
+  body #guidedControls { gap:5px; }
+  body #guidedControls button { font-size:12px;padding:7px 9px; }
+  body #guidedArrows .guided-arrow { min-width:42px;max-width:100px;padding:4px; }
+}
 body {
   --bg:#eef7fa; --surface:#fff; --surface-2:#e3edf4; --border:#c5d5e1;
   --text:#23334a; --text-muted:#52657a; --primary:#16718e; --primary-hover:#105b75;

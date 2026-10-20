@@ -48,6 +48,11 @@
     <header>
       <h1>STcube</h1>
       <div class="scramble" id="scrambleText">Scramble will appear here</div>
+      <section id="guidedSteps" hidden aria-label="Guided Solve steps">
+        <div class="guided-caption"><span id="guidedStatus" role="status"></span><span id="guidedProgressText"></span></div>
+        <div id="guidedMoves"></div>
+        <progress id="guidedProgress" value="0" max="1" aria-label="Guided Solve progress"></progress>
+      </section>
       <div class="header-actions" aria-label="Main actions">
         <button id="openBattleBtn" class="header-action primary-action"><span aria-hidden="true">&#9876;</span> Battle</button>
         <button id="howToPlayBtn" class="header-action secondary-action">How to Play</button>
@@ -261,7 +266,12 @@
       <div id="normalCubeAreaMount" hidden></div>
       <div class="cube-area" id="mainCubeArea">
         <button id="soloSpaceHint" class="solo-space-hint" type="button" aria-label="Start scramble. Press Space or tap here.">Press Space to scramble</button>
-        <div id="cubeContainer"></div>
+        <div id="guidedControls" hidden>
+          <button id="guidedUndoBtn" type="button">Undo</button>
+          <button id="guidedRedoBtn" type="button">Redo</button>
+          <button id="guidedExitBtn" type="button">Exit Guided Solve</button>
+        </div>
+        <div id="cubeContainer"><div id="guidedArrows" hidden aria-label="Guided rotation arrows"></div></div>
         <div id="realCubeInstruction" class="real-cube-instruction" hidden>Press Space to start inspection</div>
         <section class="scramble-net-panel normal-real-scramble-net" id="normalScrambleNetPanel" hidden aria-label="Current scramble cube net">
           <h3>Scramble Preview</h3>
@@ -303,9 +313,11 @@
           <div class="buttons">
             <button id="scrambleBtn" hidden>Scramble</button>
             <button id="resetBtn" hidden>Abort</button>
+            <button id="guidedStartBtn" type="button" hidden>Guided Solve</button>
             <button id="clearTimesBtn">Clear Times</button>
           </div>
 
+          <p id="guidedNotice" role="status" hidden></p>
           <div class="last-move">
             Last move: <span id="lastMove">-</span>
           </div>
@@ -496,6 +508,8 @@
   <script src="scramble.js"></script>
   <script src="timer.js"></script>
   <script src="script.js"></script>
+  <script src="guided-solver.js"></script>
+  <script src="guided-solve.js"></script>
   <script src="firebase-config.js"></script>
   <script type="module" src="online.js"></script>
   <script>
