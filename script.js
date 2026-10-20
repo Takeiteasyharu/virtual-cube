@@ -1032,6 +1032,7 @@ async function scrambleCube() {
       readyToSolve = false;
       renderNormalRealCubeUi();
     } else if (isNormalRealCubeMode()) startNormalRealPreparation();
+    else if (window.GuidedSolve?.enabled) window.beginGuidedPractice();
     else startNormalInspection();
     recordScrambleDuration("stcube:solo-scramble:total", startedAt);
   } catch (error) {

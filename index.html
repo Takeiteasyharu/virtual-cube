@@ -269,9 +269,15 @@
         <div id="guidedControls" hidden>
           <button id="guidedUndoBtn" type="button">Undo</button>
           <button id="guidedRedoBtn" type="button">Redo</button>
-          <button id="guidedExitBtn" type="button">Exit Guided Solve</button>
+          <button id="guidedNewScrambleBtn" type="button">Scramble</button>
+          <button id="guidedExitBtn" type="button">Normal mode</button>
         </div>
         <div id="cubeContainer"><div id="guidedArrows" hidden aria-label="Guided rotation arrows"></div></div>
+        <div id="guidedUnderSlot"></div>
+        <section id="guidedExtraControls" hidden aria-label="Additional cube rotations">
+          <div class="guided-control-group"><h3>Back · Middle · Front</h3><div id="guidedDepthArrows" class="guided-arrow-grid"></div></div>
+          <div class="guided-control-group"><h3>Whole cube</h3><div id="guidedWholeArrows" class="guided-arrow-grid"></div></div>
+        </section>
         <div id="realCubeInstruction" class="real-cube-instruction" hidden>Press Space to start inspection</div>
         <section class="scramble-net-panel normal-real-scramble-net" id="normalScrambleNetPanel" hidden aria-label="Current scramble cube net">
           <h3>Scramble Preview</h3>
@@ -299,6 +305,7 @@
       </div>
 
       <section class="panel">
+        <div id="guidedSideSlot"></div>
         <div class="timer" id="timerDisplay">0.00</div>
         <div class="normal-real-history-column">
           <div class="tps-display" id="tpsDisplay">TPS: -</div>
@@ -313,7 +320,6 @@
           <div class="buttons">
             <button id="scrambleBtn" hidden>Scramble</button>
             <button id="resetBtn" hidden>Abort</button>
-            <button id="guidedStartBtn" type="button" hidden>Guided Solve</button>
             <button id="clearTimesBtn">Clear Times</button>
           </div>
 
@@ -443,6 +449,12 @@
   <div class="app-modal feature-modal" id="settingsModal" hidden role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
     <section class="modal-content feature-content settings-content">
       <div class="modal-heading"><h2 id="settingsTitle">Settings</h2><button class="modal-close" data-close-modal="settingsModal" aria-label="Close Settings">Close</button></div>
+      <section class="settings-section">
+        <h3>Solve Mode</h3>
+        <label for="solveModeSelect">Play style</label>
+        <select id="solveModeSelect"><option value="normal">Normal</option><option value="guided">Guided Solve</option></select>
+        <p class="settings-hint" id="solveModeHint">Guided Solve starts automatically after scrambling. Battle rules always take priority.</p>
+      </section>
       <section class="settings-section">
         <h3>Animation Speed</h3>
         <label for="animationSpeedSelect">Rotation speed</label>

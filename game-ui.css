@@ -1,12 +1,11 @@
 /* Theme preferences remain owned by loadTheme/toggleTheme in script.js. */
 /* Guided practice reuses the scramble header and timer row; no cube resizing. */
-body #guidedStartBtn { grid-column:1/-1;background:#c6efff;color:#16435e;border-color:#2386ae; }
 body #guidedNotice { color:var(--danger);font-size:13px;line-height:1.4; }
 body #guidedSteps {
   grid-column:1/-1;grid-row:2;width:min(780px,100%);height:68px;justify-self:center;
   padding:0 12px;color:var(--text);font-size:12px;
 }
-body #guidedSteps[hidden],body #guidedControls[hidden],body #guidedArrows[hidden],body #guidedStartBtn[hidden] { display:none; }
+body #guidedSteps[hidden],body #guidedControls[hidden],body #guidedArrows[hidden],body #guidedExtraControls[hidden] { display:none; }
 body.guided-mode #scrambleText { visibility:hidden; }
 body .guided-caption { display:flex;justify-content:space-between;gap:8px;color:var(--text-muted);line-height:16px; }
 body #guidedSteps.guided-correction .guided-caption { color:var(--danger);font-weight:700; }
@@ -19,37 +18,54 @@ body .guided-step-done { opacity:.4; }
 body .guided-step-empty { visibility:hidden; }
 body #guidedProgress { display:block;width:100%;height:5px;accent-color:#1686b8; }
 body #guidedControls {
-  position:absolute;top:0;left:50%;transform:translateX(-50%);z-index:12;
-  display:flex;align-items:center;justify-content:center;gap:8px;height:58px;width:100%;
+  position:static;transform:none;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:6px;height:auto;width:100%;
 }
-body #guidedControls button { min-height:40px;padding:8px 12px;font-size:13px; }
+body #guidedControls button { min-height:44px;padding:7px 8px;font-size:12px; }
 body.guided-mode #mainCubeArea>.timer { visibility:hidden; }
+body.guided-mode #cubeContainer { overflow:visible; }
+body #guidedSideSlot,body #guidedUnderSlot { display:none; }
+body.guided-mode #guidedSideSlot { display:grid;gap:12px;margin-bottom:16px; }
+body #guidedExtraControls { display:grid;gap:12px;width:100%; }
+body .guided-control-group { min-width:0; }
+body .guided-control-group h3 { margin:0 0 5px;font-size:12px;line-height:1.2;color:var(--text-muted); }
+body .guided-arrow-grid { display:grid;grid-template-columns:repeat(3,minmax(44px,1fr));grid-template-rows:44px 44px;gap:4px; }
 body #guidedArrows { position:absolute;inset:0;z-index:8;pointer-events:none; }
-body #guidedArrows .guided-arrow {
-  position:absolute;transform:translateX(-50%);display:grid;gap:2px;place-items:center;
-  min-width:52px;max-width:120px;min-height:44px;margin:0;padding:5px 8px;
-  background:#d6f4ff;color:#104765;border:2px solid #1988bd;border-radius:12px;
-  box-shadow:0 0 0 3px #33b6ed33,0 0 15px #189ee880;pointer-events:auto;
+body #guidedArrows .guided-arrow,body #guidedExtraControls .guided-arrow {
+  position:absolute;transform:none;display:grid;gap:0;align-content:center;justify-items:center;
+  width:44px;min-width:44px;height:44px;min-height:44px;margin:0;padding:2px;
+  background:var(--surface-2);color:var(--text-muted);border:1px solid var(--border);border-radius:10px;
+  box-shadow:none;pointer-events:auto;
 }
-body #guidedArrows .guided-arrow:is(:hover,:active) { transform:translateX(-50%); }
-body #guidedArrows .guided-arrow b { font-size:28px;line-height:1; }
-body #guidedArrows .guided-arrow small { font-size:10px;line-height:1.3; }
-body #guidedArrows .guided-arrow.guided-whole { min-width:38px;max-width:42px;padding:4px; }
-body #guidedArrows .guided-arrow.guided-whole small { font-size:9px; }
-body #guidedArrows .guided-arrow:disabled { box-shadow:none; }
-body.dark #guidedArrows .guided-arrow { background:#174b6e;color:#e0f7ff;border-color:#77d6ff; }
-body.battle-mode :is(#guidedSteps,#guidedControls,#guidedArrows,#guidedStartBtn) { display:none!important; }
+body #guidedExtraControls .guided-arrow { position:static;width:100%; }
+body #guidedArrows .guided-arrow:is(:hover,:active),body #guidedExtraControls .guided-arrow:is(:hover,:active) { transform:none; }
+body .guided-arrow b { font-size:18px;line-height:18px; }
+body #guidedExtraControls .guided-arrow b { font-size:15px; }
+body .guided-arrow small { font-size:10px;line-height:11px; }
+body .guided-arrow-key { max-width:100%;font-size:8px;line-height:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
+body #guidedArrows .guided-arrow.is-next,body #guidedExtraControls .guided-arrow.is-next {
+  background:#d6f4ff;color:#104765;border:2px solid #1988bd;box-shadow:0 0 0 3px #33b6ed33,0 0 12px #189ee880;
+}
+body.dark #guidedArrows .guided-arrow.is-next,body.dark #guidedExtraControls .guided-arrow.is-next {
+  background:#174b6e;color:#e0f7ff;border-color:#77d6ff;
+}
+body.battle-mode :is(#guidedSteps,#guidedControls,#guidedArrows,#guidedExtraControls) { display:none!important; }
 @media(max-width:1100px) {
   body #guidedSteps { grid-row:3;height:76px; }
+  body.guided-mode #guidedSideSlot { display:none; }
+  body.guided-mode #guidedUnderSlot { display:grid;grid-row:3;width:100%;gap:8px;padding-top:var(--guided-clearance,0px); }
+  body.guided-mode #mainCubeArea>.move-input { grid-row:4; }
+  body.guided-mode #guidedControls { grid-template-columns:repeat(4,minmax(0,1fr)); }
+  body.guided-mode #guidedExtraControls { grid-template-columns:repeat(2,minmax(0,1fr));gap:8px; }
+  body .guided-control-group h3 { font-size:11px; }
 }
 @media(max-width:600px) {
   body #guidedSteps { padding:0 4px; }
   body .guided-caption { font-size:10px; }
   body #guidedMoves { gap:2px; }
   body .guided-step small { font-size:9px; }
-  body #guidedControls { gap:5px; }
-  body #guidedControls button { font-size:12px;padding:7px 9px; }
-  body #guidedArrows .guided-arrow { min-width:42px;max-width:100px;padding:4px; }
+  body #guidedControls { gap:4px; }
+  body #guidedControls button { font-size:11px;padding:5px 3px; }
 }
 body {
   --bg:#eef7fa; --surface:#fff; --surface-2:#e3edf4; --border:#c5d5e1;

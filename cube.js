@@ -182,6 +182,14 @@ function applyCubeSizeScale(scale = null) {
     : 1;
   camera.zoom = normalizedScale;
   camera.updateProjectionMatrix();
+  if (window.GuidedSolve?.enabled && !document.body.classList.contains("battle-mode") && cubies.length) {
+    const bounds=getProjectedCubeBounds();
+    const container=document.getElementById("cubeContainer");
+    const available=Math.max(120,document.getElementById("mainCubeArea").clientWidth-112);
+    const projected=(bounds.right-bounds.left)*container.clientWidth/100;
+    camera.zoom*=Math.min(1,available/projected);
+    camera.updateProjectionMatrix();
+  }
   if (renderer && scene) renderer.render(scene, camera);
   window.dispatchEvent(new CustomEvent("stcube:cube-view"));
 }
@@ -567,14 +575,15 @@ window.getCubeSnapshot = () => {
 };
 window.isCubeBusy = () => isAnimating || moveQueue.length > 0;
 window.getCubeMoveSpec = parseMove;
-window.getCubeHintBounds = () => {
+function getProjectedCubeBounds() {
   const box=new THREE.Box3();cubies.forEach(cubie=>box.expandByObject(cubie));
   camera.updateMatrixWorld(true);
   const points=[];
   for(const x of [box.min.x,box.max.x])for(const y of [box.min.y,box.max.y])for(const z of [box.min.z,box.max.z]) {
     const p=new THREE.Vector3(x,y,z).project(camera);points.push([(p.x+1)*50,(1-p.y)*50]);
   }
-  const left=Math.max(3,Math.min(...points.map(p=>p[0]))),right=Math.min(97,Math.max(...points.map(p=>p[0])));
-  const top=Math.max(3,Math.min(...points.map(p=>p[1]))),bottom=Math.min(95,Math.max(...points.map(p=>p[1])));
+  const left=Math.min(...points.map(p=>p[0])),right=Math.max(...points.map(p=>p[0]));
+  const top=Math.min(...points.map(p=>p[1])),bottom=Math.max(...points.map(p=>p[1]));
   return {left,right,top,bottom};
-};
+}
+window.getCubeHintBounds = getProjectedCubeBounds;
