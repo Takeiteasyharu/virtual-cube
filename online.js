@@ -1353,8 +1353,9 @@ function syncFriendVirtualBattleLayout() {
     cubeAreaParent.appendChild(mainCubeArea);
     cubeAreaMoved = true;
   }
-  if (mainCubeArea && battleInspectionOverlay && battleInspectionOverlay.parentNode !== mainCubeArea) {
-    mainCubeArea.insertBefore(battleInspectionOverlay, mainCubeArea.firstChild);
+  const inspectionParent = rankedEnabled ? document.getElementById("rankedInspectionSlot") : mainCubeArea;
+  if (inspectionParent && battleInspectionOverlay && battleInspectionOverlay.parentNode !== inspectionParent) {
+    inspectionParent.insertBefore(battleInspectionOverlay, inspectionParent.firstChild);
   }
   const opponentParent = friendEnabled ? friendVirtualOpponentSlot : friendVirtualBattleStage;
   if (opponentParent && opponentCubePanel && opponentCubePanel.parentNode !== opponentParent) {
@@ -2365,6 +2366,58 @@ function renderBattleResult() {
   battleResultBadge.className = `battle-result-badge ${activeRoom.isDraw ? "" : (iWon ? "winner" : "loser")}`;
 }
 
+// Presentation only: outcomes/deadlines remain owned by the existing room state.
+function renderRankedExperience(you, opponent) {
+  const setText = (node, value) => {
+    if (node.textContent !== value) node.textContent = value;
+  };
+  const region = document.getElementById("rankedExperience");
+  if (!region) return;
+  region.hidden = activeRoom?.mode !== "ranked" || activeRoom.cubeMode !== "virtual";
+  if (region.hidden) return;
+  const moment = document.getElementById("rankedMoment");
+  const inspecting = you?.status === "inspecting" && activeRoom.status !== "finished";
+  moment.hidden = inspecting;
+  let phase = "ready", title = "READY TO ROLL?", detail = "Get ready. Your next challenge is here!";
+  if (activeRoom.status === "finished") {
+    const draw = activeRoom.isDraw || !activeRoom.winnerUid;
+    phase = draw ? "draw" : activeRoom.winnerUid === currentUser?.uid ? "win" : "lose";
+    title = draw ? "IT’S A DRAW!" : phase === "win" ? "YOU WIN!" : "YOU LOSE!";
+    detail = draw ? "Evenly matched. Ready for another round?" : phase === "win" ? "Brilliant solve. Enjoy the victory!" : "You lost this round. Take a breath and come back stronger!";
+  } else if (hasFinalBattleTime(you)) {
+    phase = "waiting"; title = "YOU DID IT!";
+    const deadline = Number(activeRoom.finishDeadlineMs);
+    const remaining = activeRoom.status === "finishing" && deadline > 0
+      ? Math.max(0, Math.ceil((deadline - Date.now()) / 1000))
+      : Math.max(0, Math.ceil(120 - getPlayerElapsedSeconds(opponent)));
+    detail = isPlayerFinished(opponent) || remaining === 0 ? "Confirming the result…" : `Waiting for your opponent · Battle ends in up to ${remaining}s`;
+  } else if (you?.status === "solving") {
+    phase = "solving"; title = "LET’S GO!";
+    detail = activeRoom.status === "finishing" ? "Your opponent finished. Keep going — you can still finish!" : "Your turn to shine. Every move counts!";
+  } else if (inspecting) {
+    phase = "inspection";
+  } else if (you?.status === "ready") {
+    detail = "Waiting for your opponent. The scramble is on its way!";
+  }
+  setText(document.getElementById("rankedMomentTitle"), title);
+  // Do not announce a ticking countdown to screen readers every second.
+  const detailNode = document.getElementById("rankedMomentDetail");
+  detailNode.setAttribute("aria-live", phase === "waiting" ? "off" : "polite");
+  setText(detailNode, detail);
+  const key = `${activeRoomId}:${activeRound}:${phase}`;
+  if (moment.dataset.eventKey === key) return;
+  moment.dataset.eventKey = key;
+  moment.dataset.phase = phase;
+  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches && !inspecting) {
+    moment.getAnimations().forEach(animation => animation.cancel());
+    moment.animate([
+      { opacity:0, transform:"translateY(12px) scale(.82) rotate(-3deg)" },
+      { opacity:1, transform:"translateY(-3px) scale(1.06) rotate(1deg)", offset:.65 },
+      { opacity:1, transform:"none" }
+    ], { duration:650, easing:"cubic-bezier(.2,.8,.2,1)" });
+  }
+}
+
 function renderBattleReadyButton(you, opponent) {
   if (isRealFriendRoom()) {
     battleReadyBtn.hidden = true;
@@ -2473,6 +2526,7 @@ function renderBattleUi() {
   returnToNormalAfterOpponentExit(opponent);
   handleDisconnectedFriendHost();
   renderBattleResult();
+  renderRankedExperience(you, opponent);
   renderBattleReadyButton(you, opponent);
   renderRematchPanel(you, opponent);
   renderMultiplayerRoster();

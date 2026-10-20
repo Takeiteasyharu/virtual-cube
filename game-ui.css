@@ -293,6 +293,90 @@ body .confirm-times-actions button { flex:1;min-width:140px;min-height:44px; }
 body:is(.friend-virtual-battle,.ranked-battle-mode) #mainCubeArea {
   position:relative;z-index:10;overflow:visible;
 }
+
+/* Ranked arena: a symmetric stage keeps the main cube at the viewport center.
+   The progress rail reserves its height in every phase, including inspection. */
+body.ranked-battle-mode .battle-screen {
+  width:min(1600px,calc(100% - 24px));
+  grid-template-rows:auto auto auto 90px minmax(0,1fr) auto auto auto;
+}
+body.ranked-battle-mode #rankedExperience {
+  grid-row:4;display:grid;place-items:center;min-height:90px;position:relative;z-index:12;
+}
+body.ranked-battle-mode #rankedExperience[hidden] { display:none; }
+body.ranked-battle-mode #rankedInspectionSlot { position:absolute;inset:0;display:grid;place-items:center;pointer-events:none; }
+body.ranked-battle-mode #rankedInspectionSlot #battleInspectionOverlay {
+  position:static;display:flex;align-items:center;gap:16px;transform:none;margin:0;
+  min-width:0;padding:8px 22px;border-radius:18px;background:#d8cdf6;color:#382460;
+  border:2px solid #ad92df;box-shadow:4px 4px 0 #6249a329;
+}
+body.ranked-battle-mode #rankedInspectionSlot #battleInspectionOverlay[hidden] { display:none; }
+body.ranked-battle-mode #battleInspectionCount { font-size:40px;line-height:1.15;min-width:2ch; }
+body.ranked-battle-mode #rankedInspectionSlot :is(#battleInspectionLabel,#battleInspectionCount) { color:#382460!important; }
+body.ranked-battle-mode #friendVirtualBattleStage {
+  grid-row:5;grid-template-columns:minmax(0,1fr) minmax(0,760px) minmax(0,1fr);
+  gap:0;width:100%;height:100%;align-items:center;
+}
+body.ranked-battle-mode #friendVirtualBattleStage #mainCubeArea {
+  grid-column:2;grid-row:1;justify-content:center;align-self:center;min-height:0;height:100%;
+}
+body.ranked-battle-mode #friendVirtualBattleStage #cubeContainer {
+  width:min(100%,calc(100dvh - 250px),760px);height:auto;aspect-ratio:1;
+  max-height:none;max-width:100%;margin:0;
+}
+body.ranked-battle-mode #friendVirtualBattleStage #opponentCubePanel {
+  grid-column:3;grid-row:1;align-self:end;justify-self:end;width:min(100%,280px);margin:0;
+}
+body.ranked-battle-mode #battleNotice { grid-row:6; }
+body.ranked-battle-mode #battleResult { grid-row:7; }
+body.ranked-battle-mode #battleResultBadge { display:none; }
+body.ranked-battle-mode #battleRematchPanel { grid-row:8; }
+body .ranked-moment {
+  position:relative;display:grid;gap:3px;text-align:center;padding:9px 24px;
+  width:min(540px,calc(100% - 24px));border:2px solid #ad92df;border-radius:20px;
+  background:#e9e0ff;color:#382460;box-shadow:4px 4px 0 #6249a329;isolation:isolate;
+}
+body .ranked-moment[hidden] { display:none; }
+body .ranked-moment strong { font-size:clamp(20px,2.1vw,30px);line-height:1.1;font-weight:900; }
+body .ranked-moment>span:not(.ranked-confetti) { font-size:13px;line-height:1.3; }
+body .ranked-moment[data-phase="solving"] { background:#baf2f5;color:#114954;border-color:#16718e; }
+body .ranked-moment[data-phase="waiting"] { background:#fff0ad;color:#594200;border-color:#b48a00; }
+body .ranked-moment[data-phase="win"] { background:#fff0ad;color:#594200;border-color:#b48a00; }
+body .ranked-moment[data-phase="lose"] { background:#f9d4e3;color:#792640;border-color:#a43250; }
+body .ranked-moment:is([data-phase="solving"],[data-phase="waiting"]) strong { animation:ranked-cheer .8s ease-out 2; }
+body .ranked-moment[data-phase="lose"] strong { animation:ranked-rally .5s ease-in-out 2; }
+@keyframes ranked-cheer { 50% { transform:scale(1.12) rotate(-2deg); } }
+@keyframes ranked-rally { 25% { transform:translateX(-8px) rotate(-2deg); } 75% { transform:translateX(8px) rotate(2deg); } }
+body .ranked-confetti { position:absolute;inset:0;pointer-events:none;overflow:visible;z-index:-1; }
+body .ranked-confetti i { display:none;position:absolute;width:9px;height:14px;top:35%;background:#16718e; }
+body .ranked-moment[data-phase="win"] .ranked-confetti i { display:block;animation:ranked-confetti 1.8s ease-out both; }
+body .ranked-confetti i:nth-child(odd) { background:#a864d8; }
+body .ranked-confetti i:nth-child(3n) { background:#e08a15; }
+body .ranked-confetti i:nth-child(1) { left:3%;--drift:-45px; }
+body .ranked-confetti i:nth-child(2) { left:16%;--drift:-30px;animation-delay:.1s; }
+body .ranked-confetti i:nth-child(3) { left:28%;--drift:-20px;animation-delay:.2s; }
+body .ranked-confetti i:nth-child(4) { left:40%;--drift:-10px; }
+body .ranked-confetti i:nth-child(5) { left:60%;--drift:10px;animation-delay:.15s; }
+body .ranked-confetti i:nth-child(6) { left:72%;--drift:20px; }
+body .ranked-confetti i:nth-child(7) { left:84%;--drift:30px;animation-delay:.25s; }
+body .ranked-confetti i:nth-child(8) { left:97%;--drift:45px;animation-delay:.1s; }
+@keyframes ranked-confetti {
+  0% { opacity:0;transform:translate(0,0) rotate(0); }
+  20% { opacity:1; }
+  100% { opacity:0;transform:translate(var(--drift),110px) rotate(380deg); }
+}
+@media(max-width:900px) {
+  body.ranked-battle-mode .battle-screen { display:flex;flex-direction:column;height:auto;min-height:100dvh; }
+  body.ranked-battle-mode #rankedExperience { flex:none;width:100%; }
+  body.ranked-battle-mode #friendVirtualBattleStage { display:flex;flex-direction:column;height:auto;gap:16px; }
+  body.ranked-battle-mode #friendVirtualBattleStage #mainCubeArea { height:auto;width:100%; }
+  body.ranked-battle-mode #friendVirtualBattleStage #cubeContainer { width:min(94vw,560px);max-width:100%; }
+  body.ranked-battle-mode #friendVirtualBattleStage #opponentCubePanel { align-self:center;width:min(92vw,280px); }
+}
+@media(prefers-reduced-motion:reduce) {
+  body .ranked-moment .ranked-confetti i { animation:none!important;display:none!important; }
+  body .ranked-moment strong { animation:none!important; }
+}
 body:is(.friend-virtual-battle,.ranked-battle-mode) .friend-virtual-battle-stage {
   overflow:visible;
 }
