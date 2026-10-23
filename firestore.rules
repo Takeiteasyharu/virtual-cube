@@ -208,6 +208,7 @@ service cloud.firestore {
     // Existing two-player Ranked Battle join.
     (
       resource.data.mode == "ranked"
+      && resource.data.status == "waiting"
       && resource.data.guestUid == ""
       && request.resource.data.hostUid == resource.data.hostUid
       && request.resource.data.guestUid == request.auth.uid

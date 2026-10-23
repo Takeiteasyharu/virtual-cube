@@ -15,4 +15,5 @@ _site/
 *-adminsdk-*.json
 credentials*.json
 .daily-verification/
+.bot-verification/
 

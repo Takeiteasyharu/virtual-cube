@@ -36,6 +36,10 @@ function stopTimer() {
   const solveStats = typeof window.getCurrentSolveStats === "function"
     ? window.getCurrentSolveStats(finalTime)
     : { moveCount: 0, moves: [], tps: null };
+  if (window.BotBattle?.active) {
+    updateTpsDisplay(solveStats.tps);updateMovesDisplay(solveStats.moveCount);
+    window.BotBattle.finish(finalTime, solveStats);return;
+  }
   if (window.DailyChallenge?.active) {
     updateTpsDisplay(solveStats.tps);updateMovesDisplay(solveStats.moveCount);
     window.DailyChallenge.finish(finalTime, solveStats);
@@ -176,6 +180,7 @@ function getSolves(mode = getHistoryMode()) {
 }
 
 function saveSolve(time, scramble, solveStats = {}) {
+  if (window.BotBattle?.active) return;
   if (window.DailyChallenge?.active || window.DailyChallenge?.isPractice) return;
   if (window.GuidedSolve?.isPractice) return;
   if (window.isBattleMode?.()) return;

@@ -1049,6 +1049,7 @@ async function scrambleCube() {
 }
 
 function abortNormalSolve() {
+  if (window.BotBattle?.active) {window.BotBattle.abort();return;}
   window.DailyChallenge?.abort();
   if (isBattleModeActive()) return;
 
@@ -1295,6 +1296,7 @@ function getCurrentSolveStats(timeSeconds = null) {
 
   return {
     moveCount: normalizedMoveCount,
+    source: window.BotBattle?.active ? "bot" : isBattleModeActive() ? "battle" : "normal",
     moves: [...solveMoves],
     tps: tps === null ? null : Number(tps.toFixed(2)),
     currentCompletionScore: battleCurrentCompletionScore,

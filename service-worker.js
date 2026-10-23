@@ -1,4 +1,4 @@
-const CACHE_NAME = "virtual-cube-timer-v121";
+const CACHE_NAME = "virtual-cube-timer-v122";
 const BASE_PATH = new URL("./", self.location.href).pathname;
 const APP_FILE_EXTENSIONS = [".html", ".css", ".js", ".json"];
 
@@ -21,6 +21,9 @@ const CACHE_URLS = [
   `${BASE_PATH}guided-solve.js`,
   `${BASE_PATH}solve-replay.js`,
   `${BASE_PATH}daily-challenge.js`,
+  `${BASE_PATH}bot-model.js`,
+  `${BASE_PATH}bot-battle.js`,
+  `${BASE_PATH}bot-calibration.json`,
   `${BASE_PATH}firebase-config.js`,
   `${BASE_PATH}online.js`,
   `${BASE_PATH}manifest.json`,

@@ -1,4 +1,8 @@
 /* Theme preferences remain owned by loadTheme/toggleTheme in script.js. */
+body.bot-battle-mode #rankedOpponentRating { font-size:clamp(16px,2vw,24px);overflow-wrap:anywhere; }
+body.bot-battle-mode #rankedOpponentName { color:var(--accent); }
+body.bot-battle-mode #battleRoomMeta { font-size:14px; }
+body.bot-battle-mode :is(#leaveBattleBtn,#rematchReturnBtn) { background:var(--surface-2);color:var(--text); }
 body #dailyModal .daily-content { width:min(800px,96vw);max-height:92dvh;overflow:auto;padding:20px; }
 body #dailyModal button { background:var(--surface-2);color:var(--text); }
 body #dailyStart { background:var(--primary);color:#fff; }

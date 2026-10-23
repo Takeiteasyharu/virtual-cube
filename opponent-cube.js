@@ -98,6 +98,7 @@
     }
 
     reset() {
+      this.cancelMove();
       this.cubies.forEach(cubie => this.scene.remove(cubie));
       this.cubies = [];
       this.createCubies();
@@ -158,6 +159,33 @@
         this.snap(cubie);
       });
       this.scene.remove(group);
+    }
+
+    cancelMove() {
+      if (!this.activeAnimation) return;
+      const a=this.activeAnimation;this.activeAnimation=null;
+      cancelAnimationFrame(a.frame);a.group.rotation.set(0,0,0);a.group.updateMatrixWorld(true);
+      a.selected.forEach(c=>{this.scene.attach(c);this.snap(c);});this.scene.remove(a.group);a.resolve(false);
+    }
+
+    animateMove(move,duration=120) {
+      this.cancelMove();const spec=window.getCubeMoveSpec(move);
+      if(!spec)return Promise.reject(Error('Unsupported BOT move'));
+      const group=new THREE.Group();this.scene.add(group);
+      const selected=this.cubies.filter(c=>spec.layers.includes(c.userData.coord[spec.axis]));selected.forEach(c=>group.attach(c));
+      return new Promise(resolve=>{
+        const a={group,selected,resolve,frame:0},start=performance.now();this.activeAnimation=a;
+        const tick=now=>{if(this.activeAnimation!==a)return;const f=Math.min(1,(now-start)/Math.max(1,duration));group.rotation[spec.axis]=spec.angle*f;group.updateMatrixWorld(true);this.render();
+          if(f<1){a.frame=requestAnimationFrame(tick);return;}
+          selected.forEach(c=>{this.scene.attach(c);for(let i=0;i<Math.abs(Math.round(spec.angle/QUARTER_TURN));i++)this.updateCoord(c,spec.axis,Math.sign(spec.angle)*QUARTER_TURN);this.snap(c);});
+          this.scene.remove(group);this.activeAnimation=null;this.render();resolve(true);
+        };a.frame=requestAnimationFrame(tick);
+      });
+    }
+
+    snapshot() {
+      if(this.activeAnimation)throw Error('BOT cube is turning');
+      return this.cubies.flatMap(c=>c.children.map(sticker=>{const n=sticker.position.clone().normalize().applyQuaternion(c.quaternion);return {p:[c.userData.coord.x,c.userData.coord.y,c.userData.coord.z],n:[n.x,n.y,n.z].map(Math.round),c:sticker.material.color.getHex()};}));
     }
 
     updateCoord(cubie, axis, angle) {

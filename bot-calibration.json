@@ -1,0 +1,6 @@
+{
+  "version":1,"users":0,"pairedUsers":0,"calibrated":false,
+  "medians":{"Beginner":65,"Intermediate":32,"Advanced":14,"Expert":7},
+  "sigma":0.18,"ratingPoints":[],
+  "analysis":{"date":"2026-10-24","observedSolves":500,"verifiedNormalSolves":0,"legacySourceUnknown":500,"reason":"Legacy entries do not distinguish normal solves from human battles; no unverified records used."}
+}
