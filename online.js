@@ -4603,6 +4603,8 @@ if (isConfigured()) {
   const app = initializeApp(config);
   auth = getAuth(app);
   db = getFirestore(app);
+  window.STcubeDailyConnection = { auth, db };
+  window.dispatchEvent(new Event('stcube:daily-connection'));
 
   setupAuthUi();
 

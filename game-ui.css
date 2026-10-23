@@ -1,4 +1,23 @@
 /* Theme preferences remain owned by loadTheme/toggleTheme in script.js. */
+body #dailyModal .daily-content { width:min(800px,96vw);max-height:92dvh;overflow:auto;padding:20px; }
+body #dailyModal button { background:var(--surface-2);color:var(--text); }
+body #dailyStart { background:var(--primary);color:#fff; }
+body.dark #dailyStart { color:#112a36; }
+#dailyScramble { overflow-wrap:anywhere;font-weight:700;line-height:1.6;padding:12px;border:1px solid var(--border);border-radius:10px; }
+.daily-actions { display:flex;gap:8px;flex-wrap:wrap; }
+.daily-actions button { flex:1 1 120px; }
+#dailyRanking { padding-left:0;list-style:none; }
+#dailyRanking li { padding:10px 8px;border-bottom:1px solid var(--border);overflow-wrap:anywhere;font-size:14px; }
+#dailyRanking .daily-me { background:var(--surface-2);font-weight:700; }
+.daily-disclaimer,#dailyMessage,#dailyState { font-size:13px;line-height:1.5; }
+#dailyPlayStatus { position:fixed;bottom:0;left:50%;transform:translateX(-50%);max-width:95vw;padding:6px 12px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;z-index:20;font-size:12px;text-align:center; }
+body.daily-mode #soloSpaceHint { visibility:hidden; }
+body.daily-mode #openBattleBtn { pointer-events:none; }
+@media(max-width:1100px) { body #openDailyBtn { width:auto;min-width:110px; } }
+@media(max-width:1100px) {
+  body:not(.battle-mode) header h1 { grid-column:1;font-size:24px; }
+  body:not(.battle-mode) #openDailyBtn { grid-row:1;grid-column:2;min-width:0;width:100%;font-size:11px;padding:4px; }
+}
 #replayModal[hidden] { display:none; }
 body #replayModal { overflow:hidden;padding:12px; }
 body #replayModal .replay-content { width:min(760px,100%);height:min(720px,calc(100dvh - 24px));max-height:none;min-height:0;overflow:hidden;padding:16px;display:grid;grid-template-rows:auto minmax(0,1fr) auto auto auto auto;gap:6px; }

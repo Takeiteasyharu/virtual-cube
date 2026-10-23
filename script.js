@@ -988,6 +988,7 @@ function setupMoveInput() {
 }
 
 async function scrambleCube() {
+  if (window.DailyChallenge?.active) return;
   if (typeof window.isBattleMode === "function" && window.isBattleMode()) return;
   if (["inspecting", "solving"].includes(normalSolveState)) return;
   if (normalScramblePreparing) return;
@@ -1048,6 +1049,7 @@ async function scrambleCube() {
 }
 
 function abortNormalSolve() {
+  window.DailyChallenge?.abort();
   if (isBattleModeActive()) return;
 
   // Invalidate pending generation before releasing the input lock. A late

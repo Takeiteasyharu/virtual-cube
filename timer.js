@@ -10,6 +10,7 @@ const VIRTUAL_SOLVES_KEY = "virtualCubeSolveHistory";
 const REAL_SOLVES_KEY = "realCubeSolveHistory";
 
 function startTimer() {
+  if (window.DailyChallenge?.isPractice) return;
   if (window.GuidedSolve?.isPractice) return;
   if (timerRunning) return;
 
@@ -35,6 +36,11 @@ function stopTimer() {
   const solveStats = typeof window.getCurrentSolveStats === "function"
     ? window.getCurrentSolveStats(finalTime)
     : { moveCount: 0, moves: [], tps: null };
+  if (window.DailyChallenge?.active) {
+    updateTpsDisplay(solveStats.tps);updateMovesDisplay(solveStats.moveCount);
+    window.DailyChallenge.finish(finalTime, solveStats);
+    return;
+  }
   try { window.SolveReplay?.finish(finalTime, solveStats); } catch (error) { console.warn("Replay could not be saved", error); }
 
   saveSolve(finalTime, currentScramble, solveStats);
@@ -170,6 +176,7 @@ function getSolves(mode = getHistoryMode()) {
 }
 
 function saveSolve(time, scramble, solveStats = {}) {
+  if (window.DailyChallenge?.active || window.DailyChallenge?.isPractice) return;
   if (window.GuidedSolve?.isPractice) return;
   if (window.isBattleMode?.()) return;
   const mode = solveStats.mode === "real" ? "real" : "virtual";

@@ -28,7 +28,7 @@
   if(typeof module==='object'&&module.exports){module.exports=api;return;}
   const KEY='stcubeSolveReplayV1',MAX_BYTES=512000;
   let preparation=null,recording=null,latest=null,saveSequence=0,view=null;
-  const eligible=()=>!document.body.classList.contains('battle-mode')&&!root.GuidedSolve?.isPractice;
+  const eligible=()=>!document.body.classList.contains('battle-mode')&&!root.GuidedSolve?.isPractice&&!root.DailyChallenge?.active&&!root.DailyChallenge?.isPractice;
   const parse=m=>root.getCubeMoveSpec(m);
   const count=m=>calculateNormalizedMoveCount(m);
   function refresh(){const b=document.getElementById('replayOpenBtn');if(b){b.hidden=!latest||!eligible();b.disabled=isTimerRunning()||normalScramblePreparing||normalInspectionActive;}}

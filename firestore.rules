@@ -1,0 +1,387 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+    
+    function isRealFriendRoom(roomId) {
+      let room = get(
+        /databases/$(database)/documents/battleRooms/$(roomId)
+      ).data;
+
+      return room.mode == "friend" && room.cubeMode == "real";
+    }
+
+    function validSolve() {
+      return signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.time is number
+        && request.resource.data.time > 2
+        && request.resource.data.time < 3600
+        && request.resource.data.scramble is string
+        && request.resource.data.scramble.size() > 0
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 24
+        && request.resource.data.moveCount is int
+        && request.resource.data.moveCount >= 0
+        && request.resource.data.rankingType in ["single", "ao5"]
+        && (
+          !("moves" in request.resource.data) ||
+          (
+            request.resource.data.moves is list &&
+            request.resource.data.moves.size() <= 1000
+           )
+        );
+    }
+    
+    function validRankedHostUpdate(uid) {
+      let roomId = request.resource.data.lastRatedRoomId;
+      let room = getAfter(
+        /databases/$(database)/documents/battleRooms/$(roomId)
+      ).data;
+
+      return request.resource.data.lastRatedRoomId is string
+        && request.resource.data.lastRatedRound is int
+        && room.mode == "ranked"
+        && room.status == "finished"
+        && room.ratingApplied == true
+        && room.ratingUpdated == true
+        && room.hostUid == request.auth.uid
+        && room.round == request.resource.data.lastRatedRound
+        && room.ratingChanges[uid].before == resource.data.rating
+        && room.ratingChanges[uid].after == request.resource.data.rating;
+    }
+
+
+    // Daily-only paths. Published by an authenticated administrator outside the
+    // website; no browser identity (including Google users) can publish days.
+    function dailyGoogle() {
+      return signedIn() && request.auth.token.firebase.sign_in_provider == 'google.com';
+    }
+    function dailyDay(day) {
+      return get(/databases/$(database)/documents/dailyChallenges/$(day)).data;
+    }
+    function dailyResultValid(a) {
+      return a.timeMs is int && a.timeMs >= 10 && a.timeMs <= 600000
+        && a.moveCount is int && a.moveCount >= 1 && a.moveCount <= 2000
+        && a.tps is number && a.tps >= 0 && a.tps <= 100
+        && a.tps >= a.moveCount * 1000.0 / a.timeMs - 0.011
+        && a.tps <= a.moveCount * 1000.0 / a.timeMs + 0.011
+        && request.time >= resource.data.startedAt + duration.value(a.timeMs - 100, 'ms');
+    }
+    match /dailyChallenges/{day} {
+      allow get: if resource.data.opensAt <= request.time;
+      allow list, create, update, delete: if false;
+      match /attempts/{uid} {
+        allow get: if signedIn() && request.auth.uid == uid;
+        allow list, delete: if false;
+        allow create: if dailyGoogle() && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['uid','date','status','startedAt','operationId','name'])
+          && request.resource.data.uid == uid && request.resource.data.date == day
+          && request.resource.data.status == 'started'
+          && request.resource.data.startedAt == request.time
+          && request.resource.data.operationId is string && request.resource.data.operationId.size() == 36
+          && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 80
+          && dailyDay(day).opensAt <= request.time && request.time < dailyDay(day).closesAt;
+        allow update: if dailyGoogle() && request.auth.uid == uid
+          && resource.data.status == 'started'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','completedAt','timeMs','moveCount','tps'])
+          && request.resource.data.completedAt == request.time
+          && (
+            (request.resource.data.status == 'dnf'
+              && request.resource.data.keys().hasOnly(['uid','date','status','startedAt','operationId','name','completedAt']))
+            || (request.resource.data.status == 'completed'
+              && request.time < dailyDay(day).closesAt
+              && request.time < resource.data.startedAt + duration.value(10, 'm')
+              && dailyResultValid(request.resource.data)
+              && getAfter(/databases/$(database)/documents/dailyChallenges/$(day)/results/$(uid)).data == request.resource.data)
+          );
+      }
+      match /results/{uid} {
+        allow read: if dailyDay(day).opensAt <= request.time;
+        allow update, delete: if false;
+        allow create: if dailyGoogle() && request.auth.uid == uid
+          && get(/databases/$(database)/documents/dailyChallenges/$(day)/attempts/$(uid)).data.status == 'started'
+          && getAfter(/databases/$(database)/documents/dailyChallenges/$(day)/attempts/$(uid)).data.status == 'completed'
+          && request.resource.data == getAfter(/databases/$(database)/documents/dailyChallenges/$(day)/attempts/$(uid)).data;
+      }
+    }
+
+    match /solves/{solveId} {
+      allow read: if true;
+      allow create: if validSolve();
+      allow update, delete: if false;
+    }
+    
+    match /battleResults/{resultId} {
+  allow read: if signedIn()
+    && resource.data.uid == request.auth.uid;
+
+  allow create: if signedIn()
+    && request.resource.data.uid == request.auth.uid
+    && request.resource.data.result in ["win", "loss", "draw", "dnf"]
+    && request.resource.data.mode in ["ranked", "friend"]
+    && request.resource.data.moveCount is int
+    && request.resource.data.moveCount >= 0
+    && request.resource.data.moveCount <= 1000
+    && (
+  request.resource.data.finalTime == null ||
+  (
+    request.resource.data.finalTime is number &&
+    request.resource.data.finalTime < 3600 &&
+    (
+      (
+        isRealFriendRoom(request.resource.data.roomId) &&
+        request.resource.data.finalTime >= 0.01
+      ) ||
+      (
+        !isRealFriendRoom(request.resource.data.roomId) &&
+        request.resource.data.finalTime >= 3
+      )
+    )
+  )
+)
+    && (
+      request.resource.data.tps == null ||
+      (
+        request.resource.data.tps is number &&
+        request.resource.data.tps >= 0 &&
+        request.resource.data.tps <= 30
+      )
+    )
+    && (
+      request.resource.data.mode == "ranked" ||
+      request.resource.data.ratingChange == 0
+    );
+
+  allow update, delete: if false;
+}
+
+    match /battleRooms/{roomId} {
+      allow read: if signedIn();
+
+      allow create: if signedIn()
+        && request.resource.data.hostUid == request.auth.uid
+        && request.resource.data.guestUid == ""
+        && request.resource.data.round is int
+        && request.resource.data.round >= 1;
+
+      allow update: if signedIn()
+  && request.resource.data.round is int
+  && request.resource.data.round >= 1
+  && (
+    // Host controls room state.
+    (
+      resource.data.hostUid == request.auth.uid
+      && request.resource.data.hostUid == resource.data.hostUid
+      && request.resource.data.guestUid == resource.data.guestUid
+    )
+
+    ||
+
+    // A user joins or leaves a multiplayer Friend Room.
+    (
+      resource.data.mode == "friend"
+      && resource.data.maxPlayers == 20
+      && request.resource.data.hostUid == resource.data.hostUid
+      && request.resource.data.guestUid == resource.data.guestUid
+      && request.resource.data.maxPlayers == resource.data.maxPlayers
+      && request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(["playerCount", "updatedAt"])
+      && request.resource.data.playerCount is int
+      && request.resource.data.playerCount >= 0
+      && request.resource.data.playerCount <= 20
+      && (
+        request.resource.data.playerCount == resource.data.playerCount + 1
+        || request.resource.data.playerCount == resource.data.playerCount - 1
+      )
+      && existsAfter(
+        /databases/$(database)/documents/battleRooms/$(roomId)/players/$(request.auth.uid)
+      )
+    )
+
+    ||
+
+    // Existing two-player Ranked Battle join.
+    (
+      resource.data.mode == "ranked"
+      && resource.data.guestUid == ""
+      && request.resource.data.hostUid == resource.data.hostUid
+      && request.resource.data.guestUid == request.auth.uid
+      && request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(["guestUid", "updatedAt"])
+    )
+
+    ||
+
+    // Existing Ranked Battle participant updates.
+    (
+      resource.data.mode == "ranked"
+      && (
+        resource.data.hostUid == request.auth.uid
+        || resource.data.guestUid == request.auth.uid
+      )
+      && request.resource.data.hostUid == resource.data.hostUid
+      && request.resource.data.guestUid == resource.data.guestUid
+    )
+  );
+
+      allow delete: if false;
+
+      match /players/{uid} {
+        allow read: if signedIn();
+
+        allow create, update: if signedIn()
+          && request.auth.uid == uid
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.role in ["host", "guest", "player"]
+          && request.resource.data.ready is bool
+          && request.resource.data.active is bool
+          && request.resource.data.status in [
+            "joined", "ready", "inspecting", "solving",
+            "finished", "dnf", "disconnected", "returned",
+            "time_limit"
+          ]
+          && (
+            request.resource.data.inspectionStartTime == null ||
+            request.resource.data.inspectionStartTime is timestamp
+          )
+          && request.resource.data.inspectionStartTimeMs is number
+          && request.resource.data.inspectionStartTimeMs >= 0
+          && request.resource.data.round is int
+          && request.resource.data.round >= 1
+          && request.resource.data.rematchReady is bool
+          && request.resource.data.moveCount is int
+          && request.resource.data.moveCount >= 0
+          && request.resource.data.moveCount <= 1000
+          && request.resource.data.currentCompletionScore is int
+          && request.resource.data.currentCompletionScore >= 0
+          && request.resource.data.currentCompletionScore <= 54
+          && request.resource.data.maxCompletionScore is int
+          && request.resource.data.maxCompletionScore >= 0
+          && request.resource.data.maxCompletionScore <= 54
+          && request.resource.data.timeLimitReached is bool
+          && (
+              request.resource.data.finalTime == null ||
+              (
+                request.resource.data.finalTime is number &&
+                request.resource.data.finalTime < 3600 &&
+                (
+                  (
+                    isRealFriendRoom(roomId) &&
+                    request.resource.data.finalTime >= 0.01
+                  ) ||
+                  (
+                    !isRealFriendRoom(roomId) &&
+                    request.resource.data.finalTime >= 3
+                  )
+                )
+              )
+            )
+          && (
+            request.resource.data.tps == null ||
+            (
+              request.resource.data.tps is number &&
+              request.resource.data.tps >= 0 &&
+              request.resource.data.tps <= 50
+            )
+          );
+
+        allow delete: if signedIn()
+          && request.auth.uid == uid;
+
+        match /moves/{moveId} {
+          allow read: if signedIn();
+
+          allow create: if signedIn()
+            && request.auth.uid == uid
+            && request.resource.data.move is string
+            && request.resource.data.moveIndex is int
+            && request.resource.data.moveIndex >= 1
+            && request.resource.data.moveIndex <= 1000
+            && request.resource.data.elapsedMs is int
+            && request.resource.data.elapsedMs >= 0
+            && request.resource.data.elapsedMs < 3600000
+            && request.resource.data.round is int
+            && request.resource.data.round >= 1;
+
+          allow update, delete: if false;
+        }
+      }
+    }
+
+    match /matchmaking/{uid} {
+      allow read: if signedIn();
+
+      allow create, update, delete: if signedIn()
+        && request.auth.uid == uid;
+    }
+    
+    match /rankedPairs/{pairId} {
+      allow read: if signedIn();
+
+      allow create, update: if signedIn()
+        && (
+          request.auth.uid == request.resource.data.playerA ||
+          request.auth.uid == request.resource.data.playerB
+        );
+
+      allow delete: if false;
+    }
+    
+    match /users/{uid} {
+      allow read: if signedIn();
+
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.rating == 1200;
+
+      allow update: if signedIn() && (
+  (
+    request.auth.uid == uid
+    && request.resource.data.rating == resource.data.rating
+  ) ||
+  (
+    validRankedHostUpdate(uid)
+    && request.resource.data.diff(resource.data).affectedKeys()
+      .hasOnly([
+        "rating",
+        "wins",
+        "losses",
+        "rankedWins",
+        "rankedLosses",
+        "rankedDraws",
+        "rankedBattles",
+        "lastRatedRoomId",
+        "lastRatedRound",
+        "updatedAt"
+      ])
+  )
+);
+
+
+      allow delete: if false;
+  }
+  match /stats/{statId} {
+  allow read: if true;
+
+  allow create: if signedIn()
+    && statId == "global"
+    && request.resource.data.totalUsers is int
+    && request.resource.data.totalUsers == 1;
+
+  allow update: if signedIn()
+    && statId == "global"
+    && request.resource.data.totalUsers is int
+    && request.resource.data.totalUsers == resource.data.totalUsers + 1
+    && request.resource.data.diff(resource.data).affectedKeys()
+      .hasOnly(["totalUsers", "updatedAt"]);
+
+  allow delete: if false;
+}
+
+  }
+}

@@ -4,7 +4,7 @@
   "use strict";
   const S=window.GuidedSolver,MODE_KEY="stcubeSolveMode";
   const $=id=>document.getElementById(id);
-  const battle=()=>document.body.classList.contains("battle-mode");
+  const battle=()=>document.body.classList.contains("battle-mode")||Boolean(window.DailyChallenge?.active);
   let mode=localStorage.getItem(MODE_KEY)==="guided"?"guided":"normal";
   let origin=null,candidate=null,session=null,pending=null,active=false,finished=false,tainted=false,error="",switchPending=false;
   let lastBattle=battle();

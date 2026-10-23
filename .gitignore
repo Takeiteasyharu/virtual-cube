@@ -9,4 +9,10 @@ _site/
 *.log
 *.tmp
 *.zip
+.env
+.env.*
+*service-account*.json
+*-adminsdk-*.json
+credentials*.json
+.daily-verification/
 
