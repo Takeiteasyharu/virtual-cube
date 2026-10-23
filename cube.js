@@ -551,6 +551,7 @@ function runNextMove() {
   }
 
   const durationMs = getRotationDuration();
+  window.dispatchEvent(new CustomEvent("stcube:move-start", {detail:{move:nextMove}}));
   if (durationMs === 0) {
     applyParsedMoveInstant(parsed);
     callAfterMoveCallback(nextMove);

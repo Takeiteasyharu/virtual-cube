@@ -15,6 +15,7 @@ function startTimer() {
 
   timerRunning = true;
   startTime = Date.now() - elapsedTime;
+  try { window.SolveReplay?.begin(startTime, currentScramble); } catch (error) { console.warn("Replay recording unavailable", error); }
   updateMovesDisplay(null);
 
   timerInterval = setInterval(() => {
@@ -34,6 +35,7 @@ function stopTimer() {
   const solveStats = typeof window.getCurrentSolveStats === "function"
     ? window.getCurrentSolveStats(finalTime)
     : { moveCount: 0, moves: [], tps: null };
+  try { window.SolveReplay?.finish(finalTime, solveStats); } catch (error) { console.warn("Replay could not be saved", error); }
 
   saveSolve(finalTime, currentScramble, solveStats);
   updateTpsDisplay(solveStats.tps);
@@ -67,6 +69,7 @@ function stopTimerAtLimit(seconds = 120) {
 }
 
 function resetTimer() {
+  window.SolveReplay?.cancel();
   timerRunning = false;
   clearInterval(timerInterval);
   elapsedTime = 0;

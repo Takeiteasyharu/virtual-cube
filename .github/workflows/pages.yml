@@ -22,8 +22,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Test guided solve state engine
-        run: node --test tests/guided-solver.test.cjs
+      - name: Test guided solve and replay state engines
+        run: node --test tests/*.test.cjs
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
@@ -42,6 +42,7 @@ jobs:
             game-ui.js \
             guided-solver.js \
             guided-solve.js \
+            solve-replay.js \
             index.html \
             manifest.json \
             online.js \

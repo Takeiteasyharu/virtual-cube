@@ -1,4 +1,13 @@
 /* Theme preferences remain owned by loadTheme/toggleTheme in script.js. */
+#replayModal[hidden] { display:none; }
+body .replay-content { width:min(760px,94vw);max-height:94dvh;overflow:auto;padding:20px; }
+#replayCube { width:100%;height:clamp(200px,46dvh,420px); }
+#replayCube canvas { display:block; }
+#replaySeek { width:100%;min-height:44px; }
+#replayInfo { font-size:14px;line-height:1.5; }
+.replay-actions { display:flex;gap:8px;flex-wrap:wrap;align-items:center; }
+.replay-actions button { flex:1 1 110px; }
+body #replayModal button { background:var(--surface-2);color:var(--text);border-color:var(--border); }
 /* Guided practice reuses the scramble header and timer row; no cube resizing. */
 body #guidedNotice { color:var(--danger);font-size:13px;line-height:1.4; }
 body #guidedSteps {
