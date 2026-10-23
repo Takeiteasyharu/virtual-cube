@@ -4595,6 +4595,7 @@ function setupAuthUi() {
 }
 
 window.addEventListener("pagehide", () => {
+  if (activeRoom?.isBot) return;
   if (
     !currentUser ||
     !activeRoomId ||
