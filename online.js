@@ -1270,7 +1270,7 @@ function setBattleMode(enabled) {
     battleClockInterval = window.setInterval(renderBattleUi, 100);
   }
 
-  if (enabled && !battlePresenceInterval) {
+  if (enabled && !activeRoom?.isBot && !battlePresenceInterval) {
     battlePresenceInterval = window.setInterval(sendBattleHeartbeat, 30000);
     sendBattleHeartbeat();
   }
