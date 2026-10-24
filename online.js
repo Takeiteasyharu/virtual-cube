@@ -2408,7 +2408,7 @@ function renderRankedExperience(you, opponent) {
   region.hidden = activeRoom?.mode !== "ranked" || activeRoom.cubeMode !== "virtual";
   if (region.hidden) return;
   const moment = document.getElementById("rankedMoment");
-  const inspecting = you?.status === "inspecting" && activeRoom.status !== "finished";
+  const inspecting = you?.status === "inspecting" && !['finished','finishing'].includes(activeRoom.status);
   moment.hidden = inspecting;
   let phase = "ready", title = "READY TO ROLL?", detail = "Get ready. Your next challenge is here!";
   if (activeRoom.status === "finished") {
@@ -2416,6 +2416,14 @@ function renderRankedExperience(you, opponent) {
     phase = draw ? "draw" : activeRoom.winnerUid === currentUser?.uid ? "win" : "lose";
     title = draw ? "IT’S A DRAW!" : phase === "win" ? "YOU WIN!" : "YOU LOSE!";
     detail = draw ? "Evenly matched. Ready for another round?" : phase === "win" ? "Brilliant solve. Enjoy the victory!" : "You lost this round. Take a breath and come back stronger!";
+  } else if (activeRoom.status === 'finishing') {
+    phase = 'finishing';
+    const remaining = Math.max(0, Math.ceil((Number(activeRoom.finishDeadlineMs) - Date.now()) / 1000));
+    title = String(remaining);
+    detail = remaining > 0 ? (hasFinalBattleTime(you) ? 'Waiting for opponent · Result in…' : 'Your opponent finished. Keep solving! Result in…') : 'Confirming the result…';
+  } else if (you?.status === 'time_limit' || you?.timeLimitReached) {
+    phase = 'finalizing'; title = "TIME’S UP!";
+    detail = 'Comparing completion scores…';
   } else if (hasFinalBattleTime(you)) {
     phase = "waiting"; title = "YOU DID IT!";
     const deadline = Number(activeRoom.finishDeadlineMs);
@@ -2434,13 +2442,15 @@ function renderRankedExperience(you, opponent) {
   setText(document.getElementById("rankedMomentTitle"), title);
   // Do not announce a ticking countdown to screen readers every second.
   const detailNode = document.getElementById("rankedMomentDetail");
-  detailNode.setAttribute("aria-live", phase === "waiting" ? "off" : "polite");
+  detailNode.setAttribute("aria-live", ['waiting','finishing'].includes(phase) ? "off" : "polite");
   setText(detailNode, detail);
   const key = `${activeRoomId}:${activeRound}:${phase}`;
   if (moment.dataset.eventKey === key) return;
   moment.dataset.eventKey = key;
   moment.dataset.phase = phase;
-  if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches && !inspecting) {
+  const immediateResult = activeRoom.status === 'finished' && activeRoom.timeLimitReached;
+  if (immediateResult) moment.getAnimations().forEach(animation => animation.cancel());
+  if (!immediateResult && !window.matchMedia("(prefers-reduced-motion: reduce)").matches && !inspecting) {
     moment.getAnimations().forEach(animation => animation.cancel());
     moment.animate([
       { opacity:0, transform:"translateY(12px) scale(.82) rotate(-3deg)" },
@@ -4764,7 +4774,8 @@ function renderBattleResultsUI({finished,ranked,you,opponent,bot=false}) {
     const card=document.getElementById(prefix+'Name').parentElement;
     let line=card.querySelector('.ranked-final-time');
     if(!line){line=document.createElement('span');line.className='ranked-final-time';card.append(line);}
-    line.textContent=Number.isFinite(player?.finalTime)&&player?.status==='finished'?formatBattleTime(player.finalTime)+' s':'DNF';
+    const score = activeRoom?.playerMaxCompletionScores?.[player?.uid] ?? player?.maxCompletionScore ?? 0;
+    line.textContent=activeRoom?.timeLimitReached ? `${Math.max(0,Math.min(54,Math.floor(Number(score)||0)))} / 54 stickers` : Number.isFinite(player?.finalTime)&&player?.status==='finished'?formatBattleTime(player.finalTime)+' s':'DNF';
   }
   if(bot){
     leaveBattleBtn.hidden=true;
@@ -4773,7 +4784,8 @@ function renderBattleResultsUI({finished,ranked,you,opponent,bot=false}) {
     document.getElementById('rankedYouRatingChange').textContent='';
     document.getElementById('rankedOpponentRatingChange').textContent='';
   }else{
-    document.getElementById('rankedMomentDetail').textContent='';
+    const score = player => Math.max(0,Math.min(54,Math.floor(Number(activeRoom.playerMaxCompletionScores?.[player?.uid] ?? player?.maxCompletionScore)||0)));
+    document.getElementById('rankedMomentDetail').textContent=activeRoom.timeLimitReached ? `You ${score(you)} / 54 · Opponent ${score(opponent)} / 54` : '';
     battleRematchYou.textContent=you?.rematchReady?'You are ready':'';
     battleRematchOpponent.textContent=isPlayerDisconnected(opponent)?'Opponent left':opponent?.rematchReady?'Opponent is ready':'';
   }

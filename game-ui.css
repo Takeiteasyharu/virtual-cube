@@ -1,4 +1,8 @@
 /* Theme preferences remain owned by loadTheme/toggleTheme in script.js. */
+body .ranked-moment[data-phase="finishing"] { padding-block:5px; }
+body .ranked-moment[data-phase="finishing"] #rankedMomentTitle { font-size:56px;line-height:1; }
+body:has(#rankedMoment[data-phase="finishing"]) #rankedInspectionSlot { visibility:hidden; }
+body.battle-results-clean #rankedMomentDetail { font-weight:700; }
 body.battle-results-clean :is(#battleNotice,#battleResult,#rankedTimeLimitDisplay,#battleScramble) { visibility:hidden; }
 body.battle-results-clean #battleRematchSpacer { grid-row:8;pointer-events:none; }
 body.battle-results-clean #battleRematchPanel {
