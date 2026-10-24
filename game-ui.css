@@ -1,4 +1,23 @@
 /* Theme preferences remain owned by loadTheme/toggleTheme in script.js. */
+body.battle-results-clean :is(#battleNotice,#battleResult,#rankedTimeLimitDisplay) { visibility:hidden; }
+body.battle-results-clean #battleRematchSpacer { grid-row:8;pointer-events:none; }
+body.battle-results-clean #battleRematchPanel {
+  position:fixed;right:max(12px,calc((100vw - 1600px)/2));top:210px;
+  width:260px;max-width:calc(100vw - 24px);margin:0;padding:12px;z-index:15;
+  font-size:13px;box-sizing:border-box;
+}
+body.battle-results-clean #battleRematchPanel h2 { display:none; }
+body.battle-results-clean #battleRematchPanel>div:empty { display:none; }
+body.battle-results-clean .battle-rematch-actions { grid-template-columns:1fr;margin:0;gap:8px; }
+body.battle-results-clean .battle-rematch-actions button { min-height:44px;padding:8px 10px;font-size:14px; }
+body.battle-results-clean #rematchReturnBtn { background:var(--surface-2);color:var(--text); }
+body .ranked-contender { position:relative; }
+body .ranked-final-time { position:absolute;right:10px;top:-10px;padding:1px 6px;border:1px solid var(--border);border-radius:8px;background:var(--surface);font-size:13px;line-height:18px;font-weight:800;color:var(--text);font-variant-numeric:tabular-nums; }
+@media(max-width:1100px) {
+  body.battle-results-clean #battleRematchSpacer { display:none; }
+  body.battle-results-clean #battleRematchPanel { position:static;width:min(100%,520px);margin:12px auto; }
+  body.battle-results-clean .battle-rematch-actions { grid-template-columns:1fr 1fr; }
+}
 body.bot-battle-mode #rankedOpponentRating { font-size:clamp(16px,2vw,24px);overflow-wrap:anywhere; }
 body.bot-battle-mode #rankedOpponentName { color:var(--accent); }
 body.bot-battle-mode #battleRoomMeta { font-size:14px; }

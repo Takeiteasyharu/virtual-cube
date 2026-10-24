@@ -20,6 +20,7 @@ import {
   onSnapshot,
   orderBy,
   query,
+  startAfter,
   runTransaction,
   serverTimestamp,
   setDoc,
@@ -680,10 +681,15 @@ function getRankingIndexHint(rankingType, period) {
     : "solves: rankingType Asc, valid Asc, time Asc";
 }
 
-async function refreshBattleRatingRanking(force = false) {
+let battleRatingCursor = null;
+let battleRatingHasMore = false;
+let battleRatingLoading = false;
+async function refreshBattleRatingRanking(force = false, more = false) {
   if (!battleRatingList || !isConfigured()) return;
 
   battleRatingList.innerHTML = "";
+  const newPlayersList = document.getElementById('newPlayerRatingList');
+  newPlayersList.replaceChildren();
   if (!currentUser) {
     const item = document.createElement("li");
     item.textContent = "Log in to view battle ratings.";
@@ -692,18 +698,19 @@ async function refreshBattleRatingRanking(force = false) {
   }
 
   try {
-    const entries = await getBattleRatingEntries(force);
-    entries.forEach((entry, index) => {
-      const user = entry.data;
-      const item = document.createElement("li");
-      item.textContent = `${index + 1}. ${user.name || "Player"} - ${Math.round(Number(user.rating) || INITIAL_RATING)}`;
-      battleRatingList.appendChild(item);
-    });
-    if (battleRatingList.children.length === 0) {
-      const item = document.createElement("li");
-      item.textContent = "-";
-      battleRatingList.appendChild(item);
+    const entries = await getBattleRatingEntries(force, more);
+    for (const [list, rows, empty] of [
+      [battleRatingList, entries.filter(entry => Number(entry.data.rankedBattles || 0) > 0), 'No ranked players loaded yet.'],
+      [newPlayersList, entries.filter(entry => Number(entry.data.rankedBattles || 0) === 0), 'No new players loaded yet.']
+    ]) {
+      rows.forEach((entry,index)=>{
+        const item=document.createElement('li');
+        item.textContent=`${index + 1}. ${entry.data.name || 'Player'} - ${Math.round(Number(entry.data.rating) || INITIAL_RATING)}`;
+        list.appendChild(item);
+      });
+      if(!rows.length){const item=document.createElement('li');item.textContent=empty;list.appendChild(item);}
     }
+    document.getElementById('battleRatingMoreBtn').hidden = !battleRatingHasMore;
   } catch (error) {
     const item = document.createElement("li");
     item.textContent = "Battle rating ranking could not be loaded.";
@@ -712,9 +719,9 @@ async function refreshBattleRatingRanking(force = false) {
   }
 }
 
-async function getBattleRatingEntries(force = false) {
+async function getBattleRatingEntries(force = false, more = false) {
   if (force) battleRatingCache.timestamp = 0;
-  if (!force && Date.now() - battleRatingCache.timestamp < RANKING_CACHE_TTL_MS) {
+  if (!more && !force && Date.now() - battleRatingCache.timestamp < RANKING_CACHE_TTL_MS) {
     return battleRatingCache.entries;
   }
   if (battleRatingFetchPromise) return battleRatingFetchPromise;
@@ -722,13 +729,17 @@ async function getBattleRatingEntries(force = false) {
   battleRatingFetchPromise = getDocs(query(
     collection(db, USERS_COLLECTION),
     orderBy("rating", "desc"),
+    ...(more && battleRatingCursor ? [startAfter(battleRatingCursor)] : []),
     limit(RANKING_LIMIT)
   )).then(snapshot => {
+    battleRatingCursor = snapshot.docs.at(-1) || null;
+    battleRatingHasMore = snapshot.size === RANKING_LIMIT;
     const entries = snapshot.docs
       .map(entryDoc => ({ id: entryDoc.id, data: entryDoc.data() }))
-      .filter(entry => Number(entry.data.rankedBattles || 0) > 0);
-    battleRatingCache = { entries, timestamp: Date.now() };
-    return entries;
+      .filter(entry => entry.data.loginType === 'google');
+    const combined = more ? [...battleRatingCache.entries, ...entries] : entries;
+    battleRatingCache = { entries: combined, timestamp: Date.now() };
+    return combined;
   }).finally(() => {
     battleRatingFetchPromise = null;
   });
@@ -763,11 +774,12 @@ async function refreshBattleAccountRating(force = false) {
       getBattleRatingEntries(force)
     ]);
     const profile = profileSnapshot.data() || {};
-    const rankIndex = rankedUsers.findIndex(entry => entry.id === currentUser.uid);
+    const experienced = rankedUsers.filter(entry => Number(entry.data.rankedBattles || 0) > 0);
+    const rankIndex = experienced.findIndex(entry => entry.id === currentUser.uid);
     accountRating.textContent = "Rating: " + Math.round(Number(profile.rating) || INITIAL_RATING);
     accountBattleRank.textContent = rankIndex >= 0
       ? "World Rank: #" + (rankIndex + 1)
-      : (Number(profile.rankedBattles || 0) > 0 ? "World Rank: #50+" : "World Rank: -");
+      : (Number(profile.rankedBattles || 0) === 0 ? 'World Rank: Not ranked yet' : battleRatingHasMore ? `World Rank: #${experienced.length + 1}+` : "World Rank: -");
   } catch (error) {
     accountRating.textContent = "Rating: -";
     accountBattleRank.textContent = "World Rank: -";
@@ -2573,6 +2585,7 @@ function renderBattleUi() {
   renderRankedExperience(you, opponent);
   renderBattleReadyButton(you, opponent);
   renderRematchPanel(you, opponent);
+  renderBattleResultsUI({finished:activeRoom.status === 'finished',ranked:activeRoom.mode === 'ranked' && activeRoom.cubeMode === 'virtual',you,opponent});
   renderMultiplayerRoster();
   renderRankedVersus();
   renderFriendRealHistory();
@@ -4154,6 +4167,7 @@ async function persistFriendRoomExit({ roomAlreadyCancelled = false } = {}) {
 }
 
 function resetBattleUiAfterLeave() {
+  renderBattleResultsUI({finished:false});
   if (friendBattleSettingsModal) friendBattleSettingsModal.hidden = true;
   if (friendHostExitTimeout) {
     window.clearTimeout(friendHostExitTimeout);
@@ -4641,6 +4655,12 @@ rankingTypeButtons.forEach(button => {
 });
 
 setupModalUi();
+document.getElementById('battleRatingMoreBtn')?.addEventListener('click',async()=>{
+  if(battleRatingLoading)return;
+  battleRatingLoading=true;
+  const button=document.getElementById('battleRatingMoreBtn');button.disabled=true;
+  try{await refreshBattleRatingRanking(false,true);}finally{battleRatingLoading=false;button.disabled=false;}
+});
 
 document.getElementById("openRankingBtn")?.addEventListener("click", () => {
   Promise.all([
@@ -4669,9 +4689,8 @@ if (isConfigured()) {
       setStatus(`Logged in as ${user.displayName || "Guest"}`);
       updateAccountSummary(user, null);
       ensureUserProfile()
-        .then(() => refreshTotalUsers())
+        .then(() => Promise.all([refreshTotalUsers(),refreshBattleAccountRating(true)]))
         .catch(console.error);
-      refreshBattleAccountRating();
       submitPendingSolves().catch(error => {
         setStatus("Pending times could not be submitted.");
         console.error(error);
@@ -4724,6 +4743,43 @@ window.BotBattleBridge={
   leave:()=>leaveBattleMode(),
   rematch:async()=>{await leaveBattleMode();await startRankedBattle();}
 };
+// Presentation only. Keep the old grid footprint so the play cube never moves.
+function renderBattleResultsUI({finished,ranked,you,opponent,bot=false}) {
+  const panel=document.getElementById('battleRematchPanel');
+  let spacer=document.getElementById('battleRematchSpacer');
+  if(!finished||!ranked){
+    if(spacer){spacer.replaceWith(panel);}
+    document.body.classList.remove('battle-results-clean');
+    document.getElementById('opponentCubeStatus').style.visibility='';
+    document.querySelectorAll('.ranked-final-time').forEach(el=>el.remove());
+    return;
+  }
+  if(!spacer){
+    spacer=document.createElement('div');spacer.id='battleRematchSpacer';spacer.setAttribute('aria-hidden','true');
+    spacer.style.height=(panel.getBoundingClientRect().height+parseFloat(getComputedStyle(panel).marginTop||0))+'px';
+    panel.before(spacer);document.querySelector('.battle-screen').append(panel);
+  }
+  document.body.classList.add('battle-results-clean');
+  for(const [prefix,player] of [['rankedYou',you],['rankedOpponent',opponent]]){
+    const card=document.getElementById(prefix+'Name').parentElement;
+    let line=card.querySelector('.ranked-final-time');
+    if(!line){line=document.createElement('span');line.className='ranked-final-time';card.append(line);}
+    line.textContent=Number.isFinite(player?.finalTime)&&player?.status==='finished'?formatBattleTime(player.finalTime)+' s':'DNF';
+  }
+  if(bot){
+    leaveBattleBtn.hidden=true;
+    battleRematchYou.textContent='';battleRematchOpponent.textContent='';
+    document.getElementById('rankedMomentDetail').textContent='Unrated · Rating unchanged';
+    document.getElementById('rankedYouRatingChange').textContent='';
+    document.getElementById('rankedOpponentRatingChange').textContent='';
+  }else{
+    document.getElementById('rankedMomentDetail').textContent='';
+    battleRematchYou.textContent=you?.rematchReady?'You are ready':'';
+    battleRematchOpponent.textContent=isPlayerDisconnected(opponent)?'Opponent left':opponent?.rematchReady?'Opponent is ready':'';
+  }
+  document.getElementById('opponentCubeStatus').style.visibility='hidden';
+}
+window.renderBattleResultsUI=renderBattleResultsUI;
 window.addEventListener('pagehide',()=>{if(window.BotBattle?.active)window.BotBattle.dispose();else if(rankedSearchLocked)cancelRandomMatch().catch(()=>{});releaseRankedSearchLock();});
 window.isRealCubeBattle = () => document.body.classList.contains("battle-mode") && activeRoom?.cubeMode === "real";
 window.isRealFriendBattle = () => document.body.classList.contains("battle-mode") && isRealFriendRoom();

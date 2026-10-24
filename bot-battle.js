@@ -79,6 +79,7 @@
   const time=t=>t===null?'DNF':t.toFixed(2)+' s';text('battleResult',ended?`You: ${time(s.you.time)} | BOT: ${time(s.bot.solved?s.bot.time:null)} | Rating unchanged`:'');text('battleResultBadge',ended?(s.cancelled?'CANCELLED':s.outcome.toUpperCase()):'');
   $('battleRematchPanel').hidden=!ended;text('battleRematchYou','Rematch searches for a human first.');text('battleRematchOpponent','BOT results do not count toward human battle statistics.');$('playAgainBtn').disabled=false;text('playAgainBtn','Find next match');
   $('rankedTimeLimitDisplay').hidden=false;text('rankedTimeLimitDisplay',ended?'Unrated · No ranking submission':`BOT ${s.config.level} · Your solve time limit: 2:00`);
+  window.renderBattleResultsUI?.({finished:ended,ranked:true,you:{status:s.you.status,finalTime:s.you.time},opponent:{status:s.bot.status,finalTime:s.bot.solved?s.bot.time:null},bot:true});
  }
  function dispose(){clear();state=null;document.body.classList.remove('bot-battle-mode');const labels=document.querySelectorAll('#rankedVersus .ranked-rating-label');labels.forEach(l=>l.textContent='RATING');}
  window.BotBattle={prepare,start,ready,playerStarted,finish,abort,render,dispose,get active(){return !!state;},get diagnostics(){return state?{level:state.config.level,source:state.config.source,target:state.target,actual:state.bot.time,solved:!!state.bot.solved,phase:state.phase,outcome:state.outcome,moves:state.moves.length}:null;}};

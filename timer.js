@@ -250,6 +250,7 @@ function renderTimes() {
 
 function renderScrambleHistory() {
   const list = document.getElementById("scrambleHistoryList");
+  if (!list) return;
   const solves = getSolves();
 
   list.innerHTML = "";
