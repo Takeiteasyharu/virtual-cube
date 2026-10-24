@@ -1,9 +1,9 @@
 /* Theme preferences remain owned by loadTheme/toggleTheme in script.js. */
-body.battle-results-clean :is(#battleNotice,#battleResult,#rankedTimeLimitDisplay) { visibility:hidden; }
+body.battle-results-clean :is(#battleNotice,#battleResult,#rankedTimeLimitDisplay,#battleScramble) { visibility:hidden; }
 body.battle-results-clean #battleRematchSpacer { grid-row:8;pointer-events:none; }
 body.battle-results-clean #battleRematchPanel {
-  position:fixed;right:max(12px,calc((100vw - 1600px)/2));top:210px;
-  width:260px;max-width:calc(100vw - 24px);margin:0;padding:12px;z-index:15;
+  position:fixed;right:max(12px,calc((100vw - 1600px)/2));top:75px;
+  width:min(260px,calc((100vw - min(760px,100dvh - 250px))/2 - 24px));max-width:calc(100vw - 24px);margin:0;padding:12px;z-index:15;
   font-size:13px;box-sizing:border-box;
 }
 body.battle-results-clean #battleRematchPanel h2 { display:none; }
