@@ -3,7 +3,7 @@
   "scripts": {
     "daily:seed":"node tools/daily-seed.mjs --project virtual-cube-timer --days 30",
     "test:daily":"firebase emulators:exec --only firestore --project demo-stcube-daily \"node --test tests/daily-rules.test.cjs\"",
-    "test:profile":"firebase emulators:exec --only firestore --project demo-stcube-profile \"node --test tests/profile-rules.test.cjs\""
+    "test:profile":"firebase emulators:exec --only firestore --project demo-stcube-profile \"node --test tests/profile-rules.test.cjs tests/profile-stage2-rules.test.cjs tests/daily-rules.test.cjs\""
   },
   "devDependencies": { "firebase":"12.4.0", "@firebase/rules-unit-testing":"5.0.0", "cubing":"0.63.3" },
   "overrides": { "@grpc/grpc-js":"^1.13.6" }

@@ -1,6 +1,7 @@
 /* Versioned, idempotent record writer. No renderer, auth or UI dependencies. */
 (function(root){
   'use strict';
+  const Progress=root.ProfileProgress||(typeof require==='function'?require('./profile-progress.js'):null);
   const scope='normal-virtual-and-human-battles-v1';
   const fields=['normalSolves','totalMoves','totalTimeMs','tpsMilliSum','pbMs','ao5Ms','ao12Ms','rankedBattles','rankedWins','rankedLosses','rankedDraws','rankedDnfs','friendBattles','friendWins','friendLosses','friendDraws','friendDnfs'];
   const eligible=s=>s?.source==='normal'&&s.mode==='virtual'&&s.rankingEligible===true&&/^[A-Za-z0-9_-]{10,100}$/.test(s.solveId||'');
@@ -24,6 +25,15 @@
   }
   function create(sdk,db){
     const {doc,runTransaction,serverTimestamp}=sdk;
+    async function progressRead(tx,uid){
+      const day=Progress.dayIndex(Date.now()),detailRef=doc(db,'users',uid,'profileStats','details'),dayRef=doc(db,'users',uid,'activityDays',String(day));
+      const [detail,activity]=await Promise.all([tx.get(detailRef),tx.get(dayRef)]);return {day,detailRef,dayRef,detail:detail.data(),exists:activity.exists()};
+    }
+    function progressWrite(tx,uid,p,before,after,e,stamp){
+      e.featureVersion=2;e.utcDay=p.day;
+      tx.set(p.detailRef,Progress.advance(p.detail,before,after,e,stamp,p.day,p.exists));
+      if(!p.exists)tx.set(p.dayRef,{v:1,uid,dayIndex:p.day,firstEventId:e.id,createdAt:stamp});
+    }
     async function commit(work){
       // Rules can observe a competing commit before the SDK reports ABORTED.
       // Start a fresh transaction (and re-read the fixed event ID) on either code.
@@ -40,14 +50,16 @@
         const [e,s,u,existing]=await Promise.all([tx.get(er),tx.get(sr),tx.get(ur),tx.get(single)]);
         if(e.exists())return false;
         if(existing.exists())throw Error('Solve ID already belongs to a recorded solve');
+        const progress=await progressRead(tx,uid);
         const stamp=serverTimestamp(),hasAo5=Number.isFinite(input.ao5)&&input.ao5>2&&input.ao5<3600;
         const event={v:1,id,uid,kind:'normal',createdAt:stamp,timeMs:Math.round(input.time*1000),moveCount:input.moveCount,tpsMilli:Math.round(input.tps*1000),ao5Ms:hasAo5?Math.round(input.ao5*1000):0,ao12Ms:Number.isFinite(input.ao12)?Math.round(input.ao12*1000):0,singleId,ao5Id:hasAo5?ao5Id:''};
         const entry={schemaVersion:2,solveId:input.solveId,eventId:id,uid,name,source:'normal',completed:true,valid:true,mode:'virtual',scramble:input.scramble,time:input.time,tps:input.tps,moveCount:input.moveCount,moves:input.moves,dayKey:keys.today,weekKey:keys.week,monthKey:keys.month,createdAt:stamp};
         tx.set(single,{...entry,rankingType:'single'});
         if(hasAo5)tx.set(doc(db,'solves',ao5Id),{...entry,rankingType:'ao5',time:input.ao5});
-        tx.set(er,event);tx.set(sr,advance(s.data(),event,stamp));
+        const summary=advance(s.data(),event,stamp);progressWrite(tx,uid,progress,s.data(),summary,event,stamp);
+        tx.set(er,event);tx.set(sr,summary);
         const old=u.data()||{},n=Number(old.validSolves||0),avg=Number(old.averageTps||0);
-        tx.set(ur,{pb:Math.min(Number(old.pb)||Infinity,input.time),ao5:hasAo5?input.ao5:null,ao12:Number.isFinite(input.ao12)?input.ao12:null,totalSolves:Number(old.totalSolves||0)+1,validSolves:n+1,bestTps:Math.max(Number(old.bestTps||0),input.tps),averageTps:(avg*n+input.tps)/(n+1),lastSolveAt:stamp,updatedAt:stamp},{merge:true});
+        tx.set(ur,{normalSinglePbMs:summary.pbMs,pb:Math.min(Number(old.pb)||Infinity,input.time),ao5:hasAo5?input.ao5:null,ao12:Number.isFinite(input.ao12)?input.ao12:null,totalSolves:Number(old.totalSolves||0)+1,validSolves:n+1,bestTps:Math.max(Number(old.bestTps||0),input.tps),averageTps:(avg*n+input.tps)/(n+1),lastSolveAt:stamp,updatedAt:stamp},{merge:true});
         return true;
       });
     }
@@ -61,10 +73,12 @@
         if(!room||room.status!=='finished'||room.round!==round||!player||player.round!==round||room.isBot||!['friend','ranked'].includes(room.mode))throw Error('Round is not final');
         if(room.mode==='ranked'&&![room.hostUid,room.guestUid].includes(uid))throw Error('Not a participant');
         if(room.mode==='friend'&&room.maxPlayers>2&&!(room.activePlayerUids||[]).includes(uid))throw Error('Not a participant');
+        const progress=await progressRead(tx,uid);
         const result=outcome(room,player,uid),stamp=serverTimestamp(),id='battle_'+resultId;
         const event={v:1,id,uid,kind:room.mode,resultId,roomId,round,result,createdAt:stamp};
         tx.set(rr,{...details,uid,result,mode:room.mode,roomId,round,schemaVersion:2,eventId:id,createdAt:stamp});
-        tx.set(er,event);tx.set(sr,advance(s.data(),event,stamp));
+        const summary=advance(s.data(),event,stamp);progressWrite(tx,uid,progress,s.data(),summary,event,stamp);
+        tx.set(er,event);tx.set(sr,summary);
         // Ranked legacy counters are still owned by the existing Elo transaction.
         if(room.mode==='friend'){
           const old=u.data()||{},won=result==='win',lost=result==='loss';

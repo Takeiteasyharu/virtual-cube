@@ -1,4 +1,4 @@
-const CACHE_NAME = "virtual-cube-timer-v128";
+const CACHE_NAME = "virtual-cube-timer-v129";
 const BASE_PATH = new URL("./", self.location.href).pathname;
 const APP_FILE_EXTENSIONS = [".html", ".css", ".js", ".json"];
 
@@ -29,6 +29,8 @@ const CACHE_URLS = [
   `${BASE_PATH}firebase-config.js`,
   `${BASE_PATH}online.js`,
   `${BASE_PATH}profile-records.js`,
+  `${BASE_PATH}profile-progress.js`,
+  `${BASE_PATH}profile-view.js`,
   `${BASE_PATH}manifest.json`,
   `${BASE_PATH}images/favicon.png`,
   `${BASE_PATH}images/icon-192.png`,

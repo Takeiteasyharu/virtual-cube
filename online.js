@@ -15,6 +15,7 @@ import {
   doc,
   getDocs,
   getDoc,
+  getCountFromServer,
   getFirestore,
   limit,
   onSnapshot,
@@ -836,79 +837,29 @@ function createProfileGrid(items) {
   return grid;
 }
 
+let profileLoadGeneration=0;
+const profileRankCache=new Map();
+async function loadProfileRanks(uid,profile,stats,isGuest) {
+  const key=uid+':'+profile.rating+':'+profile.normalSinglePbMs+':'+profile.rankedBattles;
+  const saved=profileRankCache.get(key);if(saved&&Date.now()-saved.at<60000)return saved.value;
+  const result={battle:isGuest?'Unrated':Number(profile.rankedBattles||0)>0?'Unavailable':'Not ranked yet',single:'Not published yet'};
+  const requests=[];
+  if(!isGuest&&Number(profile.rankedBattles||0)>0)requests.push(getCountFromServer(query(collection(db,USERS_COLLECTION),where('loginType','==','google'),where('rankedBattles','>',0),where('rating','>',Number(profile.rating)||INITIAL_RATING))).then(s=>{result.battle='#'+(s.data().count+1)}).catch(()=>{}));
+  if(stats?.pbMs>0&&profile.normalSinglePbMs===stats.pbMs)requests.push(getCountFromServer(query(collection(db,USERS_COLLECTION),where('normalSinglePbMs','<',stats.pbMs))).then(s=>{result.single='#'+(s.data().count+1)}).catch(()=>{result.single='Unavailable'}));
+  await Promise.all(requests);profileRankCache.set(key,{at:Date.now(),value:result});return result;
+}
 async function showProfile() {
-  profileModal.hidden = false;
-  profileBody.textContent = "Loading profile...";
-
-  if (!currentUser) {
-    profileBody.textContent = "Please log in to view your profile.";
-    return;
-  }
-
+  const generation=++profileLoadGeneration,user=currentUser;
+  profileModal.hidden=false;profileBody.textContent='Loading profile...';
+  if(!user){profileBody.textContent='Please log in to view your profile.';return;}
   try {
-    const profileSnapshot = await getDoc(userRef());
-    const profileStats = { ...defaultUserStats(), ...(profileSnapshot.data() || {}) };
-    const cachedRanking = getCachedRankingEntries(activeRankingType, activePeriod);
-    const rankIndex = cachedRanking?.findIndex(solve => solve.uid === currentUser.uid) ?? -1;
-    const rankedUsers = battleRatingCache.entries;
-    const battleRankIndex = rankedUsers.findIndex(entry => entry.id === currentUser.uid);
-    const localSummary = getLocalSolveSummary();
-    const localSolves = (() => {
-      try {
-        return (JSON.parse(localStorage.getItem("cubeSolves")) || []).filter(solve => Number.isFinite(Number(solve.time)));
-      } catch (error) {
-        return [];
-      }
-    })();
-    const localTps = localSolves.map(solve => Number(solve.tps)).filter(Number.isFinite);
-    const latestDate = profileStats.lastSolveAt?.toDate?.() || (localSolves[0]?.date ? new Date(localSolves[0].date) : null);
-    const battleCount = Number(profileStats.rankedBattles || 0) + Number(profileStats.friendBattles || 0);
-    const wins = Number(profileStats.wins || 0);
-    const losses = Number(profileStats.losses || 0);
-
-    profileBody.innerHTML = "";
-    profileBody.appendChild(createProfileGrid([
-      ["Display name", getPlayerName()],
-      ["Login type", currentUser.isAnonymous ? "Guest" : "Google"],
-      ["PB", Number(profileStats.pb) > 0 ? Number(profileStats.pb).toFixed(2) : (localSolves.length ? Math.min(...localSolves.map(solve => Number(solve.time))).toFixed(2) : "-")],
-      ["AO5", Number(profileStats.ao5) > 0 ? Number(profileStats.ao5).toFixed(2) : (localSummary.ao5?.toFixed(2) || "-")],
-      ["AO12", Number(profileStats.ao12) > 0 ? Number(profileStats.ao12).toFixed(2) : (localSummary.ao12?.toFixed(2) || "-")],
-      ["Current world rank", rankIndex >= 0 ? `#${rankIndex + 1}` : (cachedRanking ? "#50+" : "-")],
-      ["Total solves", String(Number(profileStats.totalSolves || 0) || localSolves.length)],
-      ["Valid solves", String(Number(profileStats.validSolves || 0) || localSolves.length)],
-      ["Best TPS", Number(profileStats.bestTps || 0) > 0 ? Number(profileStats.bestTps).toFixed(2) : (localTps.length ? Math.max(...localTps).toFixed(2) : "-")],
-      ["Average TPS", Number(profileStats.averageTps || 0) > 0 ? Number(profileStats.averageTps).toFixed(2) : (localTps.length ? (localTps.reduce((sum, value) => sum + value, 0) / localTps.length).toFixed(2) : "-")],
-      ["Last solve date", latestDate && !Number.isNaN(latestDate.getTime()) ? latestDate.toLocaleString() : "-"]
-    ]));
-
-    const title = document.createElement("h3");
-    title.className = "profile-section-title";
-    title.textContent = "Battle Stats";
-    profileBody.appendChild(title);
-    profileBody.appendChild(createProfileGrid([
-      ["Current rating", currentUser.isAnonymous ? "-" : String(Math.round(Number(profileStats.rating) || INITIAL_RATING))],
-      ["Current battle rank", currentUser.isAnonymous ? "-" : (battleRankIndex >= 0 ? `#${battleRankIndex + 1}` : (Number(profileStats.rankedBattles || 0) > 0 ? "#50+" : "-"))],
-      ["Ranked battles", String(profileStats.rankedBattles || 0)],
-      ["Friend battles", String(profileStats.friendBattles || 0)],
-      ["Ranked wins", String(profileStats.rankedWins || 0)],
-      ["Ranked losses", String(profileStats.rankedLosses || 0)],
-      ["Friend wins", String(profileStats.friendWins || 0)],
-      ["Friend losses", String(profileStats.friendLosses || 0)],
-      ["Total battles", String(battleCount)],
-      ["Wins", String(wins)],
-      ["Losses", String(losses)],
-      ["DNFs", String(Number(profileStats.dnfs || 0))],
-      ["Win rate", battleCount ? `${((wins / battleCount) * 100).toFixed(1)}%` : "-"],
-      ["Best battle time", Number(profileStats.bestBattleTime) > 0 ? Number(profileStats.bestBattleTime).toFixed(2) : "-"],
-      ["Average battle time", Number(profileStats.averageBattleTime) > 0 ? Number(profileStats.averageBattleTime).toFixed(2) : "-"],
-      ["Current battle streak", String(Number(profileStats.currentBattleStreak || 0))],
-      ["Ranked battle wins", String(profileStats.rankedWins || 0)],
-      ["Friend battle wins", String(profileStats.friendWins || 0)]
-    ]));
-  } catch (error) {
-    profileBody.textContent = "Profile could not be loaded.";
-    console.error(error);
-  }
+    const [account,summary,detail]=await runTransaction(db,tx=>Promise.all([tx.get(userRef(user.uid)),tx.get(doc(db,'users',user.uid,'profileStats','current')),tx.get(doc(db,'users',user.uid,'profileStats','details'))]));
+    if(generation!==profileLoadGeneration||currentUser?.uid!==user.uid)return;
+    const model={name:getPlayerName(),guest:user.isAnonymous,createdAt:user.metadata?.creationTime||null,account:account.data()||{},stats:summary.data()||null,detail:detail.data()||null,real:typeof getSolves==='function'?getSolves('real'):[],ranks:{battle:'Loading...',single:'Loading...'}};
+    window.ProfileView.render(profileBody,model);
+    model.ranks=await loadProfileRanks(user.uid,model.account,model.stats,user.isAnonymous);
+    if(generation===profileLoadGeneration&&currentUser?.uid===user.uid&&!profileModal.hidden)window.ProfileView.render(profileBody,model);
+  }catch(error){if(generation===profileLoadGeneration)profileBody.textContent='Profile could not be loaded. Please try again.';console.error(error);}
 }
 
 async function submitOnlineSolve(time,scramble,ao5=null,stats={}) {
@@ -3947,6 +3898,8 @@ async function applyRankedBattleResultAsHost() {
       });
 
       transaction.update(hostUserRef, {
+        ratingPeakObserved: Math.max(Number(hostProfile.ratingPeakObserved||0),hostChange.before,hostChange.after),
+        ratingPeakTrackingStartedAt: hostProfile.ratingPeakTrackingStartedAt || serverTimestamp(),
         rating: hostChange.after,
         wins: Number(hostProfile.wins || 0) + (hostWon ? 1 : 0),
         losses: Number(hostProfile.losses || 0) + (hostOutcome === "loss" ? 1 : 0),
@@ -3960,6 +3913,8 @@ async function applyRankedBattleResultAsHost() {
         updatedAt: serverTimestamp()
       });
       transaction.update(guestUserRef, {
+        ratingPeakObserved: Math.max(Number(guestProfile.ratingPeakObserved||0),guestChange.before,guestChange.after),
+        ratingPeakTrackingStartedAt: guestProfile.ratingPeakTrackingStartedAt || serverTimestamp(),
         rating: guestChange.after,
         wins: Number(guestProfile.wins || 0) + (guestWon ? 1 : 0),
         losses: Number(guestProfile.losses || 0) + (guestOutcome === "loss" ? 1 : 0),
@@ -4560,6 +4515,7 @@ if (isConfigured()) {
       if(window.BotBattle?.active)leaveBattleMode().catch(console.error);
     }
     currentUser = user;
+    if (!profileModal.hidden) showProfile().catch(console.error);
 
     if (user) {
       setStatus(`Logged in as ${user.displayName || "Guest"}`);

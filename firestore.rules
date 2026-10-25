@@ -119,7 +119,6 @@ service cloud.firestore {
       let e = getAfter(/databases/$(database)/documents/users/$(uid)/profileEvents/$(a.lastEventId)).data;
       let b = profileBase(uid);
       return a.keys().hasOnly(['v','scope','trackingStartedAt','updatedAt','lastEventId','normalSolves','totalMoves','totalTimeMs','tpsMilliSum','pbMs','ao5Ms','ao12Ms','rankedBattles','rankedWins','rankedLosses','rankedDraws','rankedDnfs','friendBattles','friendWins','friendLosses','friendDraws','friendDnfs'])
-        && a.keys().hasAll(['v','scope','trackingStartedAt','updatedAt','lastEventId','normalSolves','totalMoves','totalTimeMs','tpsMilliSum','pbMs','ao5Ms','ao12Ms','rankedBattles','rankedWins','rankedLosses','rankedDraws','rankedDnfs','friendBattles','friendWins','friendLosses','friendDraws','friendDnfs'])
         && a.v == 1 && a.scope == 'normal-virtual-and-human-battles-v1'
         && a.updatedAt == request.time
         && a.trackingStartedAt == b.get('trackingStartedAt',request.time)
@@ -143,9 +142,85 @@ service cloud.firestore {
         && a.friendDraws == b.get('friendDraws',0) + (e.kind == 'friend' && e.result == 'draw' ? 1 : 0)
         && a.friendDnfs == b.get('friendDnfs',0) + (e.kind == 'friend' && e.result == 'dnf' ? 1 : 0);
     }
+function profileMin(a,b) { return a < b ? a : b; }
+    function profileMax(a,b) { return a > b ? a : b; }
+    function profileDetailBase(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid)/profileStats/details)
+        ? get(/databases/$(database)/documents/users/$(uid)/profileStats/details).data : {};
+    }
+    function profileDetailsValid(uid,d) {
+      let b = profileDetailBase(uid);
+      let c = profileBase(uid);
+      let a = getAfter(/databases/$(database)/documents/users/$(uid)/profileStats/current).data;
+      let e = getAfter(/databases/$(database)/documents/users/$(uid)/profileEvents/$(d.lastEventId)).data;
+      let continuous = b.size() == 0 || b.lastEventId == c.get('lastEventId','');
+      let p = b.get('recentTimes',[]);
+      let t = e.kind != 'normal' ? (continuous ? p : []) : [e.timeMs].concat(continuous ? p : [])[0:profileMin((continuous ? p.size() : 0)+1,12)];
+      let bt = b.get('badgeTimes',{});
+      let knownDay = exists(/databases/$(database)/documents/users/$(uid)/activityDays/$(string(e.utcDay)));
+      let streak = e.utcDay == b.get('lastDayIndex',-1) ? b.currentStreak : (e.utcDay == b.get('lastDayIndex',-1)+1 ? b.get('currentStreak',0)+1 : 1);
+      return e.featureVersion == 2 && a.lastEventId == e.id
+        && !exists(/databases/$(database)/documents/users/$(uid)/profileEvents/$(d.lastEventId))
+        && e.utcDay == int(request.time.date().toMillis() / 86400000)
+        && e.utcDay >= b.get('lastDayIndex',-1)
+        && d == {
+          'v':2,'lastEventId':e.id,
+          'trackingStartedAt':b.get('trackingStartedAt',request.time),'updatedAt':request.time,
+          'coverageComplete':b.get('coverageComplete',true) && continuous,
+          'activeDays':b.get('activeDays',0) + (knownDay ? 0 : 1),'lastDayIndex':e.utcDay,
+          'currentStreak':streak,'longestStreak':profileMax(b.get('longestStreak',0),streak),
+          'bestTpsMilli':profileMax(b.get('bestTpsMilli',0),e.kind == 'normal' ? e.tpsMilli : 0),
+          'lastSolveAt':e.kind == 'normal' ? request.time : b.get('lastSolveAt',null),
+          'normalTrackingStartedAt':b.get('normalTrackingStartedAt',null) != null ? b.normalTrackingStartedAt : (e.kind == 'normal' ? request.time : null),
+          'recentTimes':t,
+          'badgeTimes':{
+          'firstSolve': (bt.get('firstSolve',null) != null ? bt.firstSolve : ((a.normalSolves >= 1) && !( c.get('normalSolves',0) >= 1 ) ? request.time : null)),
+          'solves100': (bt.get('solves100',null) != null ? bt.solves100 : ((a.normalSolves >= 100) && !( c.get('normalSolves',0) >= 100 ) ? request.time : null)),
+          'solves1000': (bt.get('solves1000',null) != null ? bt.solves1000 : ((a.normalSolves >= 1000) && !( c.get('normalSolves',0) >= 1000 ) ? request.time : null)),
+          'sub30': (bt.get('sub30',null) != null ? bt.sub30 : ((a.pbMs > 0 && a.pbMs < 30000) && !( c.get('pbMs',0) > 0 && c.get('pbMs',0) < 30000 ) ? request.time : null)),
+          'sub20': (bt.get('sub20',null) != null ? bt.sub20 : ((a.pbMs > 0 && a.pbMs < 20000) && !( c.get('pbMs',0) > 0 && c.get('pbMs',0) < 20000 ) ? request.time : null)),
+          'sub10': (bt.get('sub10',null) != null ? bt.sub10 : ((a.pbMs > 0 && a.pbMs < 10000) && !( c.get('pbMs',0) > 0 && c.get('pbMs',0) < 10000 ) ? request.time : null)),
+          'firstWin': (bt.get('firstWin',null) != null ? bt.firstWin : ((a.rankedWins >= 1) && !( c.get('rankedWins',0) >= 1 ) ? request.time : null)),
+          'wins10': (bt.get('wins10',null) != null ? bt.wins10 : ((a.rankedWins >= 10) && !( c.get('rankedWins',0) >= 10 ) ? request.time : null)),
+          'wins100': (bt.get('wins100',null) != null ? bt.wins100 : ((a.rankedWins >= 100) && !( c.get('rankedWins',0) >= 100 ) ? request.time : null)),
+          'streak7': (bt.get('streak7',null) != null ? bt.streak7 : ((d.longestStreak >= 7) && !( b.get('longestStreak',0) >= 7 ) ? request.time : null)),
+          'streak30': (bt.get('streak30',null) != null ? bt.streak30 : ((d.longestStreak >= 30) && !( b.get('longestStreak',0) >= 30 ) ? request.time : null))
+        }
+        }
+        && getAfter(/databases/$(database)/documents/users/$(uid)/activityDays/$(string(e.utcDay))).data.dayIndex == e.utcDay;
+    }
+    match /users/{uid}/activityDays/{day} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['v','uid','dayIndex','firstEventId','createdAt'])
+        && request.resource.data.v == 1 && request.resource.data.uid == uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.dayIndex == int(request.time.date().toMillis() / 86400000)
+        && day == string(request.resource.data.dayIndex)
+        && getAfter(/databases/$(database)/documents/users/$(uid)/profileStats/details).data.lastEventId == request.resource.data.firstEventId
+        && getAfter(/databases/$(database)/documents/users/$(uid)/profileEvents/$(request.resource.data.firstEventId)).data.utcDay == request.resource.data.dayIndex;
+      allow update,delete: if false;
+    }
+    function profilePublicPbValid(uid) {
+      let a = request.resource.data;
+      let b = resource.data;
+      let s = getAfter(/databases/$(database)/documents/users/$(uid)/profileStats/current).data;
+      return a.get('normalSinglePbMs',null) == b.get('normalSinglePbMs',null) ||
+        (a.normalSinglePbMs == s.pbMs &&
+        !exists(/databases/$(database)/documents/users/$(uid)/profileEvents/$(s.lastEventId)) &&
+        getAfter(/databases/$(database)/documents/users/$(uid)/profileEvents/$(s.lastEventId)).data.kind == 'normal');
+    }
+    function profilePeakValid(uid) {
+      let a = request.resource.data;
+      let b = resource.data;
+      return (a.get('ratingPeakObserved',null) == b.get('ratingPeakObserved',null) && a.get('ratingPeakTrackingStartedAt',null) == b.get('ratingPeakTrackingStartedAt',null)) ||
+        (validRankedHostUpdate(uid) &&
+        a.ratingPeakObserved == profileMax(b.get('ratingPeakObserved',0),profileMax(b.rating,a.rating)) &&
+        a.ratingPeakTrackingStartedAt == b.get('ratingPeakTrackingStartedAt',request.time));
+    }
     function normalEventValid(uid,e) {
       let single = getAfter(/databases/$(database)/documents/solves/$(e.singleId)).data;
-      return e.keys().hasOnly(['v','id','uid','kind','createdAt','timeMs','moveCount','tpsMilli','ao5Ms','ao12Ms','singleId','ao5Id'])
+      return e.keys().hasOnly(['v','id','uid','kind','createdAt','timeMs','moveCount','tpsMilli','ao5Ms','ao12Ms','singleId','ao5Id','featureVersion','utcDay'])
         && e.id.matches('normal_[A-Za-z0-9_-]{10,100}')
         && e.singleId == e.id + '_single'
         && e.timeMs is int && e.timeMs > 2000 && e.timeMs < 3600000
@@ -170,7 +245,7 @@ service cloud.firestore {
       let room = get(/databases/$(database)/documents/battleRooms/$(e.roomId)).data;
       let player = get(/databases/$(database)/documents/battleRooms/$(e.roomId)/players/$(uid)).data;
       let result = getAfter(/databases/$(database)/documents/battleResults/$(e.resultId)).data;
-      return e.keys().hasOnly(['v','id','uid','kind','createdAt','resultId','roomId','round','result'])
+      return e.keys().hasOnly(['v','id','uid','kind','createdAt','resultId','roomId','round','result','featureVersion','utcDay'])
         && e.resultId == e.roomId + '_' + uid + '_' + string(e.round)
         && e.id == 'battle_' + e.resultId
         && e.result in ['win','loss','draw','dnf']
@@ -187,7 +262,8 @@ service cloud.firestore {
     function profileEventValid(uid,id,e) {
       return e.v == 1 && e.uid == uid && e.id == id && e.createdAt == request.time
         && (e.kind == 'normal' ? normalEventValid(uid,e) : (e.kind in ['friend','ranked'] && battleEventValid(uid,e)))
-        && getAfter(/databases/$(database)/documents/users/$(uid)/profileStats/current).data.lastEventId == id;
+        && getAfter(/databases/$(database)/documents/users/$(uid)/profileStats/current).data.lastEventId == id
+        && (!('featureVersion' in e) || (e.featureVersion == 2 && e.utcDay == int(request.time.date().toMillis() / 86400000) && getAfter(/databases/$(database)/documents/users/$(uid)/profileStats/details).data.lastEventId == id));
     }
     function versionedSolveValid(a,solveId) {
       let e = getAfter(/databases/$(database)/documents/users/$(a.uid)/profileEvents/$(a.eventId)).data;
@@ -198,7 +274,7 @@ service cloud.firestore {
     }
     match /users/{uid}/profileStats/{id} {
       allow read: if signedIn() && request.auth.uid == uid;
-      allow create, update: if signedIn() && request.auth.uid == uid && id == 'current' && profileSummaryValid(uid,request.resource.data);
+      allow create, update: if signedIn() && request.auth.uid == uid && ((id == 'current' && profileSummaryValid(uid,request.resource.data)) || (id == 'details' && profileDetailsValid(uid,request.resource.data)));
       allow delete: if false;
     }
     match /users/{uid}/profileEvents/{id} {
@@ -443,9 +519,10 @@ service cloud.firestore {
 
       allow create: if signedIn()
         && request.auth.uid == uid
-        && request.resource.data.rating == 1200;
+        && request.resource.data.rating == 1200
+        && !request.resource.data.keys().hasAny(['normalSinglePbMs','ratingPeakObserved','ratingPeakTrackingStartedAt']);
 
-      allow update: if signedIn() && (
+      allow update: if signedIn() && profilePublicPbValid(uid) && profilePeakValid(uid) && (
   (
     request.auth.uid == uid
     && request.resource.data.rating == resource.data.rating
@@ -461,6 +538,8 @@ service cloud.firestore {
         "rankedLosses",
         "rankedDraws",
         "rankedDnfs",
+        "ratingPeakObserved",
+        "ratingPeakTrackingStartedAt",
         "rankedBattles",
         "lastRatedRoomId",
         "lastRatedRound",

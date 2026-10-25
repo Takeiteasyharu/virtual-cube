@@ -69,4 +69,5 @@ test('actual ranked Elo transaction still updates both players once, without cou
  const execute=new Function(...Object.keys(context),source.slice(source.indexOf('function defaultUserStats()'),source.indexOf('async function ensureUserProfile()'))+source.slice(source.indexOf('async function applyRankedBattleResultAsHost()'),source.indexOf('function renderBattleLocalTimer('))+'return applyRankedBattleResultAsHost();');
  await execute(...Object.values(context));await execute(...Object.values(context));assert.deepEqual(errors,[]);assert.equal(notice.textContent,'');
  const a=(await getDoc(doc(db(uid),'users',uid))).data(),b=(await getDoc(doc(db(other),'users',other))).data();assert.equal(a.rating,1216);assert.equal(b.rating,1184);assert.equal(a.rankedBattles,1);assert.equal(b.rankedBattles,1);assert.equal(b.rankedLosses,0);assert.equal(b.rankedDnfs,1);
+ assert.equal(a.ratingPeakObserved,1216);assert.equal(b.ratingPeakObserved,1200);assert(a.ratingPeakTrackingStartedAt instanceof sdk.Timestamp);
 });

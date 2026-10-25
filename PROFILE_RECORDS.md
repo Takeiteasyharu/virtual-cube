@@ -1,5 +1,8 @@
 # Profile recording foundation (stage one)
 
+Stage two extends these transactions and adds the Profile UI; see
+[PROFILE_FEATURES.md](PROFILE_FEATURES.md) for the current additional fields/costs.
+
 No UI refresh, badges, backfill, Functions or billing change is included.
 
 ## Scope and compatibility
