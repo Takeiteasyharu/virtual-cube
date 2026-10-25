@@ -11,3 +11,9 @@ const match=all.find(index=>index.queryScope==='COLLECTION'&&JSON.stringify(inde
 if(match)console.log(JSON.stringify({project:'virtual-cube-timer',existing:true,name:match.name,state:match.state}));
 else if(process.argv.includes('--ensure')){const operation=await call(endpoint,{method:'POST',body:JSON.stringify({queryScope:'COLLECTION',fields})});console.log(JSON.stringify({project:'virtual-cube-timer',created:true,operation:operation.name}));}
 else console.log(JSON.stringify({project:'virtual-cube-timer',existing:false,action:'Run with --ensure after tests pass',fields}));
+if(process.argv.includes('--verify')){
+ const field=(fieldPath,op,value)=>({fieldFilter:{field:{fieldPath},op,value}});
+ const result=await call('https://firestore.googleapis.com/v1/projects/virtual-cube-timer/databases/(default)/documents:runAggregationQuery',{method:'POST',body:JSON.stringify({structuredAggregationQuery:{structuredQuery:{from:[{collectionId:'users'}],where:{compositeFilter:{op:'AND',filters:[field('loginType','EQUAL',{stringValue:'google'}),field('rankedBattles','GREATER_THAN',{integerValue:'0'}),field('rating','GREATER_THAN',{integerValue:'1200'})]}}},aggregations:[{alias:'ahead',count:{}}]}})});
+ if(!Array.isArray(result)||!result.some(r=>r.result?.aggregateFields?.ahead))throw Error('Aggregate result unavailable');
+ console.log(JSON.stringify({project:'virtual-cube-timer',battleRankAggregateVerified:true,individualRecordsRead:false}));
+}

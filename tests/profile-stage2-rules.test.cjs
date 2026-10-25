@@ -12,6 +12,9 @@ test('normal statistics, activity and unlock dates commit atomically once; twelv
  const unlocked=a.badgeTimes.firstSolve.toMillis();for(let i=1;i<=12;i++)await w.normal(uid,'Tester',input(20+i),keys);
  a=await detail(uid);assert.equal(a.activeDays,1);assert.equal(a.recentTimes.length,12);assert.equal(P.average(a.recentTimes,5),30000);assert.equal(P.average(a.recentTimes,12),26500);assert.equal(a.badgeTimes.firstSolve.toMillis(),unlocked);
  assert.equal((await getDoc(doc(d,'users',uid,'profileStats','current'))).data().normalSolves,13);
+ const withAverage={...input(24.12),ao5:25.21,ao12:26.34};await w.normal(uid,'Tester',withAverage,keys);
+ assert.equal((await getDoc(doc(d,'solves','normal_'+withAverage.solveId+'_ao5'))).data().time,25.21);
+ assert.equal((await detail(uid)).recentTimes.length,12);
 });
 test('two devices completing different events on the same UTC day count one activity day',async()=>{
  const uid='stage2-race';await user(uid);await Promise.all([R.create(sdk,db(uid)).normal(uid,'Tester',input(),keys),R.create(sdk,db(uid)).normal(uid,'Tester',input(),keys)]);

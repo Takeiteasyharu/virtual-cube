@@ -97,3 +97,7 @@ synthetic Google/Guest/empty UI fixtures at 1440/768/390/320px in both themes an
 check unchanged cube geometry. Production smoke tests remain signed out, with no
 fake ranking or battle results created; interactive Google OAuth and a live
 two-account human match are not falsely reported as tested.
+
+The actual browser client was also exercised against local Auth and Firestore
+Emulators: anonymous Guest login, normal solve upload, one UTC activity day,
+badge unlock and the real Profile read/render path all completed without JS errors.
