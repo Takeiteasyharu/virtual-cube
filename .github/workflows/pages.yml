@@ -23,7 +23,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Test guided solve, replay, bot model and English UI
-        run: node --test tests/guided-solver.test.cjs tests/solve-replay.test.cjs tests/ui-language.test.cjs tests/bot-model.test.cjs tests/rating-display.test.cjs tests/battle-moment.test.cjs tests/online-battle-page.test.cjs
+        run: node --test tests/guided-solver.test.cjs tests/solve-replay.test.cjs tests/ui-language.test.cjs tests/bot-model.test.cjs tests/rating-display.test.cjs tests/battle-moment.test.cjs tests/online-battle-page.test.cjs tests/profile-records.test.cjs
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
@@ -50,6 +50,7 @@ jobs:
             index.html \
             manifest.json \
             online.js \
+            profile-records.js \
             opponent-cube.js \
             privacy.html \
             robots.txt \

@@ -137,7 +137,6 @@ const battleRematchYou = document.getElementById("battleRematchYou");
 const battleRematchOpponent = document.getElementById("battleRematchOpponent");
 const playAgainBtn = document.getElementById("playAgainBtn");
 const rematchReturnBtn = document.getElementById("rematchReturnBtn");
-const PENDING_SOLVES_KEY = "pendingOnlineSolves";
 const BATTLE_ROOMS_COLLECTION = "battleRooms";
 const MATCHMAKING_COLLECTION = "matchmaking";
 const USERS_COLLECTION = "users";
@@ -461,94 +460,34 @@ function isValidRankingTypeEntry(solve, rankingType) {
   return true;
 }
 
+const PENDING_V2_PREFIX = "pendingNormalSolveV2:";
+function normalRecordAllowed(stats) {
+  return window.ProfileRecords.eligible(stats) && !window.isBattleMode?.()
+    && !window.BotBattle?.active && !window.GuidedSolve?.isPractice
+    && !window.SolveReplay?.active && !window.DailyChallenge?.active && !window.DailyChallenge?.isPractice;
+}
 function getPendingSolves() {
-  try {
-    return JSON.parse(localStorage.getItem(PENDING_SOLVES_KEY)) || [];
-  } catch (error) {
-    return [];
+  const records=[];
+  for(let i=0;i<localStorage.length;i++){
+    const key=localStorage.key(i);
+    if(!key?.startsWith(PENDING_V2_PREFIX))continue;
+    try{const value=JSON.parse(localStorage.getItem(key));if(window.ProfileRecords.eligible(value))records.push(value);}catch{}
   }
+  return records;
 }
-
-function savePendingSolves(solves) {
-  localStorage.setItem(PENDING_SOLVES_KEY, JSON.stringify(solves.slice(-20)));
+function queuePendingSolve(time,scramble,ao5,stats={}) {
+  if(!normalRecordAllowed(stats)||!isValidSolvePayload(time,scramble))return false;
+  const value={...stats,time,scramble,ao5:Number.isFinite(ao5)?ao5:null,ao12:stats.ao12??null,ownerUid:stats.ownerUid??currentUser?.uid??null,solvedAt:stats.solvedAt||new Date().toISOString()};
+  try { localStorage.setItem(PENDING_V2_PREFIX+stats.solveId,JSON.stringify(value)); }
+  catch(error){setStatus("Online copy could not be queued: browser storage is full. Local solve history is unchanged.");console.warn("Normal solve queue unavailable",error);return false;}
+  return value;
 }
-
-function queuePendingSolve(time, scramble, ao5, solveStats = {}) {
-  if (!isValidSolvePayload(time, scramble)) {
-    setStatus("This solve was saved locally but not submitted online.");
-    return false;
-  }
-
-  const pending = getPendingSolves();
-
-  pending.push({
-    time,
-    ao5: Number.isFinite(ao5) ? ao5 : null,
-    tps: Number.isFinite(solveStats.tps) ? solveStats.tps : null,
-    moveCount: Number.isFinite(solveStats.moveCount) ? solveStats.moveCount : 0,
-    moves: Array.isArray(solveStats.moves)
-      ? solveStats.moves.map(move => typeof move === "string" ? move : move?.move).filter(Boolean)
-      : [],
-    scramble,
-    mode: "virtual",
-    rankingEligible: true,
-    source: solveStats.source || "unknown",
-    solvedAt: new Date().toISOString()
-  });
-
-  savePendingSolves(pending);
-  setStatus(`${pending.length} pending time(s). Login to submit.`);
-  return true;
-}
-
-async function addRankingEntry(rankingType, time, scramble, solvedAt = new Date().toISOString(), solveStats = {}) {
-  if (solveStats.mode !== "virtual" || solveStats.rankingEligible !== true) return false;
-  if (!isValidOnlineSolve(time, scramble)) {
-    return false;
-  }
-
-  const solvedDate = new Date(solvedAt);
-  const keys = getPeriodKeys(Number.isNaN(solvedDate.getTime()) ? new Date() : solvedDate);
-
-  await addDoc(collection(db, "solves"), {
-    rankingType,
-    source: solveStats.source || "unknown",
-    completed: true,
-    valid: true,
-    mode: "virtual",
-    time,
-    scramble,
-    tps: Number.isFinite(solveStats.tps) ? solveStats.tps : null,
-    moveCount: Number.isFinite(solveStats.moveCount) ? solveStats.moveCount : 0,
-    moves: Array.isArray(solveStats.moves)
-      ? solveStats.moves.map(move => typeof move === "string" ? move : move?.move).filter(Boolean)
-      : [],
-    name: getPlayerName(),
-    uid: currentUser.uid,
-    dayKey: keys.today,
-    weekKey: keys.week,
-    monthKey: keys.month,
-    createdAt: serverTimestamp()
-  });
-
-  return true;
-}
-
-async function addOnlineSolve(time, scramble, ao5, solvedAt = new Date().toISOString(), solveStats = {}) {
-  const submittedSingle = await addRankingEntry("single", time, scramble, solvedAt, solveStats);
-
-  if (Number.isFinite(ao5)) {
-    await addRankingEntry("ao5", ao5, scramble, solvedAt, solveStats);
-  }
-
-  if (submittedSingle) {
-    await updateUserSolveAggregates(time, ao5, solveStats).catch(error => {
-      console.warn("Profile solve aggregates could not be updated.", error);
-    });
-    invalidateRankingCache();
-  }
-
-  return submittedSingle;
+async function addOnlineSolve(time,scramble,ao5,solvedAt,stats={}) {
+  if(!currentUser||!window.ProfileRecords.eligible(stats)||!isValidOnlineSolve(time,scramble))return false;
+  if(stats.ownerUid&&stats.ownerUid!==currentUser.uid)throw Error("Pending solve belongs to another account");
+  const writer=window.ProfileRecords.create({doc,runTransaction,serverTimestamp},db);
+  const saved=await writer.normal(currentUser.uid,getPlayerName(),{...stats,time,scramble,ao5,moves:Array.isArray(stats.moves)?stats.moves.map(m=>typeof m==="string"?m:m?.move).filter(Boolean):[]},getPeriodKeys(new Date(solvedAt)));
+  invalidateRankingCache();return saved;
 }
 
 function getLocalSolveSummary() {
@@ -569,57 +508,25 @@ function getLocalSolveSummary() {
   return { ao5: average(5), ao12: average(12) };
 }
 
-async function updateUserSolveAggregates(time, ao5, solveStats) {
-  if (!currentUser) return;
-  const reference = userRef();
-  const localSummary = getLocalSolveSummary();
-  await runTransaction(db, async transaction => {
-    const snapshot = await transaction.get(reference);
-    const profile = { ...defaultUserStats(), ...(snapshot.data() || {}) };
-    const previousValidSolves = Number(profile.validSolves || 0);
-    const tps = Number(solveStats.tps);
-    const previousAverageTps = Number(profile.averageTps || 0);
-    transaction.set(reference, {
-      pb: Math.min(Number(profile.pb) || Infinity, Number(time)),
-      ao5: Number.isFinite(localSummary.ao5) ? Number(localSummary.ao5.toFixed(2)) : (Number.isFinite(ao5) ? ao5 : null),
-      ao12: Number.isFinite(localSummary.ao12) ? Number(localSummary.ao12.toFixed(2)) : null,
-      totalSolves: Number(profile.totalSolves || 0) + 1,
-      validSolves: previousValidSolves + 1,
-      bestTps: Number.isFinite(tps) ? Math.max(Number(profile.bestTps || 0), tps) : Number(profile.bestTps || 0),
-      averageTps: Number.isFinite(tps)
-        ? ((previousAverageTps * previousValidSolves) + tps) / (previousValidSolves + 1)
-        : previousAverageTps,
-      lastSolveAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    }, { merge: true });
-  });
-}
-
 async function submitPendingSolves() {
-  if (!currentUser) return;
-
-  const pending = getPendingSolves();
-  if (pending.length === 0) return;
-
-  while (pending.length > 0) {
-    const solve = pending[0];
-
-    await addOnlineSolve(solve.time, solve.scramble, solve.ao5, solve.solvedAt, {
-      tps: solve.tps,
-      moveCount: solve.moveCount,
-      moves: solve.moves,
-      mode: solve.mode === "real" ? "real" : "virtual",
-      rankingEligible: solve.mode !== "real" && solve.rankingEligible !== false,
-      source: solve.source || "unknown"
-    });
-    pending.shift();
-    savePendingSolves(pending);
-  }
-
-  localStorage.removeItem(PENDING_SOLVES_KEY);
-  setStatus(`Logged in as ${currentUser.displayName || "Guest"}. Pending times submitted.`);
-  invalidateRankingCache();
+  if(!currentUser)return;
+  const send=async()=>{
+    for(const value of getPendingSolves()){
+      if(value.ownerUid&&value.ownerUid!==currentUser?.uid)continue;
+      if(!currentUser)break;
+      value.ownerUid=currentUser.uid;
+      localStorage.setItem(PENDING_V2_PREFIX+value.solveId,JSON.stringify(value));
+      try{
+        await addOnlineSolve(value.time,value.scramble,value.ao5,value.solvedAt,value);
+        localStorage.removeItem(PENDING_V2_PREFIX+value.solveId);
+      }catch(error){console.warn("Normal solve remains pending",error);}
+    }
+  };
+  if(navigator.locks)await navigator.locks.request("stcube-normal-records",send);else await send();
 }
+window.addEventListener("online",()=>{
+  if(currentUser)ensureUserProfile().then(()=>submitPendingSolves()).catch(error=>console.warn("Pending normal solves will retry later",error));
+});
 
 async function refreshRanking(force = false) {
   if (!isConfigured()) {
@@ -1004,30 +911,14 @@ async function showProfile() {
   }
 }
 
-async function submitOnlineSolve(time, scramble, ao5 = null, solveStats = {}) {
-  if (!isConfigured()) return;
-  if (solveStats.mode !== "virtual" || solveStats.rankingEligible !== true) return;
-
-  if (!currentUser) {
-    queuePendingSolve(time, scramble, ao5, solveStats);
-    return;
-  }
-
-  if (!isValidOnlineSolve(time, scramble)) {
-    setStatus("This solve was saved locally but not submitted online.");
-    return;
-  }
-
-  try {
-    const submitted = await addOnlineSolve(time, scramble, ao5, new Date().toISOString(), solveStats);
-    if (!submitted) return;
-
-    invalidateRankingCache();
-  } catch (error) {
-    queuePendingSolve(time, scramble, ao5, solveStats);
-    setStatus("Online submit failed. Saved locally for the next login.");
-    console.error(error);
-  }
+async function submitOnlineSolve(time,scramble,ao5=null,stats={}) {
+  if(!normalRecordAllowed(stats))return;
+  const summary=getLocalSolveSummary();
+  const value=queuePendingSolve(time,scramble,ao5,{...stats,ao12:summary.ao12,solvedAt:stats.solvedAt||new Date().toISOString()});
+  if(!value)return;
+  if(!currentUser){setStatus("Normal solve saved on this device. Log in to submit.");return;}
+  if(!isConfigured())return;
+  await submitPendingSolves();
 }
 
 function createRoomId() {
@@ -1528,6 +1419,7 @@ function renderRankedTimeLimit(you) {
 
 async function saveBattleResultForCurrentUser() {
   if (!currentUser || !activeRoom || activeRoom.status !== "finished") return;
+  if (activeRoom.isBot || window.BotBattle?.active) return;
   if (isMultiplayerFriendRoom() && !(activeRoom.activePlayerUids || []).includes(currentUser.uid)) return;
 
   const you = getDisplayPlayer(activeRoomRole);
@@ -1557,7 +1449,8 @@ async function saveBattleResultForCurrentUser() {
     const ratingBefore = activeRoom.ratingChanges?.[currentUser.uid]?.before ?? null;
     const ratingAfter = activeRoom.ratingChanges?.[currentUser.uid]?.after ?? null;
 
-    await setDoc(resultRef, {
+    const writer = window.ProfileRecords.create({doc,runTransaction,serverTimestamp},db);
+    await writer.battle(currentUser.uid,resultId,activeRoomId,activeRound,{
       uid: currentUser.uid,
       name: getPlayerName(),
       roomId: activeRoomId,
@@ -1586,40 +1479,13 @@ async function saveBattleResultForCurrentUser() {
     window.trackCubeEvent?.("battle_finish", {
       result: result === "loss" ? "lose" : result
     });
-    if (activeRoom.mode !== "ranked" || !activeRoom.ratingApplied) {
-      await recordOwnBattleStats(result, activeRoom.mode);
-    }
   } catch (error) {
     savedBattleResultKeys.delete(resultId);
     throw error;
   }
 }
 
-async function recordOwnBattleStats(result, mode) {
-  if (!currentUser) return;
 
-  const reference = userRef();
-  const snapshot = await getDoc(reference);
-  const profile = { ...defaultUserStats(), ...(snapshot.data() || {}) };
-  const prefix = mode === "ranked" ? "ranked" : "friend";
-  const won = result === "win";
-  const updates = {
-    uid: currentUser.uid,
-    name: getPlayerName(),
-    wins: Number(profile.wins || 0) + (won ? 1 : 0),
-    losses: Number(profile.losses || 0) + (won ? 0 : 1),
-    [`${prefix}Battles`]: Number(profile[`${prefix}Battles`] || 0) + 1,
-    [`${prefix}Wins`]: Number(profile[`${prefix}Wins`] || 0) + (won ? 1 : 0),
-    [`${prefix}Losses`]: Number(profile[`${prefix}Losses`] || 0) + (won ? 0 : 1),
-    updatedAt: serverTimestamp()
-  };
-  if (!snapshot.exists()) {
-    updates.rating = INITIAL_RATING;
-  } else if (Object.prototype.hasOwnProperty.call(snapshot.data() || {}, "rating")) {
-    updates.rating = Number(profile.rating) || INITIAL_RATING;
-  }
-  await setDoc(reference, updates, { merge: true });
-}
 
 function getOpponentRole() {
   if (activeRoom?.mode === "friend" && activeRoom?.maxPlayers > 2) return "opponent";
@@ -4037,6 +3903,8 @@ async function applyRankedBattleResultAsHost() {
       const hostSnapshot = await transaction.get(hostUserRef);
       const guestSnapshot = await transaction.get(guestUserRef);
       const pairSnapshot = await transaction.get(pairRef);
+      const hostPlayerSnapshot = await transaction.get(doc(db,BATTLE_ROOMS_COLLECTION,roomId,"players",room.hostUid));
+      const guestPlayerSnapshot = await transaction.get(doc(db,BATTLE_ROOMS_COLLECTION,roomId,"players",room.guestUid));
       const pair = pairSnapshot.data() || {};
       if (pair.lastRoomId === roomId) return;
       const battleNumber = Number(pair.battleCount || 0) + 1;
@@ -4061,6 +3929,8 @@ async function applyRankedBattleResultAsHost() {
       const guestProfile = guestSnapshot.data() || defaultUserStats();
       const hostWon = room.winnerUid === room.hostUid;
       const guestWon = room.winnerUid === room.guestUid;
+      const hostOutcome = window.ProfileRecords.outcome(room,hostPlayerSnapshot.data(),room.hostUid);
+      const guestOutcome = window.ProfileRecords.outcome(room,guestPlayerSnapshot.data(),room.guestUid);
 
       console.log("Ranked rating update", {
         roomId,
@@ -4079,9 +3949,10 @@ async function applyRankedBattleResultAsHost() {
       transaction.update(hostUserRef, {
         rating: hostChange.after,
         wins: Number(hostProfile.wins || 0) + (hostWon ? 1 : 0),
-        losses: Number(hostProfile.losses || 0) + (guestWon ? 1 : 0),
+        losses: Number(hostProfile.losses || 0) + (hostOutcome === "loss" ? 1 : 0),
         rankedWins: Number(hostProfile.rankedWins || 0) + (hostWon ? 1 : 0),
-        rankedLosses: Number(hostProfile.rankedLosses || 0) + (guestWon ? 1 : 0),
+        rankedLosses: Number(hostProfile.rankedLosses || 0) + (hostOutcome === "loss" ? 1 : 0),
+        rankedDnfs: Number(hostProfile.rankedDnfs || 0) + (hostOutcome === "dnf" ? 1 : 0),
         rankedDraws: Number(hostProfile.rankedDraws || 0) + (isDraw ? 1 : 0),
         rankedBattles: Number(hostProfile.rankedBattles || 0) + 1,
         lastRatedRoomId: roomId,
@@ -4091,9 +3962,10 @@ async function applyRankedBattleResultAsHost() {
       transaction.update(guestUserRef, {
         rating: guestChange.after,
         wins: Number(guestProfile.wins || 0) + (guestWon ? 1 : 0),
-        losses: Number(guestProfile.losses || 0) + (hostWon ? 1 : 0),
+        losses: Number(guestProfile.losses || 0) + (guestOutcome === "loss" ? 1 : 0),
         rankedWins: Number(guestProfile.rankedWins || 0) + (guestWon ? 1 : 0),
-        rankedLosses: Number(guestProfile.rankedLosses || 0) + (hostWon ? 1 : 0),
+        rankedLosses: Number(guestProfile.rankedLosses || 0) + (guestOutcome === "loss" ? 1 : 0),
+        rankedDnfs: Number(guestProfile.rankedDnfs || 0) + (guestOutcome === "dnf" ? 1 : 0),
         rankedDraws: Number(guestProfile.rankedDraws || 0) + (isDraw ? 1 : 0),
         rankedBattles: Number(guestProfile.rankedBattles || 0) + 1,
         lastRatedRoomId: roomId,
@@ -4693,12 +4565,9 @@ if (isConfigured()) {
       setStatus(`Logged in as ${user.displayName || "Guest"}`);
       updateAccountSummary(user, null);
       ensureUserProfile()
+        .then(() => submitPendingSolves())
         .then(() => Promise.all([refreshTotalUsers(),refreshBattleAccountRating(true)]))
         .catch(console.error);
-      submitPendingSolves().catch(error => {
-        setStatus("Pending times could not be submitted.");
-        console.error(error);
-      });
 
       const roomFromUrl = new URLSearchParams(window.location.search).get("battleRoom");
       if (roomFromUrl && !activeRoomId) {

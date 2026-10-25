@@ -56,7 +56,7 @@ function stopTimer() {
     moves: Number.isFinite(solveStats.moveCount) ? solveStats.moveCount : 0
   });
 
-  if (solveStats.mode === "virtual" && solveStats.rankingEligible === true && typeof window.submitOnlineSolve === "function") {
+  if (solveStats.source === "normal" && !window.isBattleMode?.() && !window.SolveReplay?.active && solveStats.mode === "virtual" && solveStats.rankingEligible === true && typeof window.submitOnlineSolve === "function") {
     window.submitOnlineSolve(finalTime, currentScramble, getCurrentOnlineAo5(), solveStats);
   }
 
@@ -187,6 +187,7 @@ function saveSolve(time, scramble, solveStats = {}) {
   const mode = solveStats.mode === "real" ? "real" : "virtual";
   const solves = readModeSolves(mode);
   solves.unshift({
+    solveId: solveStats.solveId || null,
     time,
     tps: Number.isFinite(solveStats.tps) ? solveStats.tps : null,
     moveCount: Number.isFinite(solveStats.moveCount) ? solveStats.moveCount : 0,

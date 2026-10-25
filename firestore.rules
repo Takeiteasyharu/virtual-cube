@@ -110,20 +110,125 @@ service cloud.firestore {
       }
     }
 
+// Canonical stage-one aggregates. Legacy /users counters cannot write these paths.
+    function profileBase(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid)/profileStats/current)
+        ? get(/databases/$(database)/documents/users/$(uid)/profileStats/current).data : {};
+    }
+    function profileSummaryValid(uid,a) {
+      let e = getAfter(/databases/$(database)/documents/users/$(uid)/profileEvents/$(a.lastEventId)).data;
+      let b = profileBase(uid);
+      return a.keys().hasOnly(['v','scope','trackingStartedAt','updatedAt','lastEventId','normalSolves','totalMoves','totalTimeMs','tpsMilliSum','pbMs','ao5Ms','ao12Ms','rankedBattles','rankedWins','rankedLosses','rankedDraws','rankedDnfs','friendBattles','friendWins','friendLosses','friendDraws','friendDnfs'])
+        && a.keys().hasAll(['v','scope','trackingStartedAt','updatedAt','lastEventId','normalSolves','totalMoves','totalTimeMs','tpsMilliSum','pbMs','ao5Ms','ao12Ms','rankedBattles','rankedWins','rankedLosses','rankedDraws','rankedDnfs','friendBattles','friendWins','friendLosses','friendDraws','friendDnfs'])
+        && a.v == 1 && a.scope == 'normal-virtual-and-human-battles-v1'
+        && a.updatedAt == request.time
+        && a.trackingStartedAt == b.get('trackingStartedAt',request.time)
+        && !exists(/databases/$(database)/documents/users/$(uid)/profileEvents/$(a.lastEventId))
+        && e.uid == uid && e.id == a.lastEventId && e.createdAt == request.time
+        && a.normalSolves == b.get('normalSolves',0) + (e.kind == 'normal' ? 1 : 0)
+        && a.totalMoves == b.get('totalMoves',0) + (e.kind == 'normal' ? e.moveCount : 0)
+        && a.totalTimeMs == b.get('totalTimeMs',0) + (e.kind == 'normal' ? e.timeMs : 0)
+        && a.tpsMilliSum == b.get('tpsMilliSum',0) + (e.kind == 'normal' ? e.tpsMilli : 0)
+        && a.pbMs == (e.kind == 'normal' ? (b.get('pbMs',0) == 0 || e.timeMs < b.pbMs ? e.timeMs : b.pbMs) : b.get('pbMs',0))
+        && a.ao5Ms == (e.kind == 'normal' ? e.ao5Ms : b.get('ao5Ms',0))
+        && a.ao12Ms == (e.kind == 'normal' ? e.ao12Ms : b.get('ao12Ms',0))
+        && a.rankedBattles == b.get('rankedBattles',0) + (e.kind == 'ranked' ? 1 : 0)
+        && a.rankedWins == b.get('rankedWins',0) + (e.kind == 'ranked' && e.result == 'win' ? 1 : 0)
+        && a.rankedLosses == b.get('rankedLosses',0) + (e.kind == 'ranked' && e.result == 'loss' ? 1 : 0)
+        && a.rankedDraws == b.get('rankedDraws',0) + (e.kind == 'ranked' && e.result == 'draw' ? 1 : 0)
+        && a.rankedDnfs == b.get('rankedDnfs',0) + (e.kind == 'ranked' && e.result == 'dnf' ? 1 : 0)
+        && a.friendBattles == b.get('friendBattles',0) + (e.kind == 'friend' ? 1 : 0)
+        && a.friendWins == b.get('friendWins',0) + (e.kind == 'friend' && e.result == 'win' ? 1 : 0)
+        && a.friendLosses == b.get('friendLosses',0) + (e.kind == 'friend' && e.result == 'loss' ? 1 : 0)
+        && a.friendDraws == b.get('friendDraws',0) + (e.kind == 'friend' && e.result == 'draw' ? 1 : 0)
+        && a.friendDnfs == b.get('friendDnfs',0) + (e.kind == 'friend' && e.result == 'dnf' ? 1 : 0);
+    }
+    function normalEventValid(uid,e) {
+      let single = getAfter(/databases/$(database)/documents/solves/$(e.singleId)).data;
+      return e.keys().hasOnly(['v','id','uid','kind','createdAt','timeMs','moveCount','tpsMilli','ao5Ms','ao12Ms','singleId','ao5Id'])
+        && e.id.matches('normal_[A-Za-z0-9_-]{10,100}')
+        && e.singleId == e.id + '_single'
+        && e.timeMs is int && e.timeMs > 2000 && e.timeMs < 3600000
+        && e.moveCount is int && e.moveCount >= 0 && e.moveCount <= 1000
+        && e.tpsMilli is int && e.tpsMilli >= 0 && e.tpsMilli <= 100000
+        && e.ao5Ms is int && (e.ao5Ms == 0 || (e.ao5Ms > 2000 && e.ao5Ms < 3600000))
+        && e.ao12Ms is int && e.ao12Ms >= 0 && e.ao12Ms < 3600000
+        && !exists(/databases/$(database)/documents/solves/$(e.singleId))
+        && single.uid == uid && single.eventId == e.id && single.schemaVersion == 2
+        && single.source == 'normal' && single.rankingType == 'single'
+        && single.time * 1000 >= e.timeMs - 0.01 && single.time * 1000 <= e.timeMs + 0.01
+        && single.moveCount == e.moveCount
+        && single.tps * 1000 >= e.tpsMilli - 0.01 && single.tps * 1000 <= e.tpsMilli + 0.01
+        && (e.ao5Ms == 0 ? e.ao5Id == '' :
+          (e.ao5Id == e.id + '_ao5'
+          && getAfter(/databases/$(database)/documents/solves/$(e.ao5Id)).data.time * 1000 >= e.ao5Ms - 0.01
+          && getAfter(/databases/$(database)/documents/solves/$(e.ao5Id)).data.time * 1000 <= e.ao5Ms + 0.01
+          && getAfter(/databases/$(database)/documents/solves/$(e.ao5Id)).data.uid == uid
+          && getAfter(/databases/$(database)/documents/solves/$(e.ao5Id)).data.eventId == e.id));
+    }
+    function battleEventValid(uid,e) {
+      let room = get(/databases/$(database)/documents/battleRooms/$(e.roomId)).data;
+      let player = get(/databases/$(database)/documents/battleRooms/$(e.roomId)/players/$(uid)).data;
+      let result = getAfter(/databases/$(database)/documents/battleResults/$(e.resultId)).data;
+      return e.keys().hasOnly(['v','id','uid','kind','createdAt','resultId','roomId','round','result'])
+        && e.resultId == e.roomId + '_' + uid + '_' + string(e.round)
+        && e.id == 'battle_' + e.resultId
+        && e.result in ['win','loss','draw','dnf']
+        && room.get('isBot',false) == false && room.mode == e.kind
+        && room.status == 'finished' && room.round == e.round && player.round == e.round
+        && (room.mode == 'ranked' ? (uid == room.hostUid || uid == room.guestUid) :
+          (room.get('maxPlayers',2) > 2 ? uid in room.activePlayerUids : (uid == room.hostUid || uid == room.guestUid)))
+        && e.result == (room.get('isDraw',false) ? 'draw' :
+          (room.get('timeLimitReached',false) || player.status == 'finished' ? (room.winnerUid == uid ? 'win' : 'loss') : 'dnf'))
+        && !exists(/databases/$(database)/documents/battleResults/$(e.resultId))
+        && result.schemaVersion == 2 && result.uid == uid && result.eventId == e.id
+        && result.mode == e.kind && result.result == e.result && result.round == e.round && result.roomId == e.roomId;
+    }
+    function profileEventValid(uid,id,e) {
+      return e.v == 1 && e.uid == uid && e.id == id && e.createdAt == request.time
+        && (e.kind == 'normal' ? normalEventValid(uid,e) : (e.kind in ['friend','ranked'] && battleEventValid(uid,e)))
+        && getAfter(/databases/$(database)/documents/users/$(uid)/profileStats/current).data.lastEventId == id;
+    }
+    function versionedSolveValid(a,solveId) {
+      let e = getAfter(/databases/$(database)/documents/users/$(a.uid)/profileEvents/$(a.eventId)).data;
+      return a.schemaVersion == 2 && a.source == 'normal' && a.mode == 'virtual'
+        && a.completed == true && a.valid == true && a.createdAt == request.time
+        && a.eventId == 'normal_' + a.solveId && e.kind == 'normal' && e.uid == a.uid
+        && (a.rankingType == 'single' ? (e.singleId == solveId && a.time * 1000 >= e.timeMs - 0.01 && a.time * 1000 <= e.timeMs + 0.01) : (e.ao5Id == solveId && a.time * 1000 >= e.ao5Ms - 0.01 && a.time * 1000 <= e.ao5Ms + 0.01));
+    }
+    match /users/{uid}/profileStats/{id} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow create, update: if signedIn() && request.auth.uid == uid && id == 'current' && profileSummaryValid(uid,request.resource.data);
+      allow delete: if false;
+    }
+    match /users/{uid}/profileEvents/{id} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow create: if signedIn() && request.auth.uid == uid && profileEventValid(uid,id,request.resource.data);
+      allow update, delete: if false;
+    }
     match /solves/{solveId} {
       allow read: if true;
-      allow create: if validSolve();
+      allow create: if validSolve()
+        && request.resource.data.get('source','normal') == 'normal'
+        && request.resource.data.get('mode','virtual') == 'virtual'
+        && (!('schemaVersion' in request.resource.data) || versionedSolveValid(request.resource.data,solveId));
       allow update, delete: if false;
     }
     
     match /battleResults/{resultId} {
-  allow read: if signedIn()
-    && resource.data.uid == request.auth.uid;
+  allow get: if signedIn() && (
+    (resource != null && resource.data.uid == request.auth.uid) ||
+    (resource == null && resultId.matches('.*_' + request.auth.uid + '_[0-9]+')));
+  allow list: if signedIn() && resource.data.uid == request.auth.uid;
 
   allow create: if signedIn()
     && request.resource.data.uid == request.auth.uid
     && request.resource.data.result in ["win", "loss", "draw", "dnf"]
     && request.resource.data.mode in ["ranked", "friend"]
+    && (!('schemaVersion' in request.resource.data) || (
+      request.resource.data.schemaVersion == 2
+      && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/profileEvents/$(request.resource.data.eventId)).data.resultId == resultId
+      && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/profileStats/current).data.lastEventId == request.resource.data.eventId))
     && request.resource.data.moveCount is int
     && request.resource.data.moveCount >= 0
     && request.resource.data.moveCount <= 1000
@@ -355,6 +460,7 @@ service cloud.firestore {
         "rankedWins",
         "rankedLosses",
         "rankedDraws",
+        "rankedDnfs",
         "rankedBattles",
         "lastRatedRoomId",
         "lastRatedRound",

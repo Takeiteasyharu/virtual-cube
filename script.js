@@ -124,6 +124,7 @@ window.isNormalManualEntryEnabled = isNormalManualEntryEnabled;
 let readyToSolve = false;
 let firstTurnDone = false;
 let solveMoveCount = 0;
+let currentSolveId = crypto.randomUUID();
 let solveMoves = [];
 let solveStartedAt = 0;
 let battleInputState = "inactive";
@@ -761,6 +762,7 @@ function isBattleInputLocked() {
 }
 
 function resetSolveStats() {
+  currentSolveId = crypto.randomUUID();
   solveMoveCount = 0;
   solveMoves = [];
   solveStartedAt = 0;
@@ -1295,6 +1297,7 @@ function getCurrentSolveStats(timeSeconds = null) {
   const tps = seconds && seconds > 0 ? normalizedMoveCount / seconds : null;
 
   return {
+    solveId: currentSolveId,
     moveCount: normalizedMoveCount,
     source: window.BotBattle?.active ? "bot" : isBattleModeActive() ? "battle" : "normal",
     moves: [...solveMoves],
