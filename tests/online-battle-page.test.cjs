@@ -22,5 +22,9 @@ test('static links, compressed screenshot, sitemap and Pages artifact are consis
  const sitemap=fs.readFileSync(path.join(root,'sitemap.xml'),'utf8'),locations=[...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map(m=>m[1]);
  assert.equal(locations.length,5);assert.equal(new Set(locations).size,5);assert(locations.includes('https://stcube3d.com/online-battle/'));assert(locations.every(u=>u.startsWith('https://stcube3d.com/')));
  assert(fs.readFileSync(path.join(root,'.github/workflows/pages.yml'),'utf8').includes('cp -R online-battle _site/online-battle'));
- assert(fs.readFileSync(path.join(root,'index.html'),'utf8').includes('href="/online-battle/">Online Battle Guide'));
+ const game=fs.readFileSync(path.join(root,'index.html'),'utf8');
+ assert(game.includes('href="/online-battle/">Battle Guide'));
+ assert.equal((game.match(/href="\/online-battle\/"/g)||[]).length,1);
+ assert(game.indexOf('id="battleGuideLink"')>game.indexOf('id="howToPlayBtn"'));
+ assert(game.indexOf('id="battleGuideLink"')<game.indexOf('</header>'));
 });
