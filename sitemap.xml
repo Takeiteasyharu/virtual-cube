@@ -22,4 +22,10 @@
     <priority>0.5</priority>
   </url>
 
+  <url>
+    <loc>https://stcube3d.com/online-battle/</loc>
+    <lastmod>2026-10-25</lastmod>
+    <priority>0.8</priority>
+  </url>
+
 </urlset>
