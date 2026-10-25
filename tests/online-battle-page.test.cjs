@@ -2,7 +2,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),fs=requir
 const root=path.join(__dirname,'..'),html=fs.readFileSync(path.join(root,'online-battle/index.html'),'utf8');
 test('English guide has unique canonical metadata, semantic content and five FAQ answers',()=>{
  assert.match(html,/<html lang="en">/);assert.equal((html.match(/<h1\b/g)||[]).length,1);
- assert.match(html,/<title>Online Rubik's Cube Battle - Race Players on STcube3D<\/title>/);
+ assert.match(html,/<title>How to Play &amp; Battle Guide - STcube3D<\/title>/);
  for(const name of ['description','twitter:card','twitter:title','twitter:description','twitter:url','twitter:image'])assert(html.includes(`name="${name}"`));
  for(const name of ['og:title','og:description','og:url','og:image'])assert(html.includes(`property="${name}"`));
  assert.match(html,/<link rel="canonical" href="https:\/\/stcube3d.com\/online-battle\/">/);
@@ -23,8 +23,15 @@ test('static links, compressed screenshot, sitemap and Pages artifact are consis
  assert.equal(locations.length,5);assert.equal(new Set(locations).size,5);assert(locations.includes('https://stcube3d.com/online-battle/'));assert(locations.every(u=>u.startsWith('https://stcube3d.com/')));
  assert(fs.readFileSync(path.join(root,'.github/workflows/pages.yml'),'utf8').includes('cp -R online-battle _site/online-battle'));
  const game=fs.readFileSync(path.join(root,'index.html'),'utf8');
- assert(game.includes('href="/online-battle/">Battle Guide'));
+ assert(game.includes('How to Play &amp; Battle Guide'));
  assert.equal((game.match(/href="\/online-battle\/"/g)||[]).length,1);
- assert(game.indexOf('id="battleGuideLink"')>game.indexOf('id="howToPlayBtn"'));
+ assert(!game.includes('howToPlayBtn'));assert(!game.includes('howToPlayModal'));
  assert(game.indexOf('id="battleGuideLink"')<game.indexOf('</header>'));
+});
+test('all former help topics and keyboard image are migrated without stale modal handlers',()=>{
+ for(const heading of ['Basic Controls','Solve Flow','Ranking Rules','Battle Mode','Keyboard Controls'])assert(html.includes('>'+heading+'<'));
+ for(const text of ['csTimer-style','15-second inspection','rotations do not start it','Suspicious solves are excluded','All keyboard shortcuts can be customized in Settings','/images/keycontrol.png'])assert(html.includes(text));
+ assert.equal((html.match(/>Play STcube /g)||[]).length,2);
+ for(const file of ['online.js','style.css','game-ui.css'])assert.doesNotMatch(fs.readFileSync(path.join(root,file),'utf8'),/howToPlayBtn|howToPlayModal|keyboard-controls-figure/);
+ assert(html.includes('imageDialog.showModal()'));assert(html.includes('imageDialog.close()'));
 });

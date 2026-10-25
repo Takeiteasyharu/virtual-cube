@@ -43,9 +43,7 @@ const nameInput = document.getElementById("playerNameInput");
 const googleLoginBtn = document.getElementById("googleLoginBtn");
 const guestLoginBtn = document.getElementById("guestLoginBtn");
 const logoutBtn = document.getElementById("logoutBtn");
-const howToPlayBtn = document.getElementById("howToPlayBtn");
 const profileBtn = document.getElementById("profileBtn");
-const howToPlayModal = document.getElementById("howToPlayModal");
 const profileModal = document.getElementById("profileModal");
 const profileBody = document.getElementById("profileBody");
 const createRoomBtn = document.getElementById("createRoomBtn");
@@ -4356,10 +4354,6 @@ function returnToNormalAfterOpponentExit(opponent) {
 }
 
 function setupModalUi() {
-  howToPlayBtn?.addEventListener("click", () => {
-    howToPlayModal.hidden = false;
-  });
-
   profileBtn?.addEventListener("click", () => {
     showProfile().catch(error => {
       profileModal.hidden = false;
@@ -4375,7 +4369,7 @@ function setupModalUi() {
     });
   });
 
-  [howToPlayModal, profileModal].forEach(modal => {
+  [profileModal].forEach(modal => {
     modal?.addEventListener("click", event => {
       if (event.target === modal) modal.hidden = true;
     });

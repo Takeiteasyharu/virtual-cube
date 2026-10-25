@@ -1122,47 +1122,6 @@ body.real-timer-clean .normal-real-history-column > .buttons {
   font-family: "Courier New", monospace;
 }
 
-.keyboard-controls-figure {
-  margin: 14px 0 0;
-}
-
-.keyboard-controls-figure figcaption {
-  margin-bottom: 10px;
-  font-size: 17px;
-  font-weight: 700;
-}
-
-.keyboard-controls-figure img {
-  display: block;
-  width: 100%;
-  max-width: 100%;
-  height: auto;
-  border: 1px solid #6f8794;
-  border-radius: 8px;
-}
-
-.keyboard-controls-tip {
-  margin: 12px 0 0;
-  padding: 10px 12px;
-  border-left: 3px solid #1e5f8b;
-  background: rgba(30, 95, 139, 0.08);
-}
-
-body.dark .keyboard-controls-tip {
-  border-left-color: #78c5ef;
-  background: rgba(120, 197, 239, 0.1);
-}
-
-@media (max-width: 600px) {
-  .keyboard-controls-figure figcaption {
-    font-size: 15px;
-  }
-
-  .keyboard-controls-figure img {
-    border-radius: 6px;
-  }
-}
-
 .profile-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1215,7 +1174,6 @@ body.dark .keyboard-controls-tip {
 #copyRoomUrlBtn,
 #openSettingsBtn,
 #openRankingBtn,
-#howToPlayBtn,
 #cancelMatchBtn {
   border: 1px solid rgba(30, 95, 139, 0.32);
   background: var(--surface-2);
@@ -1228,7 +1186,6 @@ body.dark .keyboard-controls-tip {
 #copyRoomUrlBtn:hover,
 #openSettingsBtn:hover,
 #openRankingBtn:hover,
-#howToPlayBtn:hover,
 #cancelMatchBtn:hover {
   border-color: var(--primary);
   background: rgba(30, 111, 158, 0.12);
@@ -3381,7 +3338,6 @@ body.dark #copyRoomIdBtn,
 body.dark #copyRoomUrlBtn,
 body.dark #openSettingsBtn,
 body.dark #openRankingBtn,
-body.dark #howToPlayBtn,
 body.dark #cancelMatchBtn,
 body.dark .battle-choice-tab {
   border-color: rgba(120, 197, 239, 0.34);

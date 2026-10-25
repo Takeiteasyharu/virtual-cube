@@ -4,21 +4,21 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#eef7fa">
-  <title>Online Rubik's Cube Battle - Race Players on STcube3D</title>
-  <meta name="description" content="Race Rubik's Cube players online with STcube's free 3D virtual cube. Learn how Random Battle, ratings, BOT opponents and Friend Battle rooms work.">
+  <title>How to Play &amp; Battle Guide - STcube3D</title>
+  <meta name="description" content="Learn STcube's virtual cube controls, keyboard shortcuts, solve flow and ranking rules. Race players online in Random Battle or Friend Battle.">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="https://stcube3d.com/online-battle/">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Online Rubik's Cube Battle - Race Players on STcube3D">
-  <meta property="og:description" content="Race on the same scramble, meet players in Random Battle, or invite friends to your own room. Free online cube battles in your browser.">
+  <meta property="og:title" content="How to Play &amp; Battle Guide - STcube3D">
+  <meta property="og:description" content="Learn virtual cube controls, keyboard shortcuts, solve flow, rankings and online battles on STcube.">
   <meta property="og:url" content="https://stcube3d.com/online-battle/">
   <meta property="og:image" content="https://stcube3d.com/images/online-battle-menu.jpg">
   <meta property="og:image:width" content="1100">
   <meta property="og:image:height" content="560">
   <meta property="og:image:alt" content="STcube's Battle menu with Friend Battle and Random Battle tabs">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="Online Rubik's Cube Battle - Race Players on STcube3D">
-  <meta name="twitter:description" content="A free multiplayer Rubik's Cube experience. Explore Random Battle, unrated BOT opponents and rooms for friends on STcube.">
+  <meta name="twitter:title" content="How to Play &amp; Battle Guide - STcube3D">
+  <meta name="twitter:description" content="Your guide to STcube's controls, keyboard layout, timed solves, rankings and online cube battles.">
   <meta name="twitter:url" content="https://stcube3d.com/online-battle/">
   <meta name="twitter:image" content="https://stcube3d.com/images/online-battle-menu.jpg">
   <meta name="twitter:image:alt" content="STcube's Battle menu with Friend Battle and Random Battle tabs">
@@ -26,7 +26,7 @@
   <link rel="stylesheet" href="/online-battle/guide.css">
   <script>try{document.documentElement.dataset.theme=localStorage.getItem('theme')||''}catch{}</script>
   <script type="application/ld+json">
-  {"@context":"https://schema.org","@type":"WebPage","name":"Online Rubik's Cube Battle - Race Players on STcube3D","url":"https://stcube3d.com/online-battle/","description":"A guide to STcube's free online virtual cube battles, matchmaking, ratings and friend rooms.","inLanguage":"en","isPartOf":{"@type":"WebSite","name":"STcube","url":"https://stcube3d.com/"}}
+  {"@context":"https://schema.org","@type":"WebPage","name":"How to Play & Battle Guide","url":"https://stcube3d.com/online-battle/","description":"Learn STcube controls, keyboard shortcuts, solve flow, ranking rules and online battles.","inLanguage":"en","isPartOf":{"@type":"WebSite","name":"STcube","url":"https://stcube3d.com/"}}
   </script>
 </head>
 <body>
@@ -37,21 +37,46 @@
   </header>
   <main id="main">
     <section class="hero" aria-labelledby="page-title">
-      <p class="eyebrow">STCUBE / ONLINE BATTLE</p>
-      <h1 id="page-title">Race Rubik's Cube<br>Players Online</h1>
-      <p class="intro">Turn your next solve into a race. STcube lets you compete with other players using a 3D virtual Rubik's Cube, a shared scramble and a live view of your opponent's cube. Play free, right in your browser.</p>
-      <a class="button primary" href="/">Play Online Battle <span aria-hidden="true">↗</span></a>
-      <p class="cta-note">Open STcube, then select <strong>Battle</strong>.</p>
+      <p class="eyebrow">STCUBE / GAME GUIDE</p>
+      <h1 id="page-title">How to Play &amp;<br>Battle Guide</h1>
+      <p class="intro">Learn to control a 3D virtual Rubik's Cube, time your solves and race players online. STcube is free in your browser, with shared battle scrambles and a live view of your opponent's cube.</p>
+      <a class="button primary" href="/">Play STcube <span aria-hidden="true">↗</span></a>
+      <p class="cta-note">Practice a solve or select <strong>Battle</strong> to race.</p>
       <ul class="highlights" aria-label="Battle highlights"><li>Same scramble</li><li>Live opponent cube</li><li>No download</li></ul>
     </section>
     <figure class="battle-preview">
       <img src="/images/online-battle-menu.jpg" width="1100" height="560" alt="The actual STcube Battle menu showing Friend Battle room creation and joining, with a Random Battle tab" fetchpriority="high" decoding="async">
       <figcaption>The Battle menu on STcube. Choose a room with friends or switch to Random Battle.</figcaption>
     </figure>
-    <nav class="contents" aria-label="On this page"><a href="#what-is-battle">The basics</a><a href="#get-started">Get started</a><a href="#random-battle">Random Battle</a><a href="#friend-battle">Friend Battle</a><a href="#faq">FAQ</a></nav>
+    <nav class="contents" aria-label="On this page"><a href="#basic-controls">Basic Controls</a><a href="#solve-flow">Solve Flow</a><a href="#keyboard-controls">Keyboard Controls</a><a href="#ranking-rules">Ranking Rules</a><a href="#what-is-battle">Online Battle</a><a href="#get-started">Start a Battle</a><a href="#random-battle">Random Battle</a><a href="#friend-battle">Friend Battle</a><a href="#faq">FAQ</a></nav>
+    <section id="basic-controls" class="text-section">
+      <h2>Basic Controls</h2>
+      <p><kbd>Space</kbd>: generate a scramble and start inspection. <kbd>Esc</kbd>: abort the current solve. Keyboard controls follow a csTimer-style virtual cube layout.</p>
+      <p>Use the keyboard or the cube's existing touch controls to turn the virtual cube. Key assignments can be changed in <strong>Settings → Keyboard Controls</strong>.</p>
+    </section>
+    <section id="solve-flow" class="text-section">
+      <h2>Solve Flow</h2>
+      <ol class="steps"><li><strong>Scramble.</strong> In Normal virtual-cube mode, press Space to scramble.</li><li><strong>Inspect.</strong> A 15-second inspection begins. Your first valid move starts the timer. <strong>x, y and z whole-cube rotations do not start it.</strong></li><li><strong>Solve.</strong> The timer stops automatically when the cube is solved. Press Esc to abort if needed.</li></ol>
+      <p class="note">These timed instructions describe Normal mode. Guided Solve is untimed practice with arrows and step-by-step help; its moves do not count toward normal records or rankings. Battle modes use their own round rules.</p>
+    </section>
+    <section id="keyboard-controls" class="text-section">
+      <h2>Keyboard Controls</h2>
+      <p>Keyboard shortcuts for every move are shown below. You can customize all key bindings anytime from the Settings menu.</p>
+      <figure class="keyboard-controls-figure">
+        <a id="keyboard-image-link" href="/images/keycontrol.png" target="_blank" rel="noopener" aria-label="Enlarge STcube Virtual Cube Keyboard Controls"><img id="keyboard-image" src="/images/keycontrol.png" width="1536" height="1024" alt="STcube Virtual Cube Keyboard Controls: default keyboard layout for face, middle-slice and whole-cube turns" loading="lazy" decoding="async"></a>
+        <figcaption>STcube – Virtual Cube Keyboard Controls. Click or tap the image to enlarge it; scroll within the enlarged view on smaller screens.</figcaption>
+      </figure>
+      <p class="note"><strong>Tip:</strong> All keyboard shortcuts can be customized in Settings. This image shows the default layout; if you change your bindings, use your configured keys.</p>
+    </section>
+    <section id="ranking-rules" class="text-section">
+      <h2>Ranking Rules</h2>
+      <p>Only valid solves are submitted. Suspicious solves are excluded. Log in to join the online rankings.</p>
+      <p>Open <strong>Online Ranking</strong> in the game to view solve leaderboards and the separate Battle Rating Ranking. Read the <a href="/rules.html">game rules</a> for more details.</p>
+    </section>
     <section id="what-is-battle" class="text-section">
       <p class="eyebrow">ONE SCRAMBLE. YOUR NEXT RIVAL.</p>
       <h2>What Is Online Cube Battle?</h2>
+      <h3>Battle Mode</h3>
       <p>An online Rubik's Cube battle is a race on a shared scramble. Instead of solving alone against the clock, you turn a virtual cube while another player tackles the same starting position. STcube shows your opponent's cube as the race unfolds, so you can follow the action in real time.</p>
       <p>There is nothing to install and no entry fee. Open STcube in your browser, choose a battle type and use the existing cube controls to solve. An internet connection is needed for online play.</p>
     </section>
@@ -63,7 +88,7 @@
         <li><strong>Choose your race.</strong> Select Random Battle to find an opponent, or Friend Battle to create or join a room.</li>
         <li><strong>Get ready and solve.</strong> Follow the room's Ready prompt and inspection countdown, then make your first turn to start your virtual-cube solve.</li>
       </ol>
-      <p class="note">New to the controls? Open the game's existing <strong>How to Play</strong> guide. You can change key assignments in <strong>Settings → Keyboard Controls</strong>.</p>
+      <p class="note">New to the controls? See <a href="#keyboard-controls">Keyboard Controls</a> above. You can change key assignments in <strong>Settings → Keyboard Controls</strong>.</p>
     </section>
     <div class="mode-grid">
       <section id="random-battle" class="mode-card random">
@@ -108,12 +133,20 @@
       <p class="eyebrow">MAKE YOUR NEXT SOLVE A RACE</p>
       <h2 id="closing-title">Ready for a little competition?</h2>
       <p>Find your next rival or bring a friend. The cube is waiting.</p>
-      <a class="button primary" href="/">Play Online Battle <span aria-hidden="true">↗</span></a>
+      <a class="button primary" href="/">Play STcube <span aria-hidden="true">↗</span></a>
       <p class="cta-note">In the game, select <strong>Battle</strong> to choose a mode.</p>
     </section>
   </main>
   <footer><a class="brand" href="/">STcube<span>3D</span></a><nav aria-label="Site information"><a href="/">Game</a><a href="/about.html">About</a><a href="/rules.html">Rules</a><a href="/privacy.html">Privacy Policy</a></nav><p>Play a virtual cube competition in your browser. No download required.</p></footer>
   <script>
+    const imageLink=document.getElementById('keyboard-image-link');
+    const imageDialog=document.createElement('dialog');
+    imageDialog.className='image-dialog';imageDialog.setAttribute('aria-label','Enlarged keyboard controls');
+    imageDialog.innerHTML='<button type="button" autofocus>Close image</button><div class="image-pan"><img src="/images/keycontrol.png" width="1536" height="1024" alt="STcube Virtual Cube Keyboard Controls, enlarged"></div>';
+    document.body.append(imageDialog);
+    imageLink.addEventListener('click',event=>{if(event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;event.preventDefault();imageDialog.showModal()});
+    imageDialog.querySelector('button').addEventListener('click',()=>imageDialog.close());
+    imageDialog.addEventListener('click',event=>{if(event.target===imageDialog)imageDialog.close()});
     const themeToggle=document.getElementById('theme-toggle');
     const dark=()=>document.documentElement.dataset.theme==='dark'||(!document.documentElement.dataset.theme&&matchMedia('(prefers-color-scheme: dark)').matches);
     const updateThemeLabel=()=>{themeToggle.textContent=dark()?'Light mode':'Dark mode'};
