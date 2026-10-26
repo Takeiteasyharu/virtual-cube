@@ -7,7 +7,7 @@ test('English guide has unique canonical metadata, semantic content and five FAQ
  for(const name of ['og:title','og:description','og:url','og:image'])assert(html.includes(`property="${name}"`));
  assert.match(html,/<link rel="canonical" href="https:\/\/stcube3d.com\/online-battle\/">/);
  assert.equal((html.match(/<details>/g)||[]).length,5);assert.equal((html.match(/class="button primary" href="\/"/g)||[]).length,2);
- assert.match(html,/1200/);assert.match(html,/15 seconds/);assert.match(html,/BOT/);assert.match(html,/out of 54 stickers/);
+ assert.match(html,/1200/);assert.match(html,/after 5 seconds/);assert.match(html,/BOT/);assert.match(html,/out of 54 stickers/);
  assert.doesNotMatch(html,/[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u);
  assert.doesNotMatch(html,/takeiteasyharu\.github\.io|three\.min\.js|firebasejs|<meta[^>]+noindex/i);
  const data=JSON.parse(html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/)[1]);assert.equal(data.url,'https://stcube3d.com/online-battle/');

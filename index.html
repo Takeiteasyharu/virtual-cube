@@ -200,6 +200,7 @@
         <div id="battleRematchYou">You: Waiting</div>
         <div id="battleRematchOpponent">Opponent: Waiting</div>
         <div class="battle-rematch-actions">
+          <button id="rematchBotBtn" hidden>Rematch BOT</button>
           <button id="playAgainBtn">Play Again</button>
           <button id="rematchReturnBtn" class="secondary-action">Return to Normal Mode</button>
         </div>
@@ -415,6 +416,11 @@
         </section>
       </div>
       <div id="randomBattleControls" hidden>
+        <label class="bot-preference" for="botEnabledToggle">
+          <span>Play against BOT</span>
+          <input type="checkbox" id="botEnabledToggle" role="switch" checked aria-describedby="botEnabledHint" />
+        </label>
+        <p class="bot-preference-hint" id="botEnabledHint">Start a BOT match after 5 seconds</p>
         <div class="buttons battle-buttons">
           <button id="randomBattleBtn">Find Ranked Match</button>
           <button id="cancelMatchBtn" hidden>Cancel</button>
@@ -503,6 +509,7 @@
   <script src="guided-solve.js"></script>
   <script src="bot-model.js"></script>
   <script src="bot-battle.js"></script>
+  <script src="matchmaking-config.js"></script>
   <script type="module" src="daily-challenge.js"></script>
   <script src="solve-replay.js"></script>
   <script src="firebase-config.js"></script>

@@ -82,6 +82,6 @@
   window.renderBattleResultsUI?.({finished:ended,ranked:true,you:{status:s.you.status,finalTime:s.you.time},opponent:{status:s.bot.status,finalTime:s.bot.solved?s.bot.time:null},bot:true});
  }
  function dispose(){clear();state=null;document.body.classList.remove('bot-battle-mode');const labels=document.querySelectorAll('#rankedVersus .ranked-rating-label');labels.forEach(l=>l.textContent='RATING');}
- window.BotBattle={prepare,start,ready,playerStarted,finish,abort,render,dispose,get active(){return !!state;},get diagnostics(){return state?{level:state.config.level,source:state.config.source,target:state.target,actual:state.bot.time,solved:!!state.bot.solved,phase:state.phase,outcome:state.outcome,moves:state.moves.length}:null;}};
+ window.BotBattle={prepare,start,ready,playerStarted,finish,abort,render,dispose,get active(){return !!state;},get diagnostics(){return state?{rating:state.rating,level:state.config.level,source:state.config.source,target:state.target,actual:state.bot.time,solved:!!state.bot.solved,phase:state.phase,outcome:state.outcome,moves:state.moves.length}:null;}};
  window.addEventListener('pagehide',dispose);
 })();

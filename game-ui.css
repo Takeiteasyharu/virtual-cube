@@ -1,4 +1,13 @@
 /* Theme preferences remain owned by loadTheme/toggleTheme in script.js. */
+.bot-preference { display:flex;align-items:center;justify-content:space-between;gap:16px;max-width:360px;margin:16px auto 6px;padding:12px 16px;border:1px solid var(--border);border-radius:14px;background:var(--surface-2);color:var(--text);font-weight:700; }
+.bot-preference input { appearance:none;position:relative;width:48px;height:28px;min-width:48px;min-height:28px;padding:0;margin:0;border:1px solid var(--border);border-radius:20px;background:var(--surface);cursor:pointer;box-sizing:border-box; }
+.bot-preference input::before { content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--text-muted); }
+.bot-preference input:checked { background:var(--accent); }
+.bot-preference input:checked::before { left:23px;background:#fff; }
+.bot-preference input:disabled { opacity:.55;cursor:wait; }
+.bot-preference input:focus-visible { outline:3px solid var(--accent);outline-offset:3px; }
+.bot-preference-hint { margin:4px 0 16px;text-align:center;font-size:14px;color:var(--text-muted); }
+body.bot-battle-mode.battle-results-clean #rematchReturnBtn { grid-column:1 / -1; }
 body .ranked-moment[data-phase="finishing"] { padding-block:5px; }
 body .ranked-moment[data-phase="finishing"] #rankedMomentTitle { font-size:56px;line-height:1; }
 body:has(#rankedMoment[data-phase="finishing"]) #rankedInspectionSlot { visibility:hidden; }

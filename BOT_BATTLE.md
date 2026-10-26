@@ -1,19 +1,37 @@
 # Local BOT Battle
 
-Random matchmaking searches for humans first. `BOT_FALLBACK_WAIT_MS` in
-`online.js` defaults to 15000. A final widened human search precedes fallback.
+Random matchmaking searches for humans first. `MATCHMAKING_CONFIG` in
+`matchmaking-config.js` defaults to unrestricted ratings, 5000 ms BOT fallback,
+and BOT enabled. Setting `useRatingRange: true` restores the previous
+50 / 100 / 200 / unlimited expanding ranges. Google Login remains required;
+neither previous solves nor ranked experience is required for matchmaking.
+A final widened human search precedes fallback.
 The same transaction that closes the owned waiting room removes its queue
 ticket. Human joins and withdrawal contend on that room: a committed human
 join wins; a cancelled room cannot accept a late guest under Firestore Rules.
 Generation tickets suppress cancelled asynchronous work. Web Locks serialize
 same-account searches across supported browser tabs; Firestore ownership
-tokens also protect searches across devices. Stale waiting tickets expire
-after 90 seconds for candidate selection. Abrupt disconnect cleanup is best
+tokens also protect searches across devices. Queue timestamps have a 45-second
+lease renewed every 15 seconds while searching. Bounded queries retry every
+2.5 seconds initially and every 15 seconds after the first five seconds;
+arriving players search immediately, so an existing waiter need not poll
+rapidly. Stale entries are excluded in both the query and transaction.
+Cancelled candidates are skipped so they cannot block another waiting player.
+Abrupt disconnect cleanup is best
 effort, not a server-side presence guarantee.
+Reload recovery checks a session-scoped search token in a transaction. It
+first acquires the same Web Lock to avoid reclaiming a duplicated/live tab's
+search. If storage or Web Locks are unavailable, lease expiry remains the
+fallback. No secret credentials or additional persistent user data are used.
 
 BOT sessions are local and explicitly labelled BOT, difficulty and unrated.
 They never submit solves, ratings, battle results, replay or normal history.
-Rematching searches for humans again. Friend Battle uses its existing flow.
+The Random tab saves `stcube.randomBattle.botEnabled` in localStorage (ON by
+default). Searches snapshot the preference and lock the switch. OFF searches
+have no overall timeout. The five seconds start before profile/queue setup;
+network, scramble generation and renderer preparation can delay actual entry.
+`Rematch BOT` starts a fresh local battle immediately without a queue write;
+`Find next match` searches for humans again. Friend Battle is unchanged.
 
 ## Strength model and data provenance
 
@@ -66,7 +84,13 @@ No Cloud Functions, AI service, plan change or bot gameplay database is used.
 Normal human queue creation and atomic withdrawal still use Firestore reads
 and writes; after handoff, BOT moves/results generate none. Matching queries
 remain limited to ten candidates. Spark quotas still apply to ordinary site
-traffic. Rules add only the waiting-state guard to ranked guest admission.
+traffic. Existing owner-only queue Rules and the waiting-state guard to ranked
+guest admission suffice; this update does not change Rules or require indexes.
+After the initial search, an indefinite search performs about four bounded
+candidate queries per minute (at most ten candidate documents each), plus four heartbeat transactions
+per minute and the existing queue/room listeners. Actual reads depend on
+queue occupancy and transaction retries. BOT rematches perform no Firestore
+reads or writes for matchmaking or gameplay.
 
 Bot results are client-local practice, not a tamper-proof competitive system.
 Live Google-authenticated production matchmaking is distinct from emulator

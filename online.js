@@ -148,7 +148,46 @@ const ELO_K_FACTOR = 32;
 const RANKING_CACHE_TTL_MS = 5 * 60 * 1000;
 const RANKING_LIMIT = 50;
 const MATCHMAKING_LIMIT = 10;
-const BOT_FALLBACK_WAIT_MS = 15000;
+const MATCHMAKING_CONFIG = window.Matchmaking.config;
+const BOT_FALLBACK_WAIT_MS = MATCHMAKING_CONFIG.botFallbackDelayMs;
+const botEnabledToggle = document.getElementById('botEnabledToggle');
+let botPreference = window.Matchmaking.load({getItem:key=>window.localStorage.getItem(key)});
+let rankedSearchBotEnabled = botPreference;
+let rankedSearchMaintenance = null;
+let rankedSearchMaintenanceBusy = false;
+let botRematchPending = false;
+let rankedRecoveryPromise = Promise.resolve();
+const rankedRecoveryKey='stcube.randomBattle.pendingSearch';
+function rememberRankedSearch(value){try{sessionStorage.setItem(rankedRecoveryKey,JSON.stringify(value));}catch{}}
+function forgetRankedSearch(token){try{if(JSON.parse(sessionStorage.getItem(rankedRecoveryKey)||'null')?.token===token)sessionStorage.removeItem(rankedRecoveryKey);}catch{}}
+async function recoverAbandonedRankedSearch(){
+  let entry;try{entry=JSON.parse(sessionStorage.getItem(rankedRecoveryKey)||'null');}catch{return;}
+  if(!entry||entry.uid!==currentUser?.uid||!navigator.locks)return;
+  // A duplicated tab can inherit sessionStorage. Never reclaim a live tab's lock.
+  if(!await acquireRankedSearchLock())return;
+  try{
+    await runTransaction(db,async tx=>{
+      const qref=doc(db,MATCHMAKING_COLLECTION,entry.uid),rref=doc(db,BATTLE_ROOMS_COLLECTION,entry.roomId);
+      const [queue,room]=await Promise.all([tx.get(qref),tx.get(rref)]);
+      if(queue.data()?.searchToken!==entry.token||queue.data()?.roomId!==entry.roomId)return;
+      if(room.data()?.hostUid===entry.uid&&room.data()?.status==='waiting')tx.update(rref,{status:'cancelled',updatedAt:serverTimestamp()});
+      tx.delete(qref);
+    });
+    forgetRankedSearch(entry.token);
+  }catch(error){console.warn('Abandoned search cleanup will retry on the next visit.',error.code||error.message);}
+  finally{releaseRankedSearchLock();}
+}
+function renderBotPreference() {
+  botEnabledToggle.checked = botPreference;
+  document.getElementById('botEnabledHint').textContent = botPreference ? `Start a BOT match after ${BOT_FALLBACK_WAIT_MS/1000} seconds` : 'Wait for a real player only';
+}
+renderBotPreference();
+botEnabledToggle.addEventListener('change',()=>{
+  if(botEnabledToggle.disabled)return;
+  botPreference=botEnabledToggle.checked;
+  window.Matchmaking.save({setItem:(key,value)=>window.localStorage.setItem(key,value)},botPreference);
+  renderBotPreference();
+});
 const FRIEND_TIME_ENTRY_TYPE_KEY = "friendRealTimeEntryType";
 const FRIEND_SHOW_OPPONENT_CUBE_KEY = "friendShowOpponentCube";
 
@@ -359,18 +398,7 @@ async function getRankedBattleEligibility() {
     return { eligible: false, message: "Ranked Battle requires Google Login." };
   }
 
-  const solvesSnapshot = await getDocs(query(
-    collection(db, "solves"),
-    where("uid", "==", currentUser.uid),
-    where("rankingType", "==", "single"),
-    where("valid", "==", true),
-    limit(1)
-  ));
-  const hasValidSolve = !solvesSnapshot.empty;
-
-  return hasValidSolve
-    ? { eligible: true, message: "" }
-    : { eligible: false, message: "Complete one valid solve to unlock Ranked Battle." };
+  return { eligible: true, message: "" };
 }
 
 function setRankingMessage(message) {
@@ -988,6 +1016,7 @@ function stopRankedSearchTimer() {
   rankedSearchStartedAt = 0;
   if (cancelMatchBtn) cancelMatchBtn.hidden = true;
   if (randomBattleBtn) randomBattleBtn.disabled = false;
+  botEnabledToggle.disabled = false;
 }
 
 function startRankedSearchTimer() {
@@ -995,9 +1024,12 @@ function startRankedSearchTimer() {
   rankedSearchStartedAt = Date.now();
   if (cancelMatchBtn) cancelMatchBtn.hidden = false;
   if (randomBattleBtn) randomBattleBtn.disabled = true;
+  botEnabledToggle.disabled = true;
 
   const render = () => {
-    setRandomStatus(`Searching for a player... ${formatRankedSearchElapsed(Date.now() - rankedSearchStartedAt)} · Unrated BOT fallback after ${BOT_FALLBACK_WAIT_MS/1000}s`);
+    const elapsed=Date.now()-rankedSearchStartedAt;
+    const suffix=rankedSearchBotEnabled ? `BOT in ${Math.max(0,Math.ceil((BOT_FALLBACK_WAIT_MS-elapsed)/1000))}s` : 'Real players only';
+    setRandomStatus(`Searching for a player... ${formatRankedSearchElapsed(elapsed)} · ${suffix}`);
   };
 
   render();
@@ -1023,6 +1055,8 @@ function clearFriendLobby() {
 }
 
 function clearMatchmakingListeners() {
+  if(rankedSearchMaintenance)clearInterval(rankedSearchMaintenance);
+  rankedSearchMaintenance=null;
   if (botFallbackTimeout) clearTimeout(botFallbackTimeout);
   botFallbackTimeout=null;
   if (matchmakingUnsubscribe) matchmakingUnsubscribe();
@@ -1040,7 +1074,7 @@ function clearMatchmakingListeners() {
 async function clearMyMatchmakingEntry() {
   if (!currentUser || !rankedOwnQueueRoomId) return;
   const uid=currentUser.uid,roomId=rankedOwnQueueRoomId,token=rankedSearchToken;
-  await runTransaction(db,async tx=>{const ref=doc(db,MATCHMAKING_COLLECTION,uid),snap=await tx.get(ref);if(snap.exists()&&snap.data().roomId===roomId&&snap.data().searchToken===token)tx.delete(ref);}).catch(()=>{});
+  await runTransaction(db,async tx=>{const ref=doc(db,MATCHMAKING_COLLECTION,uid),snap=await tx.get(ref);if(snap.exists()&&snap.data().roomId===roomId&&snap.data().searchToken===token)tx.delete(ref);}).then(()=>forgetRankedSearch(token)).catch(()=>{});
 }
 
 function enterMatchedRankedRoom(roomId) {
@@ -1076,18 +1110,20 @@ function watchForRankedRoom() {
 
 async function cancelRandomMatch(message = "Matchmaking cancelled.") {
   ++rankedSearchGeneration;
-  releaseRankedSearchLock();
+  const uid=currentUser?.uid,roomId=rankedOwnQueueRoomId,token=rankedSearchToken;
   clearMatchmakingListeners();
   clearFriendLobby();
-  if (currentUser && activeRoomId && !document.body.classList.contains("battle-mode")) {
-    await updateDoc(doc(db, BATTLE_ROOMS_COLLECTION, activeRoomId), {
-      status: "cancelled",
-      updatedAt: serverTimestamp()
-    }).catch(() => {});
-    activeRoomId = "";
-    activeRoomRole = "";
+  if(uid&&roomId&&!document.body.classList.contains('battle-mode')){
+    await runTransaction(db,async tx=>{
+      const roomRef=doc(db,BATTLE_ROOMS_COLLECTION,roomId),queueRef=doc(db,MATCHMAKING_COLLECTION,uid);
+      const [room,queue]=await Promise.all([tx.get(roomRef),tx.get(queueRef)]);
+      if(queue.data()?.roomId!==roomId||queue.data()?.searchToken!==token)return;
+      if(room.data()?.hostUid===uid&&room.data()?.status==='waiting')tx.update(roomRef,{status:'cancelled',updatedAt:serverTimestamp()});
+      tx.delete(queueRef);
+    }).then(()=>forgetRankedSearch(token)).catch(()=>{}); // An abrupt offline exit is also bounded by the queue lease.
+    if(activeRoomId===roomId){activeRoomId='';activeRoomRole='';}
   }
-  await clearMyMatchmakingEntry();
+  releaseRankedSearchLock();
   setRandomStatus(message);
 }
 
@@ -2913,17 +2949,14 @@ async function createBattleRoom(mode = "friend") {
 }
 
 function getRankedMatchRange(waitMs) {
-  if (waitMs < 10000) return 50;
-  if (waitMs < 20000) return 100;
-  if (waitMs < 30000) return 200;
-  return Infinity;
+  return window.Matchmaking.ratingRange(waitMs);
 }
 
 function selectRankedCandidate(queueDocs, myRating, myStartedAtMs = Date.now()) {
   const now = Date.now();
   const myRange = getRankedMatchRange(now - myStartedAtMs);
   return queueDocs
-    .filter(queueDoc => queueDoc.id !== currentUser?.uid && queueDoc.data().roomId && queueDoc.data().mode === "ranked" && now - Number(queueDoc.data().startedAtMs || now) < 90000)
+    .filter(queueDoc => queueDoc.id !== currentUser?.uid && queueDoc.data().roomId && queueDoc.data().mode === "ranked" && window.Matchmaking.fresh(queueDoc.data(),now))
     .map(queueDoc => {
       const entry = queueDoc.data();
       const difference = Math.abs(myRating - getRating(entry));
@@ -2932,7 +2965,7 @@ function selectRankedCandidate(queueDocs, myRating, myStartedAtMs = Date.now()) 
       return { queueDoc, difference, allowedRange, startedAtMs: candidateStartedAtMs };
     })
     .filter(candidate => candidate.difference <= candidate.allowedRange)
-    .sort((a, b) => a.difference - b.difference || a.startedAtMs - b.startedAtMs)[0]?.queueDoc || null;
+    .sort((a, b) => (MATCHMAKING_CONFIG.useRatingRange ? a.difference-b.difference : 0) || a.startedAtMs-b.startedAtMs)[0]?.queueDoc || null;
 }
 
 async function getRankedCandidateDocs(myRating, startedAtMs = Date.now()) {
@@ -2951,6 +2984,7 @@ async function getRankedCandidateDocs(myRating, startedAtMs = Date.now()) {
     : query(
       queueRef,
       where("status", "==", "waiting"),
+      where("createdAt", ">=", new Date(Date.now()-MATCHMAKING_CONFIG.queueLeaseMs)),
       orderBy("createdAt", "asc"),
       limit(MATCHMAKING_LIMIT)
     );
@@ -2965,9 +2999,11 @@ async function attemptRankedMatch(wide = false) {
     const ownQueue = await getDoc(doc(db, MATCHMAKING_COLLECTION, uid));
     if (!ownQueue.exists() || ownQueue.data().status !== "waiting" || ownQueue.data().searchToken!==token) return;
     const entry=ownQueue.data(),started=wide?Date.now()-31000:Number(entry.startedAtMs)||Date.now();
-    const candidates=await getRankedCandidateDocs(getRating(entry),started);
+    let candidates=await getRankedCandidateDocs(getRating(entry),started);
+    while(candidates.length){
     const candidate=selectRankedCandidate(candidates,getRating(entry),started);
     if(!candidate||ticket!==rankedSearchGeneration)return;
+    candidates=candidates.filter(item=>item.id!==candidate.id);
     const targetId=candidate.data().roomId;
     const matched=await runTransaction(db,async tx=>{
       const ownRef=doc(db,BATTLE_ROOMS_COLLECTION,ownId),targetRef=doc(db,BATTLE_ROOMS_COLLECTION,targetId);
@@ -2975,18 +3011,34 @@ async function attemptRankedMatch(wide = false) {
       const [own,target,mine,theirs]=await Promise.all([tx.get(ownRef),tx.get(targetRef),tx.get(mineRef),tx.get(theirsRef)]);
       if(ticket!==rankedSearchGeneration)throw Error("Search cancelled");
       if(own.data()?.guestUid)return {id:ownId,host:true};
-      if(own.data()?.status!=="waiting"||mine.data()?.searchToken!==token)return null;
+      if(own.data()?.status!=="waiting"||mine.data()?.searchToken!==token||!window.Matchmaking.fresh(mine.data()))return null;
       if(!target.exists()||target.data().status!=="waiting"||target.data().guestUid||target.data().mode!=="ranked"||theirs.data()?.status!=="waiting"||theirs.data()?.roomId!==targetId)return null;
+      if(!window.Matchmaking.fresh(theirs.data())||target.data().hostUid!==candidate.id)return null;
       tx.update(ownRef,{status:"cancelled",updatedAt:serverTimestamp()});tx.delete(mineRef);
       tx.update(targetRef,{guestUid:uid,updatedAt:serverTimestamp()});
       return {id:targetId,host:false};
     });
-    if(!matched||ticket!==rankedSearchGeneration)return;
+    if(ticket!==rankedSearchGeneration)return;
+    if(!matched)continue;
     clearMatchmakingListeners();clearFriendLobby();setRandomStatus("Matched with a player!");
-    if(matched.host)watchRoom(matched.id);else await joinBattleRoom(matched.id,true);
+    if(matched.host)watchRoom(matched.id);else {forgetRankedSearch(token);await joinBattleRoom(matched.id,true);}
+    return;
+    }
+  } catch(error) {
+    // Concurrent joins can invalidate a Rules precondition before the SDK's
+    // transaction retry. Reconcile the committed room, never cancel that match.
+    if(ticket===rankedSearchGeneration){
+      const own=await getDoc(doc(db,BATTLE_ROOMS_COLLECTION,ownId));
+      if(own.data()?.guestUid&&own.data()?.status!=='cancelled'){
+        clearMatchmakingListeners();clearFriendLobby();clearMyMatchmakingEntry();watchRoom(ownId);
+      }else{
+        console.warn('Match confirmation will retry.',error.code||error.message);
+      }
+    }
   } finally { rankedMatchAttempting=false; }
 }
 function scheduleRankedMatchExpansion() {
+  if(!MATCHMAKING_CONFIG.useRatingRange)return;
   rankedMatchExpansionTimeouts = [10000, 20000, 30000].map(delay => window.setTimeout(() => {
     attemptRankedMatch().catch(console.error);
   }, delay));
@@ -3009,18 +3061,21 @@ async function acquireRankedSearchLock() {
   });
 }
 async function startRankedBattle() {
-  if(document.body.classList.contains("battle-mode")||matchmakingUnsubscribe||randomRoomUnsubscribe)return;
+  await rankedRecoveryPromise;
+  if(botRematchPending||document.body.classList.contains("battle-mode")||matchmakingUnsubscribe||randomRoomUnsubscribe)return;
   if(!await acquireRankedSearchLock()){setRandomStatus("Random Battle is already active in another tab.");return;}
   const ticket=++rankedSearchGeneration;
   try {
     const eligibility=await getRankedBattleEligibility();
     if(ticket!==rankedSearchGeneration)return;
     if(!eligibility.eligible){setRandomStatus(eligibility.message);releaseRankedSearchLock();return;}
+    rankedSearchBotEnabled=botPreference;
     startRankedSearchTimer();
     const profileSnapshot=await getDoc(userRef()),profile=profileSnapshot.data()||{},myRating=getRating(profile);
     if(ticket!==rankedSearchGeneration)return;
     const startedAtMs=Date.now(),roomId=createRoomId(),uid=currentUser.uid;
     rankedOwnQueueRoomId=roomId;rankedSearchToken=crypto.randomUUID();
+    rememberRankedSearch({uid,roomId,token:rankedSearchToken});
   const room = {
     roomId,
     mode: "ranked",
@@ -3049,7 +3104,7 @@ async function startRankedBattle() {
       let oldRoom=null,oldRef=null;
       if(previous.exists()){
         oldRef=doc(db,BATTLE_ROOMS_COLLECTION,previous.data().roomId);oldRoom=await tx.get(oldRef);
-        if(oldRoom.data()?.guestUid||Date.now()-Number(previous.data().startedAtMs||0)<90000)throw Error("Another tab or device is already searching.");
+        if((oldRoom.data()?.guestUid&& !['finished','cancelled'].includes(oldRoom.data()?.status))||(oldRoom.data()?.status==='waiting'&&window.Matchmaking.fresh(previous.data())))throw Error("Another tab or device is already searching.");
       }
       if(ticket!==rankedSearchGeneration)throw Error("Search cancelled");
       if(oldRoom?.data()?.status==="waiting"&&!oldRoom.data().guestUid&&oldRoom.data().hostUid===uid)tx.update(oldRef,{status:"cancelled",updatedAt:serverTimestamp()});
@@ -3069,8 +3124,27 @@ async function startRankedBattle() {
       const entry=snapshot.data();if(entry?.status==="matched"&&entry.roomId)enterMatchedRankedRoom(entry.roomId);
     });
     scheduleRankedMatchExpansion();
-    botFallbackTimeout=setTimeout(()=>fallbackToBot(ticket,roomId,profile),BOT_FALLBACK_WAIT_MS);
-    matchmakingTimeout=setTimeout(()=>cancelRandomMatch("Search timed out. Please try again."),60000);
+    // No overall search timeout: BOT OFF waits until matched or cancelled.
+    let lastHeartbeat=Date.now(),lastMatchCheck=Date.now();
+    rankedSearchMaintenance=setInterval(async()=>{
+      if(rankedSearchMaintenanceBusy||ticket!==rankedSearchGeneration||document.body.classList.contains('battle-mode'))return;
+      rankedSearchMaintenanceBusy=true;
+      try{
+        if(Date.now()-lastHeartbeat>=MATCHMAKING_CONFIG.heartbeatMs){
+          const renewed=await runTransaction(db,async tx=>{
+            const ref=doc(db,MATCHMAKING_COLLECTION,uid),snap=await tx.get(ref);
+            if(ticket!==rankedSearchGeneration||snap.data()?.searchToken!==rankedSearchToken||snap.data()?.status!=='waiting')return false;
+            tx.update(ref,{createdAt:serverTimestamp(),updatedAt:serverTimestamp()});return true;
+          });
+          if(!renewed)return;
+          lastHeartbeat=Date.now();
+        }
+        const retryDelay=Date.now()-rankedSearchStartedAt<BOT_FALLBACK_WAIT_MS ? MATCHMAKING_CONFIG.retryMs : MATCHMAKING_CONFIG.heartbeatMs;
+        if(Date.now()-lastMatchCheck>=retryDelay){lastMatchCheck=Date.now();await attemptRankedMatch();}
+      }catch(error){console.warn('Match search will retry when connected.',error.code||error.message);}
+      finally{rankedSearchMaintenanceBusy=false;}
+    },MATCHMAKING_CONFIG.retryMs);
+    if(rankedSearchBotEnabled)botFallbackTimeout=setTimeout(()=>fallbackToBot(ticket,roomId,profile),Math.max(0,BOT_FALLBACK_WAIT_MS-(Date.now()-rankedSearchStartedAt)));
     await attemptRankedMatch();
   } catch(error) {
     if(ticket===rankedSearchGeneration){await cancelRandomMatch(error.message||"Could not start matchmaking.");}
@@ -3079,7 +3153,7 @@ async function startRankedBattle() {
 }
 async function fallbackToBot(ticket,roomId,profile) {
   let withdrawn=false;
-  if(ticket!==rankedSearchGeneration||document.body.classList.contains("battle-mode"))return;
+  if(!rankedSearchBotEnabled||ticket!==rankedSearchGeneration||document.body.classList.contains("battle-mode"))return;
   if(rankedMatchAttempting){botFallbackTimeout=setTimeout(()=>fallbackToBot(ticket,roomId,profile),50);return;}
   try {
     // One final widened human search before withdrawing. The room transaction
@@ -3099,8 +3173,10 @@ async function fallbackToBot(ticket,roomId,profile) {
     if(outcome==="human"){clearFriendLobby();clearMatchmakingListeners();watchRoom(roomId);return;}
     if(outcome!=="bot")return;
     withdrawn=true;
+    forgetRankedSearch(token);
     clearFriendLobby();clearMatchmakingListeners();activeRoomId="";activeRoomRole="";
     cancelMatchBtn.hidden=false;randomBattleBtn.disabled=true;
+    botEnabledToggle.disabled=true;
     setRandomStatus("No player found. Preparing an unrated BOT battle…");
     const scramble=await getBattleScramble();
     const prepared=await window.BotBattle.prepare(scramble,Number.isFinite(profile.rating)?profile.rating:null);
@@ -4515,6 +4591,7 @@ if (isConfigured()) {
       if(window.BotBattle?.active)leaveBattleMode().catch(console.error);
     }
     currentUser = user;
+    if(user)rankedRecoveryPromise=recoverAbandonedRankedSearch();
     if (!profileModal.hidden) showProfile().catch(console.error);
 
     if (user) {
@@ -4557,6 +4634,21 @@ window.renderBattleLocalTimer = renderBattleLocalTimer;
 window.handleBattleFinishSyncError = handleBattleFinishSyncError;
 window.isBattleMode = () => document.body.classList.contains("battle-mode");
 window.isRankedBattle = () => document.body.classList.contains("battle-mode") && activeRoom?.mode === "ranked" && !activeRoom?.isBot;
+async function rematchBot() {
+  if(botRematchPending||!activeRoom?.isBot||activeRoom.status!=='finished'||!currentUser)return;
+  botRematchPending=true;
+  const roomId=activeRoomId,uid=currentUser.uid,rating=window.BotBattle.diagnostics?.rating ?? Number(document.getElementById('rankedYouRating').textContent);
+  const button=document.getElementById('rematchBotBtn');button.disabled=true;button.textContent='Preparing BOT…';
+  try{
+    const scramble=await getBattleScramble();
+    const prepared=await window.BotBattle.prepare(scramble,Number.isFinite(rating)?rating:null);
+    if(activeRoomId!==roomId||currentUser?.uid!==uid||!activeRoom?.isBot)return;
+    await leaveBattleMode();
+    window.BotBattle.start(prepared,getPlayerName(),Number.isFinite(rating)?rating:null);
+  }catch(error){if(activeRoomId===roomId)document.getElementById('rankedMomentDetail').textContent='Could not prepare BOT. Please try again.';console.error(error);}
+  finally{botRematchPending=false;button.disabled=false;button.textContent='Rematch BOT';}
+}
+document.getElementById('rematchBotBtn').addEventListener('click',()=>rematchBot());
 window.BotBattleBridge={
   stopClock(){if(battleClockInterval)clearInterval(battleClockInterval);battleClockInterval=null;},
   enter(scramble){
@@ -4570,10 +4662,12 @@ window.BotBattleBridge={
   room:()=>activeRoom,
   players:(you,bot)=>{Object.assign(battlePlayersByRole.host,you);Object.assign(battlePlayersByRole.guest,bot);},
   leave:()=>leaveBattleMode(),
-  rematch:async()=>{await leaveBattleMode();await startRankedBattle();}
+  rematch:async()=>{await leaveBattleMode();await startRankedBattle();},
+  rematchBot
 };
 // Presentation only. Keep the old grid footprint so the play cube never moves.
 function renderBattleResultsUI({finished,ranked,you,opponent,bot=false}) {
+  document.getElementById('rematchBotBtn').hidden=!(finished&&bot);
   const panel=document.getElementById('battleRematchPanel');
   let spacer=document.getElementById('battleRematchSpacer');
   if(!finished||!ranked){
