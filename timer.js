@@ -180,6 +180,7 @@ function getSolves(mode = getHistoryMode()) {
 }
 
 function saveSolve(time, scramble, solveStats = {}) {
+  if (window.SolveReplay?.active || (solveStats.source && solveStats.source !== 'normal')) return;
   if (window.BotBattle?.active) return;
   if (window.DailyChallenge?.active || window.DailyChallenge?.isPractice) return;
   if (window.GuidedSolve?.isPractice) return;
@@ -188,6 +189,9 @@ function saveSolve(time, scramble, solveStats = {}) {
   const solves = readModeSolves(mode);
   solves.unshift({
     solveId: solveStats.solveId || null,
+    source: 'normal',
+    ownerUid: window.SolveAnalytics ? window.SolveAnalytics.ownerUidFor(solveStats,window.getAnalyticsIdentity?.()) : null,
+    completedAt: new Date().toISOString(),
     time,
     tps: Number.isFinite(solveStats.tps) ? solveStats.tps : null,
     moveCount: Number.isFinite(solveStats.moveCount) ? solveStats.moveCount : 0,

@@ -125,6 +125,7 @@ let readyToSolve = false;
 let firstTurnDone = false;
 let solveMoveCount = 0;
 let currentSolveId = crypto.randomUUID();
+let currentSolveOwnerUid = null;
 let solveMoves = [];
 let solveStartedAt = 0;
 let battleInputState = "inactive";
@@ -763,6 +764,7 @@ function isBattleInputLocked() {
 
 function resetSolveStats() {
   currentSolveId = crypto.randomUUID();
+  currentSolveOwnerUid = window.getAnalyticsIdentity?.()?.uid || null;
   solveMoveCount = 0;
   solveMoves = [];
   solveStartedAt = 0;
@@ -1298,6 +1300,7 @@ function getCurrentSolveStats(timeSeconds = null) {
 
   return {
     solveId: currentSolveId,
+    ownerUid: currentSolveOwnerUid,
     moveCount: normalizedMoveCount,
     source: window.BotBattle?.active ? "bot" : isBattleModeActive() ? "battle" : "normal",
     moves: [...solveMoves],

@@ -47,14 +47,14 @@
       // The existing display clock samples every 10ms and stores hundredths.
       // Clamp the trailing animation endpoint to that same official final time.
       const ms=Math.round(time*1000),turns=r.turns.map(([m,a,b])=>[m,Math.min(a,ms),Math.min(b,ms)]);
-      const d={v:1,scramble:r.scramble,pre:r.pre,initial:r.initial,turns,ms,count:stats.moveCount,tps:stats.tps};
+      const d={v:1,solveId:stats.solveId||null,ownerUid:root.SolveAnalytics?root.SolveAnalytics.ownerUidFor(stats,root.getAnalyticsIdentity?.()):null,scramble:r.scramble,pre:r.pre,initial:r.initial,turns,ms,count:stats.moveCount,tps:stats.tps};
       validate(d,parse,count);
       if(S.signature(S.applyAll(unpack(d.initial),d.turns.map(t=>t[0]),parse))!==finalState)throw Error('Final state mismatch');
       const json=JSON.stringify(d);if(json.length*2>MAX_BYTES)throw Error('Replay too large');
       if(seq!==saveSequence)return;localStorage.setItem(KEY,json);latest=d;refresh();
     }catch(error){console.warn('Replay not saved; previous replay retained.',error);}},0);
   }
-  root.SolveReplay={begin,finish,cancel,get active(){return !!view;},get data(){return latest;}};
+  root.SolveReplay={begin,finish,cancel,open,get active(){return !!view;},get data(){return latest;}};
   addEventListener('stcube:cube-reset',()=>{cancel();preparation=null;refresh();});
   addEventListener('stcube:scramble-applied',e=>{cancel();const moves=e.detail.moves.map(S.normalize),initial=root.getCubeSnapshot();preparation={scramble:moves.join(' '),origin:S.applyAll(initial,S.invert(moves),parse),pre:[]};});
   addEventListener('stcube:move-start',e=>{if(recording)recording.inflight={move:S.normalize(e.detail.move),t:Math.max(0,Date.now()-recording.epoch)};});
@@ -93,7 +93,7 @@
   }
   let previousFocus;
   function close(){if(!view)return;view.dispose();view=null;document.getElementById('replayModal').hidden=true;previousFocus?.focus();}
-  function open(){if(!latest||!eligible()||isTimerRunning()||normalScramblePreparing||normalInspectionActive||root.isCubeBusy())return;try{validate(latest,parse,count);previousFocus=document.activeElement;document.getElementById('replayModal').hidden=false;document.getElementById('replaySeek').max=latest.ms;view=new ReplayView(document.getElementById('replayCube'));document.getElementById('replaySpeed').value='1';document.getElementById('replayClose').focus();}catch(e){close();document.getElementById('replayModal').hidden=true;console.warn('Replay unavailable',e);}}
+  function open(expectedId){if(view||!latest||(typeof expectedId==='string'&&latest.solveId!==expectedId)||!eligible()||isTimerRunning()||normalScramblePreparing||normalInspectionActive||root.isCubeBusy())return false;try{validate(latest,parse,count);previousFocus=document.activeElement;document.getElementById('replayModal').hidden=false;document.getElementById('replaySeek').max=latest.ms;view=new ReplayView(document.getElementById('replayCube'));document.getElementById('replaySpeed').value='1';document.getElementById('replayClose').focus();return true;}catch(e){close();document.getElementById('replayModal').hidden=true;console.warn('Replay unavailable',e);return false;}}
   document.addEventListener('DOMContentLoaded',()=>{
     document.body.insertAdjacentHTML('beforeend',`<div id="replayModal" class="app-modal" hidden role="dialog" aria-modal="true" aria-labelledby="replayTitle"><section class="modal-content replay-content"><div class="modal-heading"><h2 id="replayTitle">Solve Replay</h2><button id="replayClose" type="button">Close</button></div><div id="replayCube" aria-label="Replay 3D cube"></div><p id="replayInfo" role="status"></p><label for="replaySeek">Playback position</label><input id="replaySeek" type="range" min="0" step="1" value="0"><div class="replay-actions"><button id="replayRestart">Restart</button><button id="replayPrevious">Previous turn</button><button id="replayPlay">Play</button><button id="replayNext">Next turn</button><label>Speed <select id="replaySpeed"><option>0.25</option><option>0.5</option><option selected>1</option><option>2</option><option>4</option></select> ×</label></div></section></div>`);
     try{const raw=localStorage.getItem(KEY);if(raw&&raw.length*2<=MAX_BYTES)latest=validate(JSON.parse(raw),parse,count);}catch(e){latest=null;}

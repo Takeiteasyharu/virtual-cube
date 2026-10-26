@@ -4591,6 +4591,7 @@ if (isConfigured()) {
       if(window.BotBattle?.active)leaveBattleMode().catch(console.error);
     }
     currentUser = user;
+    window.dispatchEvent(new Event('stcube:analytics-identity'));
     if(user)rankedRecoveryPromise=recoverAbandonedRankedSearch();
     if (!profileModal.hidden) showProfile().catch(console.error);
 
@@ -4707,6 +4708,7 @@ function renderBattleResultsUI({finished,ranked,you,opponent,bot=false}) {
 window.renderBattleResultsUI=renderBattleResultsUI;
 window.addEventListener('pagehide',()=>{if(window.BotBattle?.active)window.BotBattle.dispose();else if(rankedSearchLocked)cancelRandomMatch().catch(()=>{});releaseRankedSearchLock();});
 window.isRealCubeBattle = () => document.body.classList.contains("battle-mode") && activeRoom?.cubeMode === "real";
+window.getAnalyticsIdentity = () => currentUser ? {uid:currentUser.uid,type:currentUser.isAnonymous?'Guest':'Google'} : null;
 window.isRealFriendBattle = () => document.body.classList.contains("battle-mode") && isRealFriendRoom();
 window.isManualRealFriendEntry = () => document.body.classList.contains("battle-mode") && isManualRealFriendEntry();
 window.beginRealCubeInspection = beginRealCubeInspection;

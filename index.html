@@ -54,6 +54,7 @@
         <progress id="guidedProgress" value="0" max="1" aria-label="Guided Solve progress"></progress>
       </section>
       <div class="header-actions" aria-label="Main actions">
+        <button id="openAnalyticsBtn" class="header-action secondary-action">Analytics</button>
         <button id="openDailyBtn" class="header-action secondary-action">Daily Challenge</button>
         <button id="openBattleBtn" class="header-action primary-action"><span aria-hidden="true">&#9876;</span> Battle</button>
         <a id="battleGuideLink" class="header-action secondary-action" href="/online-battle/"><span class="guide-full-label">How to Play &amp; Battle Guide</span><span class="guide-short-label">Game Guide</span></a>
@@ -516,6 +517,8 @@
   <script src="profile-progress.js"></script>
   <script src="profile-records.js"></script>
   <script src="profile-view.js"></script>
+  <script src="solve-analytics.js"></script>
+  <script src="analytics-view.js"></script>
   <script type="module" src="online.js"></script>
   <script>
     if ("serviceWorker" in navigator) {

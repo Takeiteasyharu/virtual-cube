@@ -1,6 +1,7 @@
 {
   "name":"stcube-daily-tools", "private":true, "type":"commonjs",
   "scripts": {
+    "test:analytics":"node --test tests/solve-analytics.test.cjs",
     "test:random":"firebase emulators:exec --only firestore --project demo-stcube-random \"node --test tests/random-matchmaking-rules.test.cjs tests/bot-matchmaking.test.cjs\"",
     "test:random:browser":"firebase emulators:exec --only firestore --project demo-stcube-random-browser \"node tools/test-random-browser.cjs\"",
     "daily:seed":"node tools/daily-seed.mjs --project virtual-cube-timer --days 30",
