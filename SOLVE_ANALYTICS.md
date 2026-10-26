@@ -55,6 +55,14 @@ to the display range. Ties are not new PBs. The first retained result has an
 unknown earlier PB, not a claimed lifetime first solve. New dates are ISO;
 old dates remain exactly as stored.
 
+Time charts auto-focus only when at least eight finite values contain a severe
+outlier (over 10 times the median and beyond Q3 + 6 IQR), with at least 75% of
+values in the typical band. Off-scale values remain selectable as triangles;
+the notice provides a review button and a Full range switch. This is display
+zoom only: no times, overview statistics or rolling averages are changed.
+Large axis labels use k/M units to avoid clipping. A long legacy record is not
+assumed to be milliseconds or corrupt; its true origin needs the saved record.
+
 ## Replay and performance
 
 Replay still stores one verified solve under `stcubeSolveReplayV1` (v1), with

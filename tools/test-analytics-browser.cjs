@@ -12,10 +12,16 @@ async function turn(p,m){await p.evaluate(m=>performMove(m),m);await p.waitForFu
   if(!live){
    await p.evaluate(()=>{
     const history=Array.from({length:70},(_,i)=>({solveId:'fixture-'+i,mode:'virtual',source:'normal',ownerUid:i<20?'account-a':'account-b',time:20+i%15,tps:2+i/100,moveCount:40+i,date:'Saved date '+i,scramble:'R U'}));history.splice(5,0,{mode:'virtual',source:'normal',dnf:true,time:'DNF',date:'Saved DNF date'});
+    history[35].time=67792;history[35].tps=0;
     history.push({mode:'virtual',source:'bot',time:1},{mode:'real',source:'normal',time:2});localStorage.setItem('virtualCubeSolveHistory',JSON.stringify(history));window.getAnalyticsIdentity=()=>null;
    });
    await p.locator('#openAnalyticsBtn').click();assert.match(await p.locator('#analyticsCoverage').innerText(),/71 available/);
    for(const [value,count]of [['10','10'],['50','50'],['100','71'],['all','71']]){await p.locator('#analyticsRange').selectOption(value);assert.equal(await p.locator('#analyticsOverview strong').first().innerText(),count);}
+   assert(Number(await p.locator('#analyticsTimeChart svg').getAttribute('data-scale-top'))<100);assert.equal(await p.locator('#analyticsTimeChart .analytics-outlier').count(),1);
+   const average=await p.locator('#analyticsOverview strong').nth(1).innerText();await p.locator('[data-review]').click();assert.match(await p.locator('#analyticsDetails').innerText(),/67792\.00/);assert.match(await p.locator('#analyticsDetails').innerText(),/has not been converted or excluded/);
+   await p.locator('#analyticsTimeScale').selectOption('full');assert(Number(await p.locator('#analyticsTimeChart svg').getAttribute('data-scale-top'))>67792);assert.equal(await p.locator('#analyticsTimeChart .analytics-outlier').count(),0);assert.equal(await p.locator('#analyticsOverview strong').nth(1).innerText(),average);
+   assert(await p.locator('#analyticsTimeChart svg').evaluate(svg=>[...svg.querySelectorAll('.analytics-axis')].every(t=>t.getBBox().x>=0)));
+   await p.locator('#analyticsTimeScale').selectOption('focus');assert.equal(await p.evaluate(()=>JSON.parse(localStorage.getItem('virtualCubeSolveHistory')).filter(r=>r.time===67792).length),1);
    for(const metric of ['ao5','ao12','time']){await p.locator('#analyticsTimeMetric').selectOption(metric);assert(await p.locator('#analyticsTimeChart svg').isVisible());}
    const plot=p.locator('#analyticsTimeChart svg'),box=await plot.boundingBox(),units=Number(await plot.getAttribute('data-width'));await plot.click({position:{x:50/units*box.width,y:60}});assert.match(await p.locator('#analyticsDetails').innerText(),/Saved date 69/);
    assert.equal(await p.locator('#analyticsReplayBtn').count(),0);

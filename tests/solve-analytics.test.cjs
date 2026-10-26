@@ -45,3 +45,15 @@ test('existing local save path retains 100, records ownership/ISO in place, and 
 test('identity changes during a solve do not assign its local history to either account',()=>{
  assert.equal(A.ownerUidFor({ownerUid:'a'},{uid:'a'}),'a');assert.equal(A.ownerUidFor({ownerUid:'a'},{uid:'b'}),null);assert.equal(A.ownerUidFor({ownerUid:null},{uid:'b'}),null);assert.equal(A.ownerUidFor({ownerUid:'a'},null),null);
 });
+test('an isolated 67,792-second saved result does not flatten the auto-focused time chart; raw data and averages stay intact',()=>{
+ const values=Array.from({length:73},(_,i)=>i===43?67792:20+i%15),original=JSON.stringify(values),focused=A.chartScale(values),full=A.chartScale(values,false);
+ assert(focused.focused);assert.equal(focused.clipped,1);assert(focused.top<100);assert(full.top>67792);assert.equal(full.clipped,0);assert.equal(JSON.stringify(values),original);
+ const data=A.analyze(values.map(t=>r(t)));assert.equal(data.summary.total,73);assert.equal(data.rows.filter(x=>x.time===67792).length,1);assert(data.summary.average>900);
+ assert.equal(A.tickLabel(75927.2),'75.9k');
+});
+test('ordinary variation, small samples and a majority of slow solves are never silently cropped',()=>{
+ for(const values of [[20,22,25,60],Array.from({length:30},(_,i)=>20+i),[1,1,1,1,1,1,1,1000],Array(12).fill(60000)]){
+  const result=A.chartScale(values);if(values.length===8)assert(result.focused);else{assert.equal(result.focused,false);assert.equal(result.clipped,0);}
+ }
+ assert(Number.isFinite(A.chartScale([Number.MAX_VALUE],false).top));
+});

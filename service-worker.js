@@ -1,4 +1,4 @@
-const CACHE_NAME = "virtual-cube-timer-v131";
+const CACHE_NAME = "virtual-cube-timer-v132";
 const BASE_PATH = new URL("./", self.location.href).pathname;
 const APP_FILE_EXTENSIONS = [".html", ".css", ".js", ".json"];
 

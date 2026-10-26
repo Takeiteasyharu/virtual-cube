@@ -20,6 +20,8 @@ body #analyticsModal .analytics-content { width:min(1050px,100%);max-width:100%;
 .analytics-dot { fill:var(--accent);cursor:pointer; }
 .analytics-dot.selected { fill:var(--text);stroke:var(--accent);stroke-width:3; }
 .analytics-dnf { fill:#df4771;font:bold 24px sans-serif; }
+.analytics-outlier { fill:var(--accent);font:bold 20px sans-serif;cursor:pointer; }
+#analyticsScaleNotice button { font-size:13px;min-height:36px;margin:4px 0; }
 #analyticsDetails dl { display:grid;grid-template-columns:110px minmax(0,1fr);gap:8px;font-size:14px; }
 #analyticsDetails dt { color:var(--text-muted); } #analyticsDetails dd { margin:0;overflow-wrap:anywhere; }
 #analyticsPbHistory { padding-left:20px;font-size:14px;line-height:1.8;overflow-wrap:anywhere; }
