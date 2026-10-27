@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#eaffc9" />
+  <meta name="theme-color" content="#f8f5ed" />
   <title>STcube - Virtual Cube Timer | Online Rubik's Cube Timer & Multiplayer Battles</title>
 
   <meta name="description" content="Practice Rubik's Cube online with a virtual cube timer, 15-second inspection, TPS tracking, rankings, profiles, and multiplayer battles.">
@@ -26,6 +26,7 @@
   <link rel="apple-touch-icon" href="images/icon-192.png">
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="game-ui.css" />
+  <link rel="stylesheet" href="toy-room.css" />
   <script src="game-ui.js" defer></script>
   <link rel="canonical" href="https://stcube3d.com/">
   <meta name="google-site-verification" content="7IjdF9-mUBmC39GA9dpwrLpdu674KJkCRvziJruWiXM" />
@@ -44,9 +45,10 @@
   </script>
 </head>
 <body>
+  <div class="toy-room-decor" aria-hidden="true"><i></i><i></i><i></i></div>
   <div class="app">
     <header>
-      <h1>STcube</h1>
+      <h1 class="toy-brand"><span class="toy-brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span>STcube<small>A little play. A little progress.</small></span></h1>
       <div class="scramble" id="scrambleText">Scramble will appear here</div>
       <section id="guidedSteps" hidden aria-label="Guided Solve steps">
         <div class="guided-caption"><span id="guidedStatus" role="status"></span><span id="guidedProgressText"></span></div>
@@ -233,6 +235,7 @@
     <main>
       <section class="left-panel">
         <section class="account-summary" aria-label="Account status">
+          <p class="toy-eyebrow">PLAYER CORNER</p>
           <div class="account-greeting" id="accountGreeting">Log in to join the rankings.</div>
           <div class="account-rank" id="accountRank"></div>
           <div class="account-rating" id="accountRating">Rating: -</div>
@@ -240,7 +243,8 @@
         </section>
 
         <section class="login-panel" aria-label="Login">
-          <h2>Login</h2>
+          <h2>Make yourself at home.</h2>
+          <p class="toy-support">Save your progress. Find your people.</p>
           <input id="playerNameInput" type="text" maxlength="24" placeholder="Player name" />
           <div class="buttons auth-buttons">
             <button id="googleLoginBtn">Google Login</button>
@@ -303,6 +307,7 @@
         <div id="guidedSideSlot"></div>
         <div class="timer" id="timerDisplay">0.00</div>
         <div class="normal-real-history-column">
+          <p class="toy-eyebrow">YOUR RECORD SHELF</p>
           <div class="tps-display" id="tpsDisplay">TPS: -</div>
           <div class="moves-display" id="movesDisplay">Moves: -</div>
 
@@ -324,7 +329,7 @@
             Last move: <span id="lastMove">-</span>
           </div>
 
-          <h2>Solve History</h2>
+          <h2>Solve History <span class="toy-section-dot" aria-hidden="true"></span></h2>
           <ul id="timeList"></ul>
 
         </div>
@@ -386,17 +391,20 @@
   <div class="app-modal feature-modal" id="battleModal" hidden role="dialog" aria-modal="true" aria-labelledby="battleTitle">
     <section class="modal-content feature-content battle-panel" aria-label="Battle selection">
       <div class="modal-heading"><h2 id="battleTitle">Battle</h2><button class="modal-close" data-close-modal="battleModal" aria-label="Close Battle">Close</button></div>
+      <div class="toy-battle-intro"><span class="toy-eyebrow">THE PLAY ARENA</span><p>Same scramble. A fresh challenge.</p><small>Race a friend or find your next opponent.</small></div>
       <div class="battle-choice-tabs" role="tablist">
         <button class="battle-choice-tab active" data-battle-choice="friend">Friend Battle</button>
         <button class="battle-choice-tab" data-battle-choice="ranked">Random Battle</button>
       </div>
       <div id="friendBattleControls" class="friend-battle-flow">
         <section class="friend-battle-card friend-create-card" aria-label="Create a friend room">
+          <span class="toy-step-label">01 · HOST</span>
           <h3>Create Room</h3>
           <button id="createRoomBtn" class="primary-action">Create Room</button>
         </section>
         <div class="friend-battle-divider"><span>OR</span></div>
         <section class="friend-battle-card" aria-label="Join a friend room">
+          <span class="toy-step-label">02 · JOIN</span>
           <h3>Join a Room</h3>
           <input id="roomIdInput" type="text" maxlength="12" placeholder="Room ID" />
           <button id="joinRoomBtn" class="primary-action">Join Room</button>

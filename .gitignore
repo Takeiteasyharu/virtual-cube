@@ -16,4 +16,5 @@ _site/
 credentials*.json
 .daily-verification/
 .bot-verification/
+.toy-verification/
 

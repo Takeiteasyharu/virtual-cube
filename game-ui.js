@@ -28,7 +28,7 @@ document.addEventListener("DOMContentLoaded", () => {
   new MutationObserver(() => {
     const next = Number(pb.textContent);
     if (next > 0 && (!Number.isFinite(previous) || next < previous)) {
-      pb.animate([{ background: "#75612c" }, { background: "transparent" }], { duration: matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 800 });
+      pb.animate([{ transform: "scale(1.08)" }, { transform: "scale(1)" }], { duration: matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 240 });
     }
     previous = next;
   }).observe(pb, { childList: true, characterData: true, subtree: true });

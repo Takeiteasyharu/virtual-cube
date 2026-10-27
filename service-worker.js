@@ -1,4 +1,4 @@
-const CACHE_NAME = "virtual-cube-timer-v134";
+const CACHE_NAME = "virtual-cube-timer-v135";
 const BASE_PATH = new URL("./", self.location.href).pathname;
 const APP_FILE_EXTENSIONS = [".html", ".css", ".js", ".json"];
 
@@ -12,6 +12,7 @@ const CACHE_URLS = [
   `${BASE_PATH}online-battle/guide.css`,
   `${BASE_PATH}style.css`,
   `${BASE_PATH}game-ui.css`,
+  `${BASE_PATH}toy-room.css`,
   `${BASE_PATH}game-ui.js`,
   `${BASE_PATH}cube.js`,
   `${BASE_PATH}opponent-cube.js`,

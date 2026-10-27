@@ -1,12 +1,12 @@
 {
-  "name": "Virtual Cube Timer",
-  "short_name": "Cube Timer",
+  "name": "STcube - Virtual Cube Playground",
+  "short_name": "STcube",
   "description": "A virtual cube timer with online rankings.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#eaffc9",
-  "theme_color": "#eaffc9",
+  "background_color": "#f8f5ed",
+  "theme_color": "#f8f5ed",
   "icons": [
     {
       "src": "images/icon-192.png",
