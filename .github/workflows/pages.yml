@@ -25,6 +25,9 @@ jobs:
       - name: Test guided solve, replay, bot model and English UI
         run: node --test tests/guided-solver.test.cjs tests/solve-replay.test.cjs tests/solve-analytics.test.cjs tests/ui-language.test.cjs tests/bot-model.test.cjs tests/matchmaking-config.test.cjs tests/rating-display.test.cjs tests/battle-moment.test.cjs tests/online-battle-page.test.cjs tests/profile-records.test.cjs tests/profile-progress.test.cjs tests/battle-flow.test.cjs tests/battle-end.test.cjs
 
+      - name: Test input and render scheduling
+        run: node --test tests/input-render.test.cjs
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 

@@ -3666,7 +3666,9 @@ async function notifyBattleMove(move) {
   battleMovesByRole[activeRoomRole] = [...(battleMovesByRole[activeRoomRole] || []), moveData];
   const localPlayer = battlePlayersByRole[activeRoomRole];
   if (localPlayer) localPlayer.lastMove = moveData.move;
-  renderBattleUi();
+  // Input must not synchronously rebuild the room before queueCubeMove runs.
+  // The existing battle clock/snapshots refresh the remaining metadata.
+  setBattleText("battleYouLastMove", moveData.move);
   await addDoc(
     collection(db, BATTLE_ROOMS_COLLECTION, activeRoomId, "players", currentUser.uid, "moves"),
     moveData
@@ -4018,9 +4020,29 @@ async function applyRankedBattleResultAsHost(roomId=activeRoomId,roomHint=active
   }
 }
 
+let lastBotClockRender = -Infinity;
 function renderBattleLocalTimer(seconds) {
   localBattleTimerSeconds = Math.max(0, Number(seconds) || 0);
-  renderBattleUi();
+  // A 10ms timer tick must not rebuild the room, run settlement/recovery,
+  // redraw rosters and touch subscription state. Room snapshots and status
+  // transitions still run the complete renderer independently.
+  if (!activeRoomId || !activeRoom) return;
+  if (activeRoom.isBot) {
+    // Keep live BOT progress without rebuilding the entire battle 100x/sec.
+    const now = performance.now();
+    if (now - lastBotClockRender >= 100) {
+      lastBotClockRender = now;
+      window.BotBattle?.render();
+    }
+    return;
+  }
+  const you = getDisplayPlayer(activeRoomRole);
+  setBattleText("battleYouTimer", formatBattleTime(getBattlePlayerSeconds(you, activeRoomRole)));
+  if (friendRealTimerDisplay && isRealFriendRoom()) {
+    const text = you?.status === "dnf" ? "DNF"
+      : formatBattleTime(hasFinalBattleTime(you) ? Number(you.finalTime) : localBattleTimerSeconds);
+    if (friendRealTimerDisplay.textContent !== text) friendRealTimerDisplay.textContent = text;
+  }
 }
 
 function handleBattleFinishSyncError(error) {

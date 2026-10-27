@@ -4,6 +4,7 @@ let cubies = [];
 let isAnimating = false;
 let rotationGeneration = 0;
 let activeRotationGroup = null;
+let updateActiveRotation = null;
 
 const CUBE_SIZE = 0.95;
 const GAP = 0.32;
@@ -155,8 +156,11 @@ cubie.add(sticker);
   return cubie;
 }
 
-function animateScene() {
+function animateScene(now = performance.now()) {
   requestAnimationFrame(animateScene);
+  // Advance before drawing: separate RAF callbacks drew the previous angle
+  // and spent the first animation frame at zero progress.
+  if (updateActiveRotation) updateActiveRotation(now);
   renderer.render(scene, camera);
 }
 
@@ -199,6 +203,7 @@ window.applyCubeSizeScale = applyCubeSizeScale;
 
 function resetCube() {
   rotationGeneration++;
+  updateActiveRotation = null;
   moveQueue = [];
   isAnimating = false;
   if (activeRotationGroup) scene.remove(activeRotationGroup);
@@ -307,17 +312,15 @@ function rotateLayer(axis, layers, angle, durationMs = 100, move = "") {
     group.attach(cubie);
   });
 
-  let startedAt = 0;
+  const startedAt = performance.now();
 
   function animate(now = performance.now()) {
     if (generation !== rotationGeneration) return;
-    if (!startedAt) startedAt = now;
     const progress = Math.min(1, (now - startedAt) / durationMs);
     group.rotation[axis] = angle * progress;
 
-    if (progress < 1) {
-      requestAnimationFrame(animate);
-    } else {
+    if (progress >= 1) {
+      updateActiveRotation = null;
       selected.forEach(cubie => {
         scene.attach(cubie);
         updateCoord(cubie, axis, angle);
@@ -332,7 +335,7 @@ function rotateLayer(axis, layers, angle, durationMs = 100, move = "") {
     }
   }
 
-  requestAnimationFrame(animate);
+  updateActiveRotation = animate;
 }
 
 function updateCoord(cubie, axis, angle) {

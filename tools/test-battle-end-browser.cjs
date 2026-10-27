@@ -18,6 +18,38 @@ async function open(browser,uid,viewport={width:1440,height:1000}){
 }
 async function solve(p){await p.evaluate(()=>performMove('F2'));await p.waitForFunction(()=>!isCubeBusy());await p.waitForTimeout(3200);for(const m of ["U'","R'"]){await p.evaluate(m=>performMove(m),m);await p.waitForFunction(()=>!isCubeBusy());}assert.equal(await p.evaluate(()=>isCubeSolved()),true,JSON.stringify(await p.evaluate(()=>({input:battleInputState,end:BattleEnd.phase,room:__battleTest.room?.status,last:document.getElementById('lastMove').textContent}))));}
 async function layout(p,label){fs.mkdirSync('.bot-verification',{recursive:true});for(const dark of[false,true]){await p.evaluate(d=>document.body.classList.toggle('dark',d),dark);await p.waitForTimeout(80);const ok=await p.evaluate(()=>{const el=document.querySelector('.battle-end-content'),r=el.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth+1&&r.bottom<=innerHeight+1&&el.scrollWidth<=el.clientWidth+1&&el.scrollHeight<=el.clientHeight+1;});assert(ok,'Battle end layout '+label);await p.screenshot({path:'.bot-verification/end-'+label+'-'+dark+'.png'});}}
+// Optional timing probe uses actual keydown -> shared rotation -> render path
+// while two clients are in a real Emulator-backed battle (not production).
+if(process.env.STCUBE_INPUT_LATENCY){
+ const originalSolve=solve,measured=new WeakSet();
+ solve=async p=>{
+  if(!measured.has(p)){
+   measured.add(p);
+   for(const burst of [false,true])console.log('HUMAN_LATENCY',JSON.stringify(await p.evaluate(async burst=>{
+    const origin=GuidedSolver.signature(getCubeSnapshot()),inputs=[],starts=[],visible=[],done=[];
+    const start=()=>starts.push(performance.now()),complete=e=>done.push(e.detail.move);
+    addEventListener('stcube:move-start',start);addEventListener('stcube:move-complete',complete);
+    const draw=renderer.render;renderer.render=function(...args){if(activeRotationGroup&&Math.abs(activeRotationGroup.rotation.x)+Math.abs(activeRotationGroup.rotation.y)+Math.abs(activeRotationGroup.rotation.z)>0&&visible.length<starts.length)visible.push(performance.now());return draw.apply(this,args);};
+    for(const key of burst?['i','k','j','f','h','g','d','e','s','l','w','o']:['i','k']){
+     const t=performance.now();document.dispatchEvent(new KeyboardEvent('keydown',{key,code:'Key'+key.toUpperCase(),bubbles:true}));inputs.push({t,handler:performance.now()-t,move:getMoveFromKey(key)});
+     if(burst)await new Promise(r=>setTimeout(r,8));else while(isCubeBusy())await new Promise(r=>setTimeout(r,5));
+    }
+    while(isCubeBusy())await new Promise(r=>setTimeout(r,5));renderer.render=draw;removeEventListener('stcube:move-start',start);removeEventListener('stcube:move-complete',complete);
+    if(origin!==GuidedSolver.signature(getCubeSnapshot())||JSON.stringify(done)!==JSON.stringify(inputs.map(i=>i.move))||visible.length!==inputs.length)throw Error('Input order/state mismatch');
+    return {burst,starts:starts.map((t,i)=>t-inputs[i].t),visible:visible.map((t,i)=>t-inputs[i].t),handlers:inputs.map(i=>i.handler)};
+   },burst)));
+  }
+  return originalSolve(p);
+ };
+}
+if(process.env.STCUBE_INPUT_BASELINE){
+ const read=fs.readFileSync;
+ fs.readFileSync=function(file,...args){
+  if(String(file)===path.join(root,'cube.js'))file=path.join(root,'.input-latency-baseline.js');
+  if(String(file)===path.join(root,'online.js'))file=path.join(root,'.input-latency-online-baseline.js');
+  return read.call(this,file,...args);
+ };
+}
 (async()=>{
  const env=await initializeTestEnvironment({projectId:project,firestore:{host:'127.0.0.1',port:8780,rules:fs.readFileSync('firestore.rules','utf8')}});
  await env.withSecurityRulesDisabled(async c=>{for(const uid of ['host','guest','bot','friend-host','friend-guest','friend-third'])await sdk.setDoc(sdk.doc(c.firestore(),'users',uid),{uid,name:'Test Player',rating:1200,loginType:'google'});});
