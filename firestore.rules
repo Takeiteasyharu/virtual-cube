@@ -49,7 +49,8 @@ service cloud.firestore {
         && room.status == "finished"
         && room.ratingApplied == true
         && room.ratingUpdated == true
-        && room.hostUid == request.auth.uid
+        && get(/databases/$(database)/documents/battleRooms/$(roomId)).data.get('ratingUpdated',false)==false
+        && (room.hostUid == request.auth.uid || (room.get('flowVersion',0) == 3 && room.guestUid == request.auth.uid))
         && room.round == request.resource.data.lastRatedRound
         && room.ratingChanges[uid].before == resource.data.rating
         && room.ratingChanges[uid].after == request.resource.data.rating;
@@ -143,6 +144,52 @@ service cloud.firestore {
         && a.friendDnfs == b.get('friendDnfs',0) + (e.kind == 'friend' && e.result == 'dnf' ? 1 : 0);
     }
 function profileMin(a,b) { return a < b ? a : b; }
+    function originalActivityDay(uid,e) {
+      return e.get('featureVersion',2) == 3
+        ? int(get(/databases/$(database)/documents/battleRooms/$(e.roomId)).data.finishedAt.date().toMillis() / 86400000)
+        : int(request.time.date().toMillis() / 86400000);
+    }
+    function activityValues(uid,e,b) {
+      let known = exists(/databases/$(database)/documents/users/$(uid)/activityDays/$(string(e.utcDay)));
+      let cal = e.get('featureVersion',2) == 3 ? getAfter(/databases/$(database)/documents/users/$(uid)/activityCalendar/current).data : {};
+      let streak = e.utcDay == b.get('lastDayIndex',-1) ? b.currentStreak : (e.utcDay == b.get('lastDayIndex',-1)+1 ? b.get('currentStreak',0)+1 : 1);
+      return e.get('featureVersion',2) == 3
+        ? {'activeDays':cal.days,'lastDayIndex':cal.lastDay,'currentStreak':cal.current,'longestStreak':profileMax(b.get('longestStreak',0),cal.longest),'valid':cal.days == b.get('activeDays',0)+(known?0:1)}
+        : {'activeDays':b.get('activeDays',0)+(known?0:1),'lastDayIndex':e.utcDay,'currentStreak':streak,'longestStreak':profileMax(b.get('longestStreak',0),streak),'valid':e.utcDay >= b.get('lastDayIndex',-1)};
+    }
+    function calendarInsertValid(uid,a,b) {
+      let day=a.insertDay;
+      let i=a.insertIndex;
+      let runs=b.runs;
+      let left=i<runs.size()?runs[i]:{'start':day+2,'end':day+2};
+      let touches=i<runs.size() && left.start<=day+1;
+      let start=touches?profileMin(day,left.start):day;
+      let end=touches?profileMax(day,left.end):day;
+      let merge=touches && i+1<runs.size() && runs[i+1].start==end+1;
+      let lastEnd=merge?runs[i+1].end:end;
+      let removed=touches?(merge?[left,runs[i+1]]:[left]):[];
+      return day is int && day>=0 && i is int && i>=0 && i<=runs.size()
+        && (i==0 || runs[i-1].end<day-1)
+        && (i==runs.size() || left.end>=day-1)
+        && (!touches || day<left.start || day>left.end)
+        && a.runs.size()==runs.size()-removed.size()+1 && a.runs[i]=={'start':start,'end':lastEnd}
+        && a.runs.removeAll([a.runs[i]])==runs.removeAll(removed)
+        && a.days==b.days+1 && a.lastDay==a.runs[a.runs.size()-1].end
+        && a.current==a.lastDay-a.runs[a.runs.size()-1].start+1
+        && a.longest==profileMax(b.longest,lastEnd-start+1)
+        && (exists(/databases/$(database)/documents/users/$(uid)/activityDays/$(string(day))) ||
+            getAfter(/databases/$(database)/documents/users/$(uid)/activityDays/$(string(day))).data.dayIndex==day);
+    }
+    match /users/{uid}/activityCalendar/{id} {
+      allow read: if signedIn() && request.auth.uid==uid;
+      allow create: if signedIn() && request.auth.uid==uid && id=='current'
+        && request.resource.data=={'v':1,'runs':[],'days':0,'lastDay':-1,'current':0,'longest':0,'insertDay':-1,'insertIndex':0,'updatedAt':request.time};
+      allow update: if signedIn() && request.auth.uid==uid && id=='current'
+        && request.resource.data.keys().hasOnly(['v','runs','days','lastDay','current','longest','insertDay','insertIndex','updatedAt'])
+        && request.resource.data.v==1 && request.resource.data.updatedAt==request.time
+        && calendarInsertValid(uid,request.resource.data,resource.data);
+      allow delete: if false;
+    }
     function profileMax(a,b) { return a > b ? a : b; }
     function profileDetailBase(uid) {
       return exists(/databases/$(database)/documents/users/$(uid)/profileStats/details)
@@ -157,18 +204,18 @@ function profileMin(a,b) { return a < b ? a : b; }
       let p = b.get('recentTimes',[]);
       let t = e.kind != 'normal' ? (continuous ? p : []) : [e.timeMs].concat(continuous ? p : [])[0:profileMin((continuous ? p.size() : 0)+1,12)];
       let bt = b.get('badgeTimes',{});
-      let knownDay = exists(/databases/$(database)/documents/users/$(uid)/activityDays/$(string(e.utcDay)));
+      let activity = activityValues(uid,e,b);
       let streak = e.utcDay == b.get('lastDayIndex',-1) ? b.currentStreak : (e.utcDay == b.get('lastDayIndex',-1)+1 ? b.get('currentStreak',0)+1 : 1);
-      return e.featureVersion == 2 && a.lastEventId == e.id
+      return e.featureVersion in [2,3] && a.lastEventId == e.id
         && !exists(/databases/$(database)/documents/users/$(uid)/profileEvents/$(d.lastEventId))
-        && e.utcDay == int(request.time.date().toMillis() / 86400000)
-        && e.utcDay >= b.get('lastDayIndex',-1)
+        && e.utcDay == originalActivityDay(uid,e)
+        && activity.valid
         && d == {
           'v':2,'lastEventId':e.id,
           'trackingStartedAt':b.get('trackingStartedAt',request.time),'updatedAt':request.time,
           'coverageComplete':b.get('coverageComplete',true) && continuous,
-          'activeDays':b.get('activeDays',0) + (knownDay ? 0 : 1),'lastDayIndex':e.utcDay,
-          'currentStreak':streak,'longestStreak':profileMax(b.get('longestStreak',0),streak),
+          'activeDays':activity.activeDays,'lastDayIndex':activity.lastDayIndex,
+          'currentStreak':activity.currentStreak,'longestStreak':activity.longestStreak,
           'bestTpsMilli':profileMax(b.get('bestTpsMilli',0),e.kind == 'normal' ? e.tpsMilli : 0),
           'lastSolveAt':e.kind == 'normal' ? request.time : b.get('lastSolveAt',null),
           'normalTrackingStartedAt':b.get('normalTrackingStartedAt',null) != null ? b.normalTrackingStartedAt : (e.kind == 'normal' ? request.time : null),
@@ -195,7 +242,7 @@ function profileMin(a,b) { return a < b ? a : b; }
         && request.resource.data.keys().hasOnly(['v','uid','dayIndex','firstEventId','createdAt'])
         && request.resource.data.v == 1 && request.resource.data.uid == uid
         && request.resource.data.createdAt == request.time
-        && request.resource.data.dayIndex == int(request.time.date().toMillis() / 86400000)
+        && request.resource.data.dayIndex == originalActivityDay(uid,getAfter(/databases/$(database)/documents/users/$(uid)/profileEvents/$(request.resource.data.firstEventId)).data)
         && day == string(request.resource.data.dayIndex)
         && getAfter(/databases/$(database)/documents/users/$(uid)/profileStats/details).data.lastEventId == request.resource.data.firstEventId
         && getAfter(/databases/$(database)/documents/users/$(uid)/profileEvents/$(request.resource.data.firstEventId)).data.utcDay == request.resource.data.dayIndex;
@@ -251,10 +298,12 @@ function profileMin(a,b) { return a < b ? a : b; }
         && e.result in ['win','loss','draw','dnf']
         && room.get('isBot',false) == false && room.mode == e.kind
         && room.status == 'finished' && room.round == e.round && player.round == e.round
+        && (e.get('featureVersion',2)==3 ? room.get('flowVersion',0)==3 : room.get('flowVersion',0)!=3)
         && (room.mode == 'ranked' ? (uid == room.hostUid || uid == room.guestUid) :
           (room.get('maxPlayers',2) > 2 ? uid in room.activePlayerUids : (uid == room.hostUid || uid == room.guestUid)))
-        && e.result == (room.get('isDraw',false) ? 'draw' :
-          (room.get('timeLimitReached',false) || player.status == 'finished' ? (room.winnerUid == uid ? 'win' : 'loss') : 'dnf'))
+        && e.result == (room.get('flowVersion',0)==3 ?
+          (room.roundResults[uid].status=='dnf'?'dnf':uid in room.winnerUids?(room.winnerUids.size()>1?'draw':'win'):'loss') : (room.get('isDraw',false) ? 'draw' :
+          (room.get('timeLimitReached',false) || player.status == 'finished' ? (room.winnerUid == uid ? 'win' : 'loss') : 'dnf')))
         && !exists(/databases/$(database)/documents/battleResults/$(e.resultId))
         && result.schemaVersion == 2 && result.uid == uid && result.eventId == e.id
         && result.mode == e.kind && result.result == e.result && result.round == e.round && result.roomId == e.roomId;
@@ -263,7 +312,7 @@ function profileMin(a,b) { return a < b ? a : b; }
       return e.v == 1 && e.uid == uid && e.id == id && e.createdAt == request.time
         && (e.kind == 'normal' ? normalEventValid(uid,e) : (e.kind in ['friend','ranked'] && battleEventValid(uid,e)))
         && getAfter(/databases/$(database)/documents/users/$(uid)/profileStats/current).data.lastEventId == id
-        && (!('featureVersion' in e) || (e.featureVersion == 2 && e.utcDay == int(request.time.date().toMillis() / 86400000) && getAfter(/databases/$(database)/documents/users/$(uid)/profileStats/details).data.lastEventId == id));
+        && (!('featureVersion' in e) || (e.featureVersion in [2,3] && e.utcDay == originalActivityDay(uid,e) && getAfter(/databases/$(database)/documents/users/$(uid)/profileStats/details).data.lastEventId == id));
     }
     function versionedSolveValid(a,solveId) {
       let e = getAfter(/databases/$(database)/documents/users/$(a.uid)/profileEvents/$(a.eventId)).data;
@@ -341,6 +390,97 @@ function profileMin(a,b) { return a < b ? a : b; }
   allow update, delete: if false;
 }
 
+    function flowParticipants(r) { return r.mode=='friend' && r.get('maxPlayers',2)>2 ? r.get('activePlayerUids',[]) : [r.hostUid,r.guestUid]; }
+    function flowExpiry(r,p) {
+      let offline=p.updatedAt+duration.value(90,'s');
+      let deadline=r.get('roundStartedAt',null)==null?offline:r.roundStartedAt+duration.value(300,'s');
+      return offline<deadline?offline:deadline;
+    }
+    function flowBestTime(b,c) { return c.status=='finished' ? (b.get('bestTime',null)==null || c.time<b.bestTime ? c.time:b.bestTime) : b.get('bestTime',null); }
+    function flowBestScore(b,c) { return c.status=='finished'?-1:(b.get('bestTime',null)!=null? -1:profileMax(b.get('bestScore',-1),c.status=='time_limit'?c.score:-1)); }
+    function flowWinners(b,uid,c) {
+      return c.status=='finished'
+        ? (b.get('bestTime',null)==null || c.time<b.bestTime ? [uid] : c.time==b.bestTime ? b.winnerUids.concat([uid]):b.winnerUids)
+        : b.get('bestTime',null)==null && c.status=='time_limit'
+          ? (c.score>b.get('bestScore',-1)?[uid]:c.score==b.get('bestScore',-1)?b.winnerUids.concat([uid]):b.winnerUids)
+          : b.get('winnerUids',[]);
+    }
+    function flowCertificateValid(roomId,a,b) {
+      let uid=a.resultActorUid;
+      let c=a.roundResults[uid];
+      let p=get(/databases/$(database)/documents/battleRooms/$(roomId)/players/$(uid)).data;
+      let after=getAfter(/databases/$(database)/documents/battleRooms/$(roomId)/players/$(uid)).data;
+      let results=b.get('roundResults',{});
+      let winners=flowWinners(b,uid,c);
+      let total=flowParticipants(b).size();
+      let done=a.resultCount==total;
+      return request.auth.uid in flowParticipants(b) && uid in flowParticipants(b) && !(uid in results)
+        && a.diff(b).affectedKeys().hasOnly(['latestEndedAt','pendingParticipantUids','roundResults','resultCount','bestTime','bestScore','winnerUids','status','winnerUid','winnerName','isDraw','timeLimitReached','resultActorUid','updatedAt','finishedAt','roundStartedAt'])
+        && a.pendingParticipantUids==(done?[]:flowParticipants(b))
+        && a.roundResults.diff(results).affectedKeys().hasOnly([uid]) && a.roundResults.size()==results.size()+1 && a.resultCount==a.roundResults.size()
+        && c.keys().hasOnly(['status','time','score','endedAt','name','round']) && c.round==b.round && c.name==p.name
+        && c.status in ['finished','dnf','time_limit'] && c.score is int && c.score>=0 && c.score<=54
+        && (c.status=='finished' ? c.time is number && c.time>=0.01 && c.time<3600 && c.score==0 && (b.get('roundStartedAt',null)==null || request.time<=b.roundStartedAt+duration.value(300,'s')) : c.time==null)
+        && ((uid==request.auth.uid && c.endedAt==request.time && after.status==c.status && (c.status!='finished'||after.finalTime==c.time) && after.finishedAt==request.time)
+          || (c.status=='dnf' && c.time==null && c.score==0 && c.endedAt==flowExpiry(b,p) && request.time>=c.endedAt))
+        && a.bestTime==flowBestTime(b,c) && a.bestScore==flowBestScore(b,c) && a.winnerUids==winners
+        && a.status==(done?'finished':b.status) && a.winnerUid==(done&&winners.size()==1?winners[0]:'')
+        && a.winnerName==(done&&winners.size()==1?a.roundResults[winners[0]].name:'')
+        && a.isDraw==(done&&winners.size()!=1)
+        && a.timeLimitReached==(done&&a.bestTime==null&&a.bestScore>=0)
+        && a.roundStartedAt==(b.get('roundStartedAt',null)==null?request.time:b.roundStartedAt)
+        && a.latestEndedAt==(b.get('latestEndedAt',null)==null || c.endedAt>b.latestEndedAt?c.endedAt:b.latestEndedAt)
+        && (!done || a.finishedAt==a.latestEndedAt);
+    }
+    function flowRatingValid(roomId,a,b) {
+      let beforeHost=get(/databases/$(database)/documents/users/$(b.hostUid)).data;
+      let beforeGuest=get(/databases/$(database)/documents/users/$(b.guestUid)).data;
+      let host=getAfter(/databases/$(database)/documents/users/$(b.hostUid)).data;
+      let guest=getAfter(/databases/$(database)/documents/users/$(b.guestUid)).data;
+      return a.ratingApplied==true && a.ratingUpdated==true
+        && host.lastRatedRoomId==roomId && guest.lastRatedRoomId==roomId
+        && host.lastRatedRound==b.round && guest.lastRatedRound==b.round
+        && host.rankedBattles==beforeHost.get('rankedBattles',0)+1 && guest.rankedBattles==beforeGuest.get('rankedBattles',0)+1
+        && a.ratingChanges[b.hostUid].before==beforeHost.rating && a.ratingChanges[b.hostUid].after==host.rating
+        && a.ratingChanges[b.guestUid].before==beforeGuest.rating && a.ratingChanges[b.guestUid].after==guest.rating;
+    }
+    function flowRoomUpdate(roomId,a,b) {
+      return a.flowVersion==3 && a.round==b.round && a.hostUid==b.hostUid
+        && ((b.mode=='ranked' && b.status=='waiting' && b.guestUid=='' && a.guestUid==request.auth.uid && request.auth.uid!=b.hostUid
+          && a.diff(b).affectedKeys().hasOnly(['guestUid','updatedAt']))
+        || (a.guestUid==b.guestUid
+        && (('resultActorUid' in a && a.get('resultCount',0)>b.get('resultCount',0) && flowCertificateValid(roomId,a,b))
+        || (request.auth.uid in flowParticipants(b) && b.status=='finished' && b.get('ratingUpdated',false)==false && a.ratingUpdated==true
+          && flowRatingValid(roomId,a,b)
+          && a.diff(b).affectedKeys().hasOnly(['ratingApplied','ratingUpdated','ratingUpdatedAt','winnerRatingBefore','winnerRatingAfter','loserRatingBefore','loserRatingAfter','ratingChanges','repeatedOpponent','repeatedOpponentBattleCount','ratingMultiplier','ratingNotice','updatedAt']))
+        || (request.auth.uid in flowParticipants(b) && b.status!='finished' && a.status in ['ready','inspection','solving']
+          && a.diff(b).affectedKeys().hasOnly(['status','updatedAt','roundStartedAt','pendingParticipantUids']) && a.roundStartedAt==(b.get('roundStartedAt',null)==null?request.time:b.roundStartedAt)
+          && a.pendingParticipantUids==flowParticipants(b))
+        || (request.auth.uid==b.hostUid && b.get('roundStartedAt',null)==null && a.get('roundStartedAt',null)==null && a.status!='finished'
+          && a.diff(b).affectedKeys().hasOnly(['status','scramble','updatedAt','playerCount','activePlayerUids','cancelledBy'])
+          && a.get('roundResults',{})==b.get('roundResults',{}) && a.get('resultCount',0)==b.get('resultCount',0))
+        || (request.auth.uid==b.hostUid && b.mode=='friend' && b.get('roundStartedAt',null)==null && a.roundStartedAt==request.time
+          && a.status in ['ready','inspection'] && a.activePlayerUids is list && a.activePlayerUids.size()>0 && a.activePlayerUids.size()<=20 && b.hostUid in a.activePlayerUids
+          && a.pendingParticipantUids==a.activePlayerUids
+          && a.diff(b).affectedKeys().hasOnly(['status','scramble','activePlayerUids','inspectionStartTime','inspectionStartTimeMs','winnerUid','winnerName','finishedAt','updatedAt','roundStartedAt','pendingParticipantUids']))
+        || (b.mode=='friend' && a.diff(b).affectedKeys().hasOnly(['playerCount','updatedAt']) && a.playerCount is int && a.playerCount>=0 && a.playerCount<=20
+          && (a.playerCount==b.playerCount+1 || a.playerCount==b.playerCount-1)
+          && existsAfter(/databases/$(database)/documents/battleRooms/$(roomId)/players/$(request.auth.uid))))));
+    }
+    match /battleInboxes/{uid}/rounds/{id} {
+      allow read: if signedIn() && request.auth.uid==uid;
+      allow create: if signedIn() && request.resource.data.keys().hasOnly(['uid','roomId','round','state','createdAt'])
+        && request.resource.data.uid==uid && request.resource.data.state=='pending' && request.resource.data.createdAt==request.time
+        && id==request.resource.data.roomId+'_'+string(request.resource.data.round)
+        && getAfter(/databases/$(database)/documents/battleRooms/$(request.resource.data.roomId)).data.flowVersion==3
+        && getAfter(/databases/$(database)/documents/battleRooms/$(request.resource.data.roomId)).data.status=='finished'
+        && request.resource.data.round==getAfter(/databases/$(database)/documents/battleRooms/$(request.resource.data.roomId)).data.round
+        && request.auth.uid in flowParticipants(getAfter(/databases/$(database)/documents/battleRooms/$(request.resource.data.roomId)).data)
+        && uid in flowParticipants(getAfter(/databases/$(database)/documents/battleRooms/$(request.resource.data.roomId)).data);
+      allow update: if signedIn() && request.auth.uid==uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state']) && request.resource.data.state=='processed'
+        && exists(/databases/$(database)/documents/users/$(uid)/profileEvents/$('battle_'+resource.data.roomId+'_'+uid+'_'+string(resource.data.round)));
+      allow delete: if false;
+    }
     match /battleRooms/{roomId} {
       allow read: if signedIn();
 
@@ -348,12 +488,19 @@ function profileMin(a,b) { return a < b ? a : b; }
         && request.resource.data.hostUid == request.auth.uid
         && request.resource.data.guestUid == ""
         && request.resource.data.round is int
-        && request.resource.data.round >= 1;
+        && request.resource.data.round >= 1
+        && (request.resource.data.get('flowVersion',0)!=3 || (
+          request.resource.data.round==1 && request.resource.data.status=='waiting'
+          && request.resource.data.get('roundStartedAt',null)==null && request.resource.data.get('finishedAt',null)==null
+          && request.resource.data.roundResults=={} && request.resource.data.resultCount==0
+          && request.resource.data.bestTime==null && request.resource.data.bestScore==-1 && request.resource.data.winnerUids==[]
+          && request.resource.data.winnerUid=='' && request.resource.data.winnerName==''
+          && request.resource.data.get('activePlayerUids',[])==[] && request.resource.data.get('pendingParticipantUids',[])==[]));
 
       allow update: if signedIn()
   && request.resource.data.round is int
   && request.resource.data.round >= 1
-  && (
+  && (resource.data.get('flowVersion',0)==3 ? flowRoomUpdate(roomId,request.resource.data,resource.data) : (
     // Host controls room state.
     (
       resource.data.hostUid == request.auth.uid
@@ -409,7 +556,7 @@ function profileMin(a,b) { return a < b ? a : b; }
       && request.resource.data.hostUid == resource.data.hostUid
       && request.resource.data.guestUid == resource.data.guestUid
     )
-  );
+  ));
 
       allow delete: if false;
 
@@ -418,6 +565,10 @@ function profileMin(a,b) { return a < b ? a : b; }
 
         allow create, update: if signedIn()
           && request.auth.uid == uid
+          && existsAfter(/databases/$(database)/documents/battleRooms/$(roomId))
+          && (!exists(/databases/$(database)/documents/battleRooms/$(roomId))
+            ? getAfter(/databases/$(database)/documents/battleRooms/$(roomId)).data.hostUid==request.auth.uid
+            : (get(/databases/$(database)/documents/battleRooms/$(roomId)).data.get('flowVersion',0)!=3 || !(uid in get(/databases/$(database)/documents/battleRooms/$(roomId)).data.get('roundResults',{})) || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['updatedAt','active','ready'])))
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.role in ["host", "guest", "player"]
           && request.resource.data.ready is bool
@@ -473,7 +624,8 @@ function profileMin(a,b) { return a < b ? a : b; }
           );
 
         allow delete: if signedIn()
-          && request.auth.uid == uid;
+          && request.auth.uid == uid
+          && (get(/databases/$(database)/documents/battleRooms/$(roomId)).data.get('flowVersion',0)!=3 || get(/databases/$(database)/documents/battleRooms/$(roomId)).data.get('roundStartedAt',null)==null);
 
         match /moves/{moveId} {
           allow read: if signedIn();

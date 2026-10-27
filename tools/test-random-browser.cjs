@@ -46,18 +46,12 @@ async function turn(p,m){await p.evaluate(m=>performMove(m),m);await p.waitForFu
    for(const m of ['F2',"U'","R'"])await turn(p,m);
    await p.waitForFunction(()=>BotBattle.diagnostics.phase==='finished',null,{timeout:20000});assert(await p.evaluate(()=>BotBattle.diagnostics.solved));
    const target=await p.evaluate(()=>BotBattle.diagnostics.target),actual=await p.evaluate(()=>BotBattle.diagnostics.actual);assert(Math.abs(target-actual)<1);
-   assert(await p.locator('#rematchBotBtn').isVisible());
-   for(let i=0;i<3;i++){
-    const id=await p.evaluate(()=>__randomTest.id),from=Date.now();await p.locator('#rematchBotBtn').click();
-    await p.waitForFunction(old=>__randomTest.id!==old&&BotBattle.diagnostics?.phase==='ready',id);
-    assert(Date.now()-from<4500);assert.equal(await p.evaluate(()=>BotBattle.diagnostics.actual),null);
-    assert.equal(await p.evaluate(()=>battleInputState==='solving'),false);
-    await p.locator('#battleReadyBtn').click();await p.evaluate(()=>BotBattle.abort());
-   }
+   assert.equal(await p.locator('#rematchBotBtn,#playAgainBtn').count(),0);
+   await p.waitForFunction(()=>BattleEnd.phase==='leave');
    assert.equal(await p.evaluate(()=>JSON.stringify(getAllSolves())),history);assert.equal(await p.evaluate(()=>JSON.stringify(SolveReplay.data)),replay);
    await env.withSecurityRulesDisabled(async c=>{assert.equal((await sdk.getDoc(sdk.doc(c.firestore(),'users',uid))).data().rating,2100);assert(!(await sdk.getDoc(sdk.doc(c.firestore(),'matchmaking',uid))).exists());assert.equal((await sdk.getDocs(sdk.collection(c.firestore(),'battleResults'))).size,0);});
-   await p.locator('#rematchReturnBtn').click();assert.equal(await p.evaluate(()=>BotBattle.active),false);
-   assert.deepEqual(errors,[]);reports.push({viewport,botFallbackMs:delay,verifiedActualSolve:true,target,actual,immediateRematches:3,historyReplayRatingUnchanged:true,errors});await context.close();
+   await p.locator('#battleEndLeave').click();assert.equal(await p.evaluate(()=>BotBattle.active),false);
+   assert.deepEqual(errors,[]);reports.push({viewport,botFallbackMs:delay,verifiedActualSolve:true,target,actual,leaveOnly:true,historyReplayRatingUnchanged:true,errors});await context.close();
   }
   const a=await open(browser,'human-low');await a.p.locator('#botEnabledToggle').uncheck();assert.match(await a.p.locator('#botEnabledHint').innerText(),/real player only/);
   await a.p.reload();await a.p.waitForFunction(()=>!!window.__randomTest);assert.equal(await a.p.locator('#botEnabledToggle').isChecked(),false);

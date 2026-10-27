@@ -15,7 +15,7 @@
   return {scramble,config,target,moves,origin,durations:weights.map(w=>target*1000*w/sum)};
  }
  function start(prepared,name,rating){
-  clear();state={...prepared,name,rating:Number.isFinite(rating)?rating:null,phase:'ready',you:{status:'joined',time:null},bot:{status:'joined',time:null,index:0},started:null,cancelled:false};
+  clear();window.BattleEnd?.reset();state={...prepared,id:generation,name,rating:Number.isFinite(rating)?rating:null,phase:'ready',you:{status:'joined',time:null},bot:{status:'joined',time:null,index:0},started:null,cancelled:false};
   document.body.classList.add('bot-battle-mode');window.BotBattleBridge.enter(prepared.scramble);render();
  }
  function ready(){
@@ -77,7 +77,8 @@
   text('rankedMomentTitle',title);text('rankedMomentDetail',ended?'BOT battle · No rating change · Human battle statistics unchanged':s.you.time!==null?`Waiting for BOT · About ${Math.max(0,Math.ceil(s.target-elapsed))}s remaining`:`${s.config.level} BOT · No rating change`);
   text('battleNotice',s.message|| (ended?'BOT battle finished.':inspecting?'Inspection: make your first move to start.':s.you.time!==null?'Your solve is complete. Waiting for BOT.':'Unrated BOT battle in progress.'));
   const time=t=>t===null?'DNF':t.toFixed(2)+' s';text('battleResult',ended?`You: ${time(s.you.time)} | BOT: ${time(s.bot.solved?s.bot.time:null)} | Rating unchanged`:'');text('battleResultBadge',ended?(s.cancelled?'CANCELLED':s.outcome.toUpperCase()):'');
-  $('battleRematchPanel').hidden=!ended;text('battleRematchYou','Rematch searches for a human first.');text('battleRematchOpponent','BOT results do not count toward human battle statistics.');$('playAgainBtn').disabled=false;text('playAgainBtn','Find next match');
+  $('battleRematchPanel').hidden=true;
+  if(['finished','dnf'].includes(s.you.status))window.BattleEnd?.update({key:'bot_'+s.id,title:ended?(s.outcome==='win'?'YOU WIN!':s.outcome==='lose'?'BOT WINS!':'DRAW'):'SOLVE COMPLETE · RESULT PENDING',detail:`You: ${s.you.time===null?'DNF':s.you.time.toFixed(2)+' s'}. `+(ended?'Final result · No rating change.':'BOT is still solving. This is not a final result. No rating change.'),leave:()=>window.BotBattleBridge.leave()});
   $('rankedTimeLimitDisplay').hidden=false;text('rankedTimeLimitDisplay',ended?'Unrated · No ranking submission':`BOT ${s.config.level} · Your solve time limit: 2:00`);
   window.renderBattleResultsUI?.({finished:ended,ranked:true,you:{status:s.you.status,finalTime:s.you.time},opponent:{status:s.bot.status,finalTime:s.bot.solved?s.bot.time:null},bot:true});
  }

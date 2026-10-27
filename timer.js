@@ -17,6 +17,7 @@ function startTimer() {
   timerRunning = true;
   startTime = Date.now() - elapsedTime;
   try { window.SolveReplay?.begin(startTime, currentScramble); } catch (error) { console.warn("Replay recording unavailable", error); }
+  window.BattleEnd?.begin(startTime,currentScramble);
   updateMovesDisplay(null);
 
   timerInterval = setInterval(() => {
@@ -36,6 +37,7 @@ function stopTimer() {
   const solveStats = typeof window.getCurrentSolveStats === "function"
     ? window.getCurrentSolveStats(finalTime)
     : { moveCount: 0, moves: [], tps: null };
+  if(window.isBattleMode?.())window.BattleEnd?.capture(finalTime,solveStats);
   if (window.BotBattle?.active) {
     updateTpsDisplay(solveStats.tps);updateMovesDisplay(solveStats.moveCount);
     window.BotBattle.finish(finalTime, solveStats);return;

@@ -64,33 +64,36 @@
     if(preparation){preparation.pre.push(m);if(preparation.pre.length>10000)preparation=null;}
   });
   class ReplayView{
-    constructor(container){
+    constructor(container,data=latest,callbacks=null){
+      this.data=data;this.callbacks=callbacks;
       this.container=container;this.scene=new THREE.Scene();this.camera=new THREE.PerspectiveCamera(38,1,.1,100);this.camera.position.set(0,5,5);this.camera.lookAt(0,0,0);
       this.renderer=new THREE.WebGLRenderer({alpha:true,antialias:true});this.renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));container.append(this.renderer.domElement);
       this.geometry=new THREE.PlaneGeometry(.49,.49);this.materials=new Map();this.stickers=[];this.ms=0;this.speed=1;this.playing=false;this.frame=0;this.stepIndex=null;this.index=0;
-      this.checkpoints=new Map([[0,unpack(latest.initial)]]);let state=unpack(latest.initial);latest.turns.forEach((t,i)=>{state=S.apply(state,t[0],parse);if((i+1)%32===0)this.checkpoints.set(i+1,state);});
+      this.checkpoints=new Map([[0,unpack(data.initial)]]);let state=unpack(data.initial);data.turns.forEach((t,i)=>{state=S.apply(state,t[0],parse);if((i+1)%32===0)this.checkpoints.set(i+1,state);});
       this.materials.set(0,new THREE.MeshBasicMaterial({color:0,side:THREE.DoubleSide}));
       this.edges=new THREE.EdgesGeometry(this.geometry);this.edgeMaterial=new THREE.LineBasicMaterial({color:0x172333});
       for(let i=0;i<54;i++){const mesh=new THREE.Mesh(this.geometry,this.materials.get(0));mesh.add(new THREE.LineSegments(this.edges,this.edgeMaterial));this.scene.add(mesh);this.stickers.push(mesh);}
       this.resize=new ResizeObserver(()=>this.draw());this.resize.observe(container);this.draw();
     }
     draw(){
-      const d=latest,{state,index}=this.stepIndex===null?stateAt(d,this.ms,parse,this.checkpoints):stateAtIndex(d,this.stepIndex,parse,this.checkpoints),t=d.turns[index],spec=this.stepIndex===null&&t&&this.ms>=t[1]?parse(t[0]):null;
+      const d=this.data,{state,index}=this.stepIndex===null?stateAt(d,this.ms,parse,this.checkpoints):stateAtIndex(d,this.stepIndex,parse,this.checkpoints),t=d.turns[index],spec=this.stepIndex===null&&t&&this.ms>=t[1]?parse(t[0]):null;
       this.index=index;
       const fraction=spec?(t[2]===t[1]?1:Math.min(1,(this.ms-t[1])/(t[2]-t[1]))):0;
       const q=new THREE.Quaternion();if(spec)q.setFromAxisAngle(new THREE.Vector3(...['x','y','z'].map(a=>a===spec.axis?1:0)),spec.angle*fraction);
       state.forEach((s,i)=>{const mesh=this.stickers[i],p=new THREE.Vector3(...s.p).multiplyScalar(.6),n=new THREE.Vector3(...s.n);p.addScaledVector(n,.31);if(spec&&spec.layers.includes(s.p['xyz'.indexOf(spec.axis)])){p.applyQuaternion(q);n.applyQuaternion(q);}mesh.position.copy(p);mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0,0,1),n);if(!this.materials.has(s.c))this.materials.set(s.c,new THREE.MeshBasicMaterial({color:s.c,side:THREE.DoubleSide}));mesh.material=this.materials.get(s.c);});
       const w=this.container.clientWidth,h=this.container.clientHeight;if(w&&h){this.camera.aspect=w/h;const half=Math.atan(Math.tan(this.camera.fov*Math.PI/360)*Math.min(1,w/h));const distance=1.9/Math.sin(half);this.camera.position.set(0,distance/Math.SQRT2,distance/Math.SQRT2);this.camera.lookAt(0,0,0);this.camera.updateProjectionMatrix();this.renderer.setSize(w,h,false);this.renderer.render(this.scene,this.camera);}
+      if(this.callbacks){this.callbacks.draw?.({ms:this.ms,index,total:d.turns.length});return;}
       document.getElementById('replaySeek').value=this.ms;
       document.getElementById('replayInfo').textContent=`${(this.ms/1000).toFixed(2)} / ${(d.ms/1000).toFixed(2)} s · Turn ${index} / ${d.turns.length} · Moves ${d.count} · TPS ${d.tps.toFixed(2)} · ${t&&this.ms>=t[1]?t[0]:d.turns[index-1]?.[0]||'—'}`;
       document.getElementById('replayPlay').textContent=this.playing?'Pause':'Play';
     }
     pause(){this.playing=false;cancelAnimationFrame(this.frame);this.frame=0;this.draw();}
-    play(){if(this.playing)return;if(this.ms>=latest.ms)this.ms=0;this.stepIndex=null;this.playing=true;let previous=performance.now();const tick=now=>{if(!this.playing)return;this.ms=Math.min(latest.ms,this.ms+(now-previous)*this.speed);previous=now;if(this.ms>=latest.ms)this.playing=false;this.draw();if(this.playing)this.frame=requestAnimationFrame(tick);};this.frame=requestAnimationFrame(tick);this.draw();}
-    seek(ms){this.pause();this.stepIndex=null;this.ms=Math.max(0,Math.min(latest.ms,ms));this.draw();}
-    step(direction){this.pause();this.stepIndex=Math.max(0,Math.min(latest.turns.length,this.index+direction));this.ms=this.stepIndex?latest.turns[this.stepIndex-1][2]:0;this.draw();}
+    play(){if(this.playing)return;if(this.ms>=this.data.ms)this.ms=0;this.stepIndex=null;this.playing=true;let previous=performance.now();const tick=now=>{if(!this.playing)return;this.ms=Math.min(this.data.ms,this.ms+(now-previous)*this.speed);previous=now;if(this.ms>=this.data.ms)this.playing=false;this.draw();if(this.playing)this.frame=requestAnimationFrame(tick);else this.callbacks?.end?.();};this.frame=requestAnimationFrame(tick);this.draw();}
+    seek(ms){this.pause();this.stepIndex=null;this.ms=Math.max(0,Math.min(this.data.ms,ms));this.draw();}
+    step(direction){this.pause();this.stepIndex=Math.max(0,Math.min(this.data.turns.length,this.index+direction));this.ms=this.stepIndex?this.data.turns[this.stepIndex-1][2]:0;this.draw();}
     dispose(){cancelAnimationFrame(this.frame);this.playing=false;this.resize.disconnect();this.geometry.dispose();this.edges.dispose();this.edgeMaterial.dispose();this.materials.forEach(m=>m.dispose());this.renderer.dispose();this.renderer.forceContextLoss();this.renderer.domElement.remove();this.scene.clear();this.stickers=[];this.materials.clear();this.checkpoints.clear();}
   }
+  root.SolveReplay.createView=(container,data,callbacks)=>{validate(data,parse,count);return new ReplayView(container,data,callbacks);};
   let previousFocus;
   function close(){if(!view)return;view.dispose();view=null;document.getElementById('replayModal').hidden=true;previousFocus?.focus();}
   function open(expectedId){if(view||!latest||(typeof expectedId==='string'&&latest.solveId!==expectedId)||!eligible()||isTimerRunning()||normalScramblePreparing||normalInspectionActive||root.isCubeBusy())return false;try{validate(latest,parse,count);previousFocus=document.activeElement;document.getElementById('replayModal').hidden=false;document.getElementById('replaySeek').max=latest.ms;view=new ReplayView(document.getElementById('replayCube'));document.getElementById('replaySpeed').value='1';document.getElementById('replayClose').focus();return true;}catch(e){close();document.getElementById('replayModal').hidden=true;console.warn('Replay unavailable',e);return false;}}

@@ -759,6 +759,7 @@ function isBattleInspecting() {
 }
 
 function isBattleInputLocked() {
+  if(window.BattleEnd?.active)return true;
   return isBattleModeActive() && !["inspecting", "solving"].includes(battleInputState);
 }
 
@@ -1226,6 +1227,12 @@ function clearBattleInspection() {
     battleInspectionInterval = null;
   }
 }
+window.finishPersonalBattleInput=()=>{
+  clearBattleInspection();clearRankedBattleTimeLimit();
+  if(isTimerRunning())stopTimerAtLimit(elapsedTime/1000);
+  readyToSolve=false;firstTurnDone=false;battleInputState='finished';
+  setBattleInspectionOverlay(false);setSolvingMode(false);
+};
 
 function setBattleInspectionOverlay(visible, count = "15", label = "Inspection") {
   const overlay = document.getElementById("battleInspectionOverlay");

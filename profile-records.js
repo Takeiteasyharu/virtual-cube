@@ -2,6 +2,7 @@
 (function(root){
   'use strict';
   const Progress=root.ProfileProgress||(typeof require==='function'?require('./profile-progress.js'):null);
+  const Calendar=root.ActivityCalendar||(typeof require==='function'?require('./activity-calendar.js'):null);
   const scope='normal-virtual-and-human-battles-v1';
   const fields=['normalSolves','totalMoves','totalTimeMs','tpsMilliSum','pbMs','ao5Ms','ao12Ms','rankedBattles','rankedWins','rankedLosses','rankedDraws','rankedDnfs','friendBattles','friendWins','friendLosses','friendDraws','friendDnfs'];
   const eligible=s=>s?.source==='normal'&&s.mode==='virtual'&&s.rankingEligible===true&&/^[A-Za-z0-9_-]{10,100}$/.test(s.solveId||'');
@@ -19,12 +20,27 @@
   }
   function outcome(room,player,uid){
     if(room.isBot||!['ranked','friend'].includes(room.mode))throw Error('Not a human battle');
+    if(room.flowVersion===3){const r=room.roundResults?.[uid];if(!r)throw Error('Missing round certificate');if(r.status==='dnf')return 'dnf';return (room.winnerUids||[]).includes(uid)?(room.winnerUids.length>1?'draw':'win'):'loss';}
     if(room.isDraw)return 'draw';
     if(room.timeLimitReached||player?.status==='finished')return room.winnerUid===uid?'win':'loss';
     return 'dnf';
   }
   function create(sdk,db){
-    const {doc,runTransaction,serverTimestamp}=sdk;
+    const {doc,runTransaction,serverTimestamp,getDoc,getDocs,collection,query,where,limit}=sdk;
+    const cleanCalendar=(value,stamp)=>{const {changed,...data}=value;return {...data,updatedAt:stamp};};
+    async function prepareCalendar(uid){
+      const ref=doc(db,'users',uid,'activityCalendar','current'),detailRef=doc(db,'users',uid,'profileStats','details');
+      let [snapshot,detail]=await Promise.all([getDoc(ref),getDoc(detailRef)]);
+      if(!snapshot.exists())await runTransaction(db,async tx=>{if(!(await tx.get(ref)).exists())tx.set(ref,cleanCalendar(Calendar.empty(),serverTimestamp()));});
+      snapshot=await getDoc(ref);if(snapshot.data().days===Number(detail.data()?.activeDays||0))return;
+      const days=await getDocs(query(collection(db,'users',uid,'activityDays'),where('dayIndex','>',snapshot.data().lastDay),limit(1000)));
+      for(const d of days.docs)await runTransaction(db,async tx=>{
+        const snap=await tx.get(ref),next=Calendar.insert(snap.data(),Number(d.data().dayIndex));
+        if(next.changed)tx.set(ref,cleanCalendar(next,serverTimestamp()));
+      });
+      const caughtUp=await runTransaction(db,async tx=>{const [cal,current]=await Promise.all([tx.get(ref),tx.get(detailRef)]);return cal.data().days===Number(current.data()?.activeDays||0);});
+      if(!caughtUp)throw Error('Activity calendar bootstrap incomplete; result remains pending for the next bounded sync');
+    }
     async function progressRead(tx,uid){
       const day=Progress.dayIndex(Date.now()),detailRef=doc(db,'users',uid,'profileStats','details'),dayRef=doc(db,'users',uid,'activityDays',String(day));
       const [detail,activity]=await Promise.all([tx.get(detailRef),tx.get(dayRef)]);return {day,detailRef,dayRef,detail:detail.data(),exists:activity.exists()};
@@ -65,6 +81,7 @@
     }
     async function battle(uid,resultId,roomId,round,details){
       const er=doc(db,'users',uid,'profileEvents','battle_'+resultId),sr=doc(db,'users',uid,'profileStats','current'),rr=doc(db,'battleResults',resultId),roomRef=doc(db,'battleRooms',roomId),pr=doc(db,'battleRooms',roomId,'players',uid),ur=doc(db,'users',uid);
+      const preliminary=await getDoc(roomRef);if(preliminary.data()?.flowVersion===3)await prepareCalendar(uid);
       return commit(async tx=>{
         const [e,s,r,roomSnap,playerSnap,u]=await Promise.all([tx.get(er),tx.get(sr),tx.get(rr),tx.get(roomRef),tx.get(pr),tx.get(ur)]);
         // Existing pre-v1 results are not migrated or counted retroactively.
@@ -73,11 +90,24 @@
         if(!room||room.status!=='finished'||room.round!==round||!player||player.round!==round||room.isBot||!['friend','ranked'].includes(room.mode))throw Error('Round is not final');
         if(room.mode==='ranked'&&![room.hostUid,room.guestUid].includes(uid))throw Error('Not a participant');
         if(room.mode==='friend'&&room.maxPlayers>2&&!(room.activePlayerUids||[]).includes(uid))throw Error('Not a participant');
-        const progress=await progressRead(tx,uid);
+        let progress,calendar=null,calRef=null;
+        if(room.flowVersion===3){
+          const cert=room.roundResults?.[uid];if(!cert?.endedAt?.toMillis)throw Error('Missing original completion date');
+          const day=Progress.dayIndex(room.finishedAt.toMillis());calRef=doc(db,'users',uid,'activityCalendar','current');
+          const [cal,detail,activity]=await Promise.all([tx.get(calRef),tx.get(doc(db,'users',uid,'profileStats','details')),tx.get(doc(db,'users',uid,'activityDays',String(day)))]);
+          if(cal.data()?.days!==Number(detail.data()?.activeDays||0))throw Error('Activity calendar changed; retry pending result');
+          calendar=activity.exists()?cal.data():Calendar.insert(cal.data(),day);
+          progress={day,detailRef:doc(db,'users',uid,'profileStats','details'),dayRef:doc(db,'users',uid,'activityDays',String(day)),detail:detail.data(),exists:activity.exists()};
+        }else progress=await progressRead(tx,uid);
         const result=outcome(room,player,uid),stamp=serverTimestamp(),id='battle_'+resultId;
         const event={v:1,id,uid,kind:room.mode,resultId,roomId,round,result,createdAt:stamp};
         tx.set(rr,{...details,uid,result,mode:room.mode,roomId,round,schemaVersion:2,eventId:id,createdAt:stamp});
-        const summary=advance(s.data(),event,stamp);progressWrite(tx,uid,progress,s.data(),summary,event,stamp);
+        const summary=advance(s.data(),event,stamp);
+        if(calendar){
+          event.featureVersion=3;event.utcDay=progress.day;
+          tx.set(progress.detailRef,Progress.advance(progress.detail,s.data(),summary,event,stamp,progress.day,progress.exists,calendar));
+          if(!progress.exists){tx.set(progress.dayRef,{v:1,uid,dayIndex:progress.day,firstEventId:event.id,createdAt:stamp});tx.set(calRef,cleanCalendar(calendar,stamp));}
+        }else progressWrite(tx,uid,progress,s.data(),summary,event,stamp);
         tx.set(er,event);tx.set(sr,summary);
         // Ranked legacy counters are still owned by the existing Elo transaction.
         if(room.mode==='friend'){

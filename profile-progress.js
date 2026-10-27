@@ -11,7 +11,7 @@
  const value=(b,s,d)=>b.kind==='solves'?Number(s?.normalSolves||0):b.kind==='wins'?Number(s?.rankedWins||0):b.kind==='pb'?Number(s?.pbMs||0):Number(d?.longestStreak||0);
  const achieved=(b,s,d)=>b.kind==='pb'?value(b,s,d)>0&&value(b,s,d)<b.target:value(b,s,d)>=b.target;
  function average(times,n){if(times.length<n)return 0;const a=times.slice(0,n);return (a.reduce((s,x)=>s+x,0)-Math.min(...a)-Math.max(...a))/(n-2);}
- function advance(old,before,after,e,stamp,day,dayExists){
+ function advance(old,before,after,e,stamp,day,dayExists,calendar=null){
   const continuous=!old||old.lastEventId===before?.lastEventId;
   const previous=old?.lastDayIndex??-1,newDay=!dayExists;
   const streak=day===previous?(old?.currentStreak||0):day===previous+1?(old?.currentStreak||0)+1:1;
@@ -21,6 +21,10 @@
    bestTpsMilli:Math.max(old?.bestTpsMilli||0,e.kind==='normal'?e.tpsMilli:0),lastSolveAt:e.kind==='normal'?stamp:old?.lastSolveAt||null,
    normalTrackingStartedAt:old?.normalTrackingStartedAt||(e.kind==='normal'?stamp:null),recentTimes:times,badgeTimes:{}};
   for(const b of definitions)next.badgeTimes[b.id]=old?.badgeTimes?.[b.id]||(achieved(b,after,next)&&!achieved(b,before,old)?stamp:null);
+  if(calendar){
+   next.activeDays=calendar.days;next.lastDayIndex=calendar.lastDay;next.currentStreak=calendar.current;next.longestStreak=Math.max(old?.longestStreak||0,calendar.longest);
+   for(const b of definitions.filter(b=>b.kind==='streak'))next.badgeTimes[b.id]=old?.badgeTimes?.[b.id]||(achieved(b,after,next)?stamp:null);
+  }
   return next;
  }
  function badges(stats,detail){return definitions.map(b=>{
