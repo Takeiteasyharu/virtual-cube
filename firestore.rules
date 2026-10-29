@@ -5,6 +5,130 @@ service cloud.firestore {
     function signedIn() {
       return request.auth != null;
     }
+
+    // Client-assisted podiums: source membership and exact increments are checked,
+    // but Rules cannot prove that a browser selected the global best three.
+    match /rankingMedalConfig/{id} { allow read: if true; allow write: if false; }
+    match /rankingMedalAwards/{id} { allow read: if true; allow write: if false; }
+    function medalStart() { return timestamp.date(2026,10,30); }
+    function medalPad(n) { return n < 10 ? '0'+string(n) : string(n); }
+    function medalDay(t) { return string(t.year())+'-'+medalPad(t.month())+'-'+medalPad(t.day()); }
+    function medalWeek(t) {
+      let thursday=t+duration.value(4-t.dayOfWeek(),'d');
+      let week=int(math.floor((thursday.toMillis()-timestamp.date(thursday.year(),1,1).toMillis()) / 604800000))+1;
+      return string(thursday.year())+'-W'+medalPad(week);
+    }
+    function medalKey(kind,t) { return kind=='today' ? medalDay(t) : kind=='month' ? string(t.year())+'-'+medalPad(t.month()) : medalWeek(t); }
+    function medalEnd(kind,t) { return kind=='today' ? t+duration.value(1,'d') : kind=='week' ? t+duration.value(7,'d') : timestamp.date(t.month()==12?t.year()+1:t.year(),t.month()==12?1:t.month()+1,1); }
+    function medalFirst(kind) {
+      let t=medalStart();
+      return kind=='today'?t:kind=='week'?t+duration.value((8-t.dayOfWeek())%7,'d'):t.day()==1?t:medalEnd('month',t);
+    }
+    function medalBoundary(kind,t) {
+      return kind in ['today','week','month'] && t is timestamp && t>=medalFirst(kind)
+        && t==timestamp.date(t.year(),t.month(),t.day())
+        && (kind!='week'||t.dayOfWeek()==1) && (kind!='month'||t.day()==1);
+    }
+    function medalJobShape(d,kind) {
+      return d.keys().hasOnly(['v','kind','nextStart','leaseUid','leaseUntil','updatedAt'])
+        && d.v==1 && d.kind==kind && medalBoundary(kind,d.nextStart)
+        && d.leaseUid is string && d.leaseUntil is timestamp && d.updatedAt==request.time;
+    }
+    function medalLease(d) { return d.leaseUid==request.auth.uid && d.leaseUntil>request.time && d.leaseUntil<=request.time+duration.value(90,'s'); }
+    function medalClosedCertificates(kind,t) {
+      let prefix=kind+'_'+medalKey(kind,t)+'_';
+      return existsAfter(/databases/$(database)/documents/rankingMedalPeriods/$(prefix+'single'))
+        && existsAfter(/databases/$(database)/documents/rankingMedalPeriods/$(prefix+'ao5'))
+        && existsAfter(/databases/$(database)/documents/rankingMedalPeriods/$(prefix+'tps'))
+        && existsAfter(/databases/$(database)/documents/rankingMedalPeriods/$(prefix+'moves'));
+    }
+    match /rankingMedalJobs/{kind} {
+      allow read: if true;
+      allow create: if signedIn() && medalJobShape(request.resource.data,kind)
+        && request.resource.data.nextStart==medalFirst(kind)
+        && medalEnd(kind,request.resource.data.nextStart)<=request.time && medalLease(request.resource.data);
+      allow update: if signedIn() && medalJobShape(request.resource.data,kind) && (
+        (request.resource.data.nextStart==resource.data.nextStart
+          && medalEnd(kind,resource.data.nextStart)<=request.time
+          && resource.data.leaseUntil<=request.time && medalLease(request.resource.data))
+        || (resource.data.leaseUid==request.auth.uid && request.resource.data.leaseUid==''
+          && request.resource.data.leaseUntil==timestamp.value(0)
+          && (request.resource.data.nextStart==resource.data.nextStart
+            || (resource.data.leaseUntil>request.time
+              && request.resource.data.nextStart==medalEnd(kind,resource.data.nextStart)
+              && medalClosedCertificates(kind,resource.data.nextStart)))));
+      allow delete: if false;
+    }
+    function medalSource(s,id,d) {
+      let type=d.metric=='ao5'?'ao5':'single';
+      let field=d.kind=='today'?'dayKey':d.kind=='week'?'weekKey':'monthKey';
+      // Immutable v2 solves already passed the normal-event transaction Rules.
+      // Recheck provenance, period and the selected metric without duplicating
+      // the entire solve validator (Firestore has a 1,000-expression limit).
+      return s.get('schemaVersion',0)==2 && s.source=='normal' && s.mode=='virtual'
+        && s.valid==true && s.rankingType==type
+        && s.createdAt>=d.startAt && s.createdAt<d.endAt && s[field]==d.key;
+    }
+    function medalWinner(d,i,id) {
+      let w=d.winners[i];
+      let s=get(/databases/$(database)/documents/solves/$(w.solveId)).data;
+      let counter=getAfter(/databases/$(database)/documents/rankingMedals/$(w.uid)).data;
+      let field=d.metric=='tps'?'tps':d.metric=='moves'?'moveCount':'time';
+      return w.keys().hasOnly(['uid','solveId','value'])
+        && medalSource(s,w.solveId,d) && s.uid==w.uid && w.value==s[field] && w.value>0
+        && counter.lastPeriodId==id && counter.updatedAt==request.time;
+    }
+    function medalSorted(d,a,b) {
+      return d.winners[a].uid!=d.winners[b].uid && (d.metric=='tps'
+        ? d.winners[a].value>=d.winners[b].value : d.winners[a].value<=d.winners[b].value);
+    }
+    function medalProblem(d) {
+      let s=get(/databases/$(database)/documents/solves/$(d.problemSolveId)).data;
+      let field=d.kind=='today'?'dayKey':d.kind=='week'?'weekKey':'monthKey';
+      return s.get(field,'')==d.key && s.get('valid',false)==true
+        && s.get('rankingType','')==(d.metric=='ao5'?'ao5':'single') && !medalSource(s,d.problemSolveId,d);
+    }
+    function medalCertificate(d,id) {
+      let j=get(/databases/$(database)/documents/rankingMedalJobs/$(d.kind)).data;
+      return d.keys().hasOnly(['v','kind','key','metric','startAt','endAt','status','winners','problemSolveId','finalizedBy','finalizedAt'])
+        && d.v==1 && d.key==medalKey(d.kind,d.startAt)
+        && d.metric in ['single','ao5','tps','moves'] && id==d.kind+'_'+d.key+'_'+d.metric
+        && d.endAt==medalEnd(d.kind,d.startAt) && d.endAt<=request.time
+        && j.nextStart==d.startAt && j.leaseUid==request.auth.uid && j.leaseUntil>request.time
+        && d.finalizedBy==request.auth.uid && d.finalizedAt==request.time
+        && d.winners is list && d.winners.size()<=3 && d.problemSolveId is string
+        && ((d.status=='empty' && d.winners.size()==0 && d.problemSolveId=='')
+          || (d.status=='unverifiable' && d.winners.size()==0 && medalProblem(d))
+          || (d.status=='finalized' && d.problemSolveId=='' && d.winners.size()>0
+            && medalWinner(d,0,id)
+            && (d.winners.size()<2 || (medalWinner(d,1,id) && medalSorted(d,0,1)))
+            && (d.winners.size()<3 || (medalWinner(d,2,id) && medalSorted(d,1,2) && d.winners[0].uid!=d.winners[2].uid))));
+    }
+    match /rankingMedalPeriods/{id} {
+      allow read: if true;
+      allow create: if signedIn() && medalCertificate(request.resource.data,id);
+      allow update,delete: if false;
+    }
+    function medalIncrement(uid,before,after) {
+      let id=after.lastPeriodId;
+      let d=getAfter(/databases/$(database)/documents/rankingMedalPeriods/$(id)).data;
+      let rank=d.winners[0].uid==uid?0:d.winners.size()>1 && d.winners[1].uid==uid?1:d.winners.size()>2 && d.winners[2].uid==uid?2:-1;
+      return after.keys().hasOnly(['v','uid','gold','silver','bronze','lastPeriodId','updatedAt'])
+        && after.v==1 && after.uid==uid && after.updatedAt==request.time
+        && after.gold is int && after.silver is int && after.bronze is int
+        && after.gold>=0 && after.silver>=0 && after.bronze>=0
+        && !exists(/databases/$(database)/documents/rankingMedalPeriods/$(id))
+        && d.status=='finalized' && rank>=0
+        && after.gold==before.get('gold',0)+(rank==0?1:0)
+        && after.silver==before.get('silver',0)+(rank==1?1:0)
+        && after.bronze==before.get('bronze',0)+(rank==2?1:0);
+    }
+    match /rankingMedals/{uid} {
+      allow read: if true;
+      allow create: if signedIn() && medalIncrement(uid,{},request.resource.data);
+      allow update: if signedIn() && medalIncrement(uid,resource.data,request.resource.data);
+      allow delete: if false;
+    }
     
     function isRealFriendRoom(roomId) {
       let room = get(

@@ -115,6 +115,9 @@ body .bot-preference { background:var(--surface);margin-top:0;max-width:none;bor
 body #onlineRankingList,body #battleRatingList { padding-left:0;list-style-position:inside; }
 body :is(#onlineRankingList,#battleRatingList)>li { padding:14px;margin:10px 0;background:var(--surface-2);border:1px solid var(--border);border-radius:15px; }
 body .ranking-tab,body .ranking-type-tab { box-shadow:none;min-width:0; }
+body .ranking-scope-note { padding:12px 16px;border-radius:14px;background:var(--toy-blue);font-size:12px;line-height:1.6;color:var(--text-muted);margin:0 0 18px; }
+body .player-medals { display:inline-block;vertical-align:top;max-width:100%;max-height:4.8em;overflow:auto;overflow-wrap:anywhere;white-space:normal;line-height:1.5;font-size:.85em;letter-spacing:0; }
+body #onlineRankingList>li { overflow-wrap:anywhere;min-width:0; }
 body .ranking-tab.active,body .ranking-type-tab.active { background:var(--toy-yellow);color:var(--text);border-color:var(--border); }
 body .profile-section { padding:22px 0; }.profile-section:first-child { padding-top:4px; }
 body #profile-overview { border-radius:20px;padding:20px;background:var(--toy-blue);border:1px solid var(--border); }

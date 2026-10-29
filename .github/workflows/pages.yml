@@ -28,6 +28,9 @@ jobs:
       - name: Test input and render scheduling
         run: node --test tests/input-render.test.cjs tests/toy-room.test.cjs
 
+      - name: Test medal model and ranking limits
+        run: node --test tests/medals.test.cjs tests/ranking-limits.test.cjs
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
@@ -62,6 +65,9 @@ jobs:
             profile-records.js \
             profile-progress.js \
             profile-view.js \
+            ranking-medals.js \
+            medal-automation.js \
+            medal-display.js \
             solve-analytics.js \
             analytics-view.js \
             opponent-cube.js \

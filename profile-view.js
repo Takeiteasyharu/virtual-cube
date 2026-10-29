@@ -13,7 +13,8 @@
  function render(container,m){
   stopDayTimer();
   container.replaceChildren();container.classList.add('profile-dashboard');const a=m.account||{},s=m.stats,raw=m.detail,d=raw&&s&&raw.lastEventId!==s.lastEventId?{...raw,coverageComplete:false,recentTimes:[],lastSolveAt:null}:raw,untracked='Not tracked yet';
-  const overview=section(container,'Player Overview','profile-overview');overview.append(node('p',m.name,'profile-player-name'));
+  const overview=section(container,'Player Overview','profile-overview'),playerName=node('p',m.name,'profile-player-name');root.MedalDisplay?.append(playerName,m.medals);overview.append(playerName);
+  if(m.medalStatus)note(overview,m.medalStatus==='available'?'Permanent medals are automatically finalized by visitors after each tracked UTC day, ISO week and month closes. All does not award medals. Tracking starts October 30, 2026; earlier results are not backfilled.':'Ranking medals are temporarily unavailable. Other profile statistics are unchanged.');
   overview.append(grid([['Login Type',m.guest?'Guest':'Google'],['Account Created',date(m.createdAt)],['Battle Rating',m.guest?'Unrated':count(a.rating??1200)],['Battle Rating Rank',m.ranks.battle],['Single PB Rank · Tracked Profiles',m.ranks.single]]));
   note(overview,'Battle rank compares Google players with ranked matches. Single PB rank compares published, tracked normal virtual PBs, not every historical solve. Ties share a rank. Unavailable ranks are never estimated. Rank checks are cached for up to one minute.');
   if(m.guest)note(overview,'Guest records belong to this anonymous account. Clearing browser data or switching devices can make the account inaccessible.');

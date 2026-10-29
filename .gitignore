@@ -17,4 +17,6 @@ credentials*.json
 .daily-verification/
 .bot-verification/
 .toy-verification/
+.medal-previews/
+.medal-verification/
 

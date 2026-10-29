@@ -1,4 +1,4 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import {
   getAuth,
   GoogleAuthProvider,
@@ -13,6 +13,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  documentId,
   getDocs,
   getDoc,
   getCountFromServer,
@@ -249,7 +250,7 @@ let battleRatingCache = { entries: [], timestamp: 0 };
 let battleRatingFetchPromise = null;
 
 function getRankingCacheKey(rankingType = activeRankingType, period = activePeriod) {
-  return `${rankingType}_${period}`;
+  return `${rankingType}_${period}_${period==='all'?'':getPeriodKeys()[period]}`;
 }
 
 function getCachedRankingEntries(rankingType = activeRankingType, period = activePeriod) {
@@ -445,7 +446,9 @@ function updateAccountSummary(user, rank = null) {
   }
 
   accountGreeting.textContent = `Hello, ${getPlayerName()}`;
-  accountRank.textContent = rank ? `Current world rank: #${rank}` : "Current world rank: -";
+  accountRank.textContent = typeof rank === "number"
+    ? `Current world rank: #${rank}`
+    : rank ? `Current ranking: ${rank}` : "Current world rank: -";
 }
 
 function isValidSolvePayload(time, scramble) {
@@ -553,7 +556,9 @@ window.addEventListener("online",()=>{
   if(currentUser)ensureUserProfile().then(()=>submitPendingSolves()).catch(error=>console.warn("Pending normal solves will retry later",error));
 });
 
+let rankingLoadGeneration = 0;
 async function refreshRanking(force = false) {
+  const generation=++rankingLoadGeneration,rankingType=activeRankingType,period=activePeriod;
   if (!isConfigured()) {
     setRankingMessage("Firebase config is required.");
     return;
@@ -562,7 +567,11 @@ async function refreshRanking(force = false) {
   setRankingMessage("Loading...");
 
   try {
-    const entries = await getRankingEntries(activeRankingType, activePeriod, force);
+    const entries = await getRankingEntries(rankingType, period, force);
+    const medals = await loadMedalTotals(entries.map(s=>s.uid),force);
+    if(generation!==rankingLoadGeneration)return;
+    const scopeNote=document.getElementById('rankingScopeNote');
+    if(scopeNote)scopeNote.textContent=`Up to ${getRankingDisplayLimit(period)} players · Best result per player · UTC periods. `+(entries.scanLimited?'Read budget reached; only verified leading players are shown. ':'')+(medals.status==='available'?'Permanent medals are finalized automatically after tracked periods close.':'Medals could not be loaded. Ranking results are unchanged.');
     rankingList.innerHTML = "";
 
     if (entries.length === 0) {
@@ -571,9 +580,10 @@ async function refreshRanking(force = false) {
       return;
     }
 
-    entries.slice(0, 50).forEach((solve, index) => {
+    entries.slice(0, getRankingDisplayLimit(period)).forEach((solve, index) => {
       const li = document.createElement("li");
-      li.textContent = formatRankingEntry(solve, index, activeRankingType);
+      li.textContent = formatRankingEntry(solve, index, rankingType);
+      window.MedalDisplay?.append(li,medals.totals.get(solve.uid));
       rankingList.appendChild(li);
     });
     refreshAccountRank(entries);
@@ -717,87 +727,43 @@ async function refreshBattleAccountRating(force = false) {
   }
 }
 
+const medalTotalsCache=new Map();
+async function loadMedalTotals(uids,force=false){
+  const totals=new Map(),missing=[...new Set(uids.filter(uid=>typeof uid==='string'&&uid))];
+  const wanted=missing.filter(uid=>force||!medalTotalsCache.has(uid)||Date.now()-medalTotalsCache.get(uid).at>RANKING_CACHE_TTL_MS);
+  let status='available';
+  try{for(let offset=0;offset<wanted.length;offset+=30){const ids=wanted.slice(offset,offset+30),snapshot=await getDocs(query(collection(db,'rankingMedals'),where(documentId(),'in',ids)));const found=new Map(snapshot.docs.map(d=>[d.id,d.data()]));for(const uid of ids){const value=found.get(uid)||null;window.RankingMedals.counts(value);medalTotalsCache.set(uid,{value,at:Date.now()});}}}catch(error){status='unavailable';console.warn('Ranking medals unavailable',error.code||error.message);}
+  for(const uid of missing)if(medalTotalsCache.has(uid))totals.set(uid,medalTotalsCache.get(uid).value);
+  return {totals,status};
+}
+
+function getRankingDisplayLimit(period) {
+  return period === "all" ? RANKING_LIMIT : 10;
+}
+
 async function getRankingEntries(rankingType, period, force = false) {
+  const displayLimit = getRankingDisplayLimit(period);
   const cacheKey = getRankingCacheKey(rankingType, period);
   if (!force) {
     const cached = getCachedRankingEntries(rankingType, period);
     if (cached) return cached;
   }
 
-  const solvesRef = collection(db, "solves");
-  let rankingQuery;
-
-  if (rankingType === "tps" || rankingType === "moves") {
-    const metricField = rankingType === "tps" ? "tps" : "moveCount";
-    const direction = rankingType === "tps" ? "desc" : "asc";
-
-    if (period === "all") {
-      rankingQuery = query(
-        solvesRef,
-        where("rankingType", "==", "single"),
-        where("valid", "==", true),
-        orderBy(metricField, direction),
-        limit(RANKING_LIMIT)
-      );
-    } else {
-      const keys = getPeriodKeys();
-      const fieldMap = { today: "dayKey", week: "weekKey", month: "monthKey" };
-      rankingQuery = query(
-        solvesRef,
-        where("rankingType", "==", "single"),
-        where("valid", "==", true),
-        where(fieldMap[period], "==", keys[period]),
-        orderBy(metricField, direction),
-        limit(RANKING_LIMIT)
-      );
-    }
-
-    const snapshot = await getDocs(rankingQuery);
-    const entries = [];
-    snapshot.forEach(entryDoc => {
-      const solve = entryDoc.data();
-      if (isValidRankingTypeEntry(solve, rankingType)) entries.push(solve);
-    });
-
-    const sortedEntries = entries.sort((a, b) => rankingType === "tps"
-      ? Number(b.tps) - Number(a.tps)
-      : Number(a.moveCount) - Number(b.moveCount));
-    rankingCache.set(cacheKey, { entries: sortedEntries, timestamp: Date.now() });
-    return sortedEntries;
+  const metricField = rankingType === "tps" ? "tps" : rankingType === "moves" ? "moveCount" : "time";
+  const constraints = [where("rankingType", "==", rankingType === "tps" || rankingType === "moves" ? "single" : rankingType),where("valid", "==", true)];
+  if (period !== "all") constraints.push(where({today:"dayKey",week:"weekKey",month:"monthKey"}[period],"==",getPeriodKeys()[period]));
+  constraints.push(orderBy(metricField,rankingType === "tps" ? "desc" : "asc"));
+  const entries=[],seen=new Set(),budget=period === "all" ? 1000 : 200;
+  let cursor=null,scanned=0,exhausted=false;
+  while(entries.length<displayLimit && scanned<budget){
+    const size=Math.min(displayLimit,budget-scanned);
+    const snapshot=await getDocs(query(collection(db,"solves"),...constraints,...(cursor?[startAfter(cursor)]:[]),limit(size)));
+    scanned+=snapshot.size;cursor=snapshot.docs.at(-1)||null;
+    for(const entryDoc of snapshot.docs){const solve=entryDoc.data();if(typeof solve.uid!=="string"||!solve.uid||seen.has(solve.uid)||!isValidRankingTypeEntry(solve,rankingType))continue;seen.add(solve.uid);entries.push(solve);if(entries.length===displayLimit)break;}
+    if(snapshot.size<size){exhausted=true;break;}
   }
-
-  if (period === "all") {
-    rankingQuery = query(
-      solvesRef,
-      where("rankingType", "==", rankingType),
-      where("valid", "==", true),
-      orderBy("time", "asc"),
-      limit(RANKING_LIMIT)
-    );
-  } else {
-    const keys = getPeriodKeys();
-    const fieldMap = { today: "dayKey", week: "weekKey", month: "monthKey" };
-
-    rankingQuery = query(
-      solvesRef,
-      where("rankingType", "==", rankingType),
-      where("valid", "==", true),
-      where(fieldMap[period], "==", keys[period]),
-      orderBy("time", "asc"),
-      limit(RANKING_LIMIT)
-    );
-  }
-
-  const snapshot = await getDocs(rankingQuery);
-  const entries = [];
-  snapshot.forEach(entryDoc => {
-    const solve = entryDoc.data();
-    if (isValidRankingTypeEntry(solve, rankingType)) entries.push(solve);
-  });
-
-  const sortedEntries = entries.sort((a, b) => Number(a.time) - Number(b.time));
-  rankingCache.set(cacheKey, { entries: sortedEntries, timestamp: Date.now() });
-  return sortedEntries;
+  entries.scanLimited=!exhausted&&entries.length<displayLimit&&scanned>=budget;
+  rankingCache.set(cacheKey,{entries,timestamp:Date.now()});return entries;
 }
 
 async function calculateMyRankingRank() {
@@ -824,7 +790,7 @@ async function refreshAccountRank(entries = null) {
       return;
     }
     const rankIndex = rankingEntries.findIndex(solve => solve.uid === currentUser.uid);
-    updateAccountSummary(currentUser, rankIndex >= 0 ? rankIndex + 1 : "50+");
+    updateAccountSummary(currentUser, rankIndex >= 0 ? rankIndex + 1 : "Not in loaded results");
   } catch (error) {
     updateAccountSummary(currentUser, null);
     console.error(error);
@@ -882,6 +848,7 @@ async function showProfile() {
     const model={name:getPlayerName(),guest:user.isAnonymous,createdAt:user.metadata?.creationTime||null,account:account.data()||{},stats:summary.data()||null,detail:detail.data()||null,real:typeof getSolves==='function'?getSolves('real'):[],ranks:{battle:'Loading...',single:'Loading...'}};
     window.ProfileView.render(profileBody,model);
     model.ranks=await loadProfileRanks(user.uid,model.account,model.stats,user.isAnonymous);
+    const medals=await loadMedalTotals([user.uid]);model.medals=medals.totals.get(user.uid);model.medalStatus=medals.status;
     if(generation===profileLoadGeneration&&currentUser?.uid===user.uid&&!profileModal.hidden)window.ProfileView.render(profileBody,model);
   }catch(error){if(generation===profileLoadGeneration)profileBody.textContent='Profile could not be loaded. Please try again.';console.error(error);}
 }
@@ -4583,6 +4550,19 @@ if (isConfigured()) {
   const app = initializeApp(config);
   auth = getAuth(app);
   db = getFirestore(app);
+  window.addEventListener('stcube:medals-updated',()=>medalTotalsCache.clear());
+  window.MedalAutomation?.start({
+    sdk:{doc,getDoc,getDocs,collection,query,where,orderBy,startAfter,limit,runTransaction,Timestamp,serverTimestamp},
+    async ensureConnection(){
+      await auth.authStateReady();
+      if(auth.currentUser)return {db,uid:auth.currentUser.uid};
+      // A separate anonymous worker never changes the player's login or profile.
+      const worker=initializeApp(config,'stcube-medals-worker-v1');
+      try{const workerAuth=getAuth(worker);await workerAuth.authStateReady();const credential=workerAuth.currentUser?{user:workerAuth.currentUser}:await signInAnonymously(workerAuth);
+        return {db:getFirestore(worker),uid:credential.user.uid,release:()=>deleteApp(worker)};
+      }catch(error){await deleteApp(worker);throw error;}
+    }
+  }).catch(error=>console.warn('Medal worker deferred',error.code||error.message));
   window.STcubeDailyConnection = { auth, db };
   window.dispatchEvent(new Event('stcube:daily-connection'));
 
