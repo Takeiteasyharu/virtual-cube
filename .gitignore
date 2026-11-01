@@ -19,4 +19,6 @@ credentials*.json
 .toy-verification/
 .medal-previews/
 .medal-verification/
+.rotation-verification/
+.rotation-before.js
 

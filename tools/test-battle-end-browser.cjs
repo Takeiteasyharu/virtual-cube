@@ -3,6 +3,8 @@ const {chromium}=require('C:/Users/harut/.cache/codex-runtimes/codex-primary-run
 const fs=require('node:fs'),http=require('node:http'),path=require('node:path'),assert=require('node:assert/strict');
 const {initializeTestEnvironment}=require('@firebase/rules-unit-testing'),sdk=require('firebase/firestore');
 const root=path.resolve(__dirname,'..'),project='demo-stcube-battle-end',reports=[];
+const humanTimings=[];
+process.once('exit',()=>{if(humanTimings.length){fs.mkdirSync('.rotation-verification',{recursive:true});fs.writeFileSync('.rotation-verification/'+(process.env.STCUBE_ROTATION_BEFORE?'before':'after')+'-human-latency.json',JSON.stringify(humanTimings,null,2));}});
 const hook=`
 import {connectFirestoreEmulator} from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 const fixtureUid=localStorage.getItem('battleTestUid');
@@ -23,9 +25,11 @@ async function layout(p,label){fs.mkdirSync('.bot-verification',{recursive:true}
 if(process.env.STCUBE_INPUT_LATENCY){
  const originalSolve=solve,measured=new WeakSet();
  solve=async p=>{
-  if(!measured.has(p)){
+  // Probe only the two ranked clients. Injecting extra turns into the separate
+  // three-player Friend fixture can itself exhaust its inspection window.
+  if(!measured.has(p)&&await p.evaluate(()=>__battleTest.room?.mode==='ranked'&&!__battleTest.room?.isBot)){
    measured.add(p);
-   for(const burst of [false,true])console.log('HUMAN_LATENCY',JSON.stringify(await p.evaluate(async burst=>{
+   for(const burst of [false,true]){const timing=await p.evaluate(async burst=>{
     const origin=GuidedSolver.signature(getCubeSnapshot()),inputs=[],starts=[],visible=[],done=[];
     const start=()=>starts.push(performance.now()),complete=e=>done.push(e.detail.move);
     addEventListener('stcube:move-start',start);addEventListener('stcube:move-complete',complete);
@@ -37,7 +41,7 @@ if(process.env.STCUBE_INPUT_LATENCY){
     while(isCubeBusy())await new Promise(r=>setTimeout(r,5));renderer.render=draw;removeEventListener('stcube:move-start',start);removeEventListener('stcube:move-complete',complete);
     if(origin!==GuidedSolver.signature(getCubeSnapshot())||JSON.stringify(done)!==JSON.stringify(inputs.map(i=>i.move))||visible.length!==inputs.length)throw Error('Input order/state mismatch');
     return {burst,starts:starts.map((t,i)=>t-inputs[i].t),visible:visible.map((t,i)=>t-inputs[i].t),handlers:inputs.map(i=>i.handler)};
-   },burst)));
+   },burst);humanTimings.push(timing);console.log('HUMAN_LATENCY',JSON.stringify(timing));}
   }
   return originalSolve(p);
  };
@@ -50,6 +54,12 @@ if(process.env.STCUBE_INPUT_BASELINE){
   return read.call(this,file,...args);
  };
 }
+// Compare against the immediately preceding low-latency rotation implementation,
+// not the older 90–100ms latency baseline. No production client source is edited.
+if(process.env.STCUBE_ROTATION_BEFORE){
+ const read=fs.readFileSync;
+ fs.readFileSync=function(file,...args){return read.call(this,String(file)===path.join(root,'cube.js')?path.join(root,'.rotation-before.js'):file,...args);};
+}
 (async()=>{
  const env=await initializeTestEnvironment({projectId:project,firestore:{host:'127.0.0.1',port:8780,rules:fs.readFileSync('firestore.rules','utf8')}});
  await env.withSecurityRulesDisabled(async c=>{for(const uid of ['host','guest','bot','friend-host','friend-guest','friend-third'])await sdk.setDoc(sdk.doc(c.firestore(),'users',uid),{uid,name:'Test Player',rating:1200,loginType:'google'});});
@@ -60,6 +70,10 @@ if(process.env.STCUBE_INPUT_BASELINE){
   await a.p.evaluate(()=>__battleTest.start());await b.p.evaluate(()=>__battleTest.start());for(const x of [a,b])await x.p.waitForFunction(()=>document.body.classList.contains('battle-mode'));
   const roomId=await a.p.evaluate(()=>__battleTest.id);assert.equal(roomId,await b.p.evaluate(()=>__battleTest.id));
   await a.p.evaluate(()=>__battleTest.ready());await b.p.evaluate(()=>__battleTest.ready());for(const x of [a,b])await x.p.waitForFunction(()=>battleInputState==='inspecting');
+  // The timing probe adds deliberate input and waits. Start the guest's clock
+  // with a reversible pair before waiting for the host's result/replay, so the
+  // probe cannot consume the guest's entire inspection window on a slow runner.
+  if(process.env.STCUBE_INPUT_LATENCY)for(const move of ['R',"R'"]){await b.p.evaluate(m=>performMove(m),move);await b.p.waitForFunction(()=>!isCubeBusy());}
   await solve(a.p);await a.p.waitForFunction(()=>BattleEnd.phase==='result');assert.match(await a.p.locator('#battleEndTitle').innerText(),/PENDING/);
   await a.p.waitForTimeout(1800);assert.equal(await a.p.evaluate(()=>BattleEnd.phase),'result');await a.p.waitForFunction(()=>BattleEnd.phase==='replay');
   await layout(a.p,'desktop');

@@ -156,11 +156,14 @@ cubie.add(sticker);
   return cubie;
 }
 
-function animateScene(now = performance.now()) {
+function animateScene() {
   requestAnimationFrame(animateScene);
   // Advance before drawing: separate RAF callbacks drew the previous angle
   // and spent the first animation frame at zero progress.
-  if (updateActiveRotation) updateActiveRotation(now);
+  // RAF's timestamp is the frame's start, not callback execution time. Input
+  // may have started a turn after that timestamp. Sample the same live clock
+  // used by rotateLayer so the very first drawable frame cannot run backwards.
+  if (updateActiveRotation) updateActiveRotation(performance.now());
   renderer.render(scene, camera);
 }
 
@@ -313,10 +316,12 @@ function rotateLayer(axis, layers, angle, durationMs = 100, move = "") {
   });
 
   const startedAt = performance.now();
+  let lastProgress = 0;
 
   function animate(now = performance.now()) {
     if (generation !== rotationGeneration) return;
-    const progress = Math.min(1, (now - startedAt) / durationMs);
+    const progress = Math.max(lastProgress, Math.min(1, Math.max(0, now - startedAt) / durationMs));
+    lastProgress = progress;
     group.rotation[axis] = angle * progress;
 
     if (progress >= 1) {
