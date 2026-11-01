@@ -1,0 +1,46 @@
+/* Toy blocks: the top three occupy real steps, not recolored result rows. */
+body .ranking-board-heading { display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:24px; }
+body .ranking-board-heading h3 { margin:0;font-size:22px; }
+body .ranking-board-heading>span { color:var(--text-muted);font-size:10px;font-weight:800;letter-spacing:1.5px; }
+body .ranking-medal-help { color:var(--text-muted);font-size:12px;line-height:1.6;margin:10px 0 24px; }
+body .ranking-podium { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:end;gap:14px;padding:30px 12px 18px;margin:12px 0 20px;border-radius:24px;background:var(--toy-blue);border-bottom:5px solid var(--toy-edge); }
+body .ranking-podium[hidden] { display:none; }
+body .podium-place { --podium:#d9e0e8;--podium-edge:#9faab8;position:relative;min-width:0;text-align:center;animation:podium-arrive 220ms ease-out both; }
+body .podium-place-1 { grid-column:2;grid-row:1;--podium:#ffdc77;--podium-edge:#c19a38; }
+body .podium-place-2 { grid-column:1;grid-row:1; }
+body .podium-place-3 { grid-column:3;grid-row:1;--podium:#e8b08f;--podium-edge:#b57c59; }
+body .podium-crown { display:block;color:#ad7610;font-size:42px;line-height:1;margin:0 0 10px;filter:drop-shadow(0 2px 0 #ffffff80); }
+body.dark .podium-crown { color:#ffdc77; }
+body .podium-player-card { padding:16px 10px 20px;background:var(--surface);border-radius:20px 20px 12px 12px;border:2px solid var(--podium);box-shadow:0 5px 0 #23344b0c;position:relative;z-index:1; }
+body .ranking-player { min-width:0;overflow-wrap:anywhere;line-height:1.45; }
+body .ranking-player-name { font-weight:750; }
+body .ranking-player .player-medals { display:inline;vertical-align:baseline;font-size:.9em; }
+body .podium-player-card .ranking-player { max-height:116px;overflow:auto;font-size:15px; }
+body .podium-player-card .ranking-record { display:block;font-size:clamp(16px,2vw,27px);margin-top:12px;overflow-wrap:anywhere; }
+body .podium-step { display:flex;align-items:center;justify-content:center;height:76px;margin:0 5px;background:var(--podium);border:1px solid var(--podium-edge);border-bottom:8px solid var(--podium-edge);border-radius:0 0 14px 14px;box-shadow:0 8px 12px #23344b0d;color:#273447; }
+body .podium-place-1 .podium-step { height:112px; }
+body .podium-place-3 .podium-step { height:56px; }
+body .podium-position { font-size:32px;font-weight:900;line-height:1; }
+body :is(#onlineRankingList,#battleRatingList,#newPlayerRatingList).ranking-results { list-style:none;padding:0;margin:0;min-height:0; }
+body :is(#onlineRankingList,#battleRatingList,#newPlayerRatingList).ranking-results>li::marker { content:''; }
+body :is(#onlineRankingList,#battleRatingList,#newPlayerRatingList).ranking-results>.ranking-result-row { display:grid;grid-template-columns:48px minmax(0,1fr) minmax(80px,auto);align-items:center;gap:14px;padding:16px;margin:8px 0;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 3px 0 #23344b08; }
+body .ranking-position { color:var(--text-muted);font-size:18px;font-weight:800; }
+body .ranking-record { font-variant-numeric:tabular-nums;letter-spacing:-.4px;white-space:nowrap; }
+body .ranking-result-row .ranking-player { max-height:92px;overflow:auto; }
+@keyframes podium-arrive { from { opacity:0;transform:translateY(7px); } to { opacity:1;transform:none; } }
+@media(max-width:540px) {
+ body .ranking-board-heading>span { display:none; }
+ body .ranking-board-heading h3 { font-size:19px; }
+ body .ranking-podium { gap:6px;padding:22px 6px 12px;border-radius:18px; }
+ body .podium-player-card { padding:12px 5px 14px;border-radius:13px 13px 8px 8px; }
+ body .podium-player-card .ranking-player { font-size:12px;max-height:94px; }
+ body .podium-player-card .ranking-record { font-size:14px;white-space:normal; }
+ body .podium-crown { font-size:34px; }
+ body .podium-step { margin:0 2px;height:58px; }
+ body .podium-place-1 .podium-step { height:88px; }
+ body .podium-place-3 .podium-step { height:42px; }
+ body .podium-position { font-size:25px; }
+ body :is(#onlineRankingList,#battleRatingList,#newPlayerRatingList).ranking-results>.ranking-result-row { grid-template-columns:28px minmax(0,1fr) auto;gap:8px;padding:12px 9px;font-size:13px; }
+ body .ranking-position { font-size:15px; }
+}
+@media(prefers-reduced-motion:reduce) { body .podium-place { animation:none; } }

@@ -5,6 +5,7 @@ test('experienced and new Google players render in separate rating lists',async(
  const experienced=element(),fresh=element(),more=element();
  const entries=Array.from({length:81},(_,i)=>({id:String(i),data:{name:'Player '+i,rating:1200,loginType:'google',rankedBattles:i<20?1:0}}));
  const context={battleRatingList:experienced,isConfigured:()=>true,currentUser:{uid:'0'},INITIAL_RATING:1200,battleRatingHasMore:true,console,
+ loadMedalTotals:async()=>({totals:new Map()}),window:{RankingView:{render({list,entries}){list.children=entries.map(e=>({textContent:e.name+' - '+e.rating}));}}},
  document:{getElementById:id=>id==='newPlayerRatingList'?fresh:more,createElement:element},getBattleRatingEntries:async()=>entries};
  const fn=source.slice(source.indexOf('async function refreshBattleRatingRanking('),source.indexOf('async function getBattleRatingEntries('));
  await vm.runInNewContext('('+fn+')(true)',context);
@@ -16,7 +17,7 @@ test('bounded rating pages retain zero-match Google users, exclude guests and co
  const pages=[[entry('guest','guest',0),entry('old','google',3),entry('new','google',0)],[entry('next','google',0)]],queries=[];
  const context={battleRatingCache:{timestamp:0,entries:[]},RANKING_CACHE_TTL_MS:300000,battleRatingFetchPromise:null,battleRatingCursor:null,battleRatingHasMore:false,db:{},USERS_COLLECTION:'users',RANKING_LIMIT:3,
  collection:()=>({}),orderBy:(...v)=>({order:v}),limit:v=>({limit:v}),startAfter:v=>({cursor:v.id}),query:(...v)=>{queries.push(v);return v},getDocs:async()=>{const docs=pages.shift();return {docs,size:docs.length}}};
- const fn=source.slice(source.indexOf('async function getBattleRatingEntries('),source.indexOf('function formatRankingEntry('));
+ const fn=source.slice(source.indexOf('async function getBattleRatingEntries('),source.indexOf('async function refreshBattleAccountRating('));
  vm.createContext(context);vm.runInContext(fn,context);
  assert.equal((await vm.runInContext('getBattleRatingEntries(true)',context)).length,2);
  const all=await vm.runInContext('getBattleRatingEntries(false,true)',context);assert.deepEqual(Array.from(all,x=>x.id),['old','new','next']);

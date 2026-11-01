@@ -1,6 +1,9 @@
 const {chromium}=require('C:/Users/harut/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright');
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),assert=require('node:assert/strict');
 const root=path.resolve(__dirname,'..'),out=path.join(root,'.toy-verification');fs.mkdirSync(out,{recursive:true});
+// Layout fixtures must not finalize real production medals in the background.
+const originalLaunch=chromium.launch.bind(chromium);
+chromium.launch=async options=>{const b=await originalLaunch(options),create=b.newContext.bind(b);b.newContext=async options=>{const c=await create(options);await c.addInitScript(()=>localStorage.setItem('stcubeMedalNextSweepV1',String(Number.MAX_SAFE_INTEGER)));return c;};return b;};
 const server=http.createServer((req,res)=>{try{let f=path.join(root,new URL(req.url,'http://localhost').pathname);if(fs.statSync(f).isDirectory())f=path.join(f,'index.html');res.setHeader('Content-Type',({'.html':'text/html','.js':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png'})[path.extname(f)]||'text/plain');res.end(fs.readFileSync(f));}catch{res.writeHead(404).end();}});
 (async()=>{await new Promise(r=>server.listen(8782,r));const b=await chromium.launch({channel:'msedge',headless:true,args:['--use-angle=swiftshader','--enable-webgl','--enable-unsafe-swiftshader']});try{
  for(const [width,height]of [[1440,900],[1024,768],[390,844],[320,740]]){

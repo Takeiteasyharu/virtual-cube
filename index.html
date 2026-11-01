@@ -27,6 +27,7 @@
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="game-ui.css" />
   <link rel="stylesheet" href="toy-room.css" />
+  <link rel="stylesheet" href="ranking-view.css" />
   <script src="game-ui.js" defer></script>
   <link rel="canonical" href="https://stcube3d.com/">
   <meta name="google-site-verification" content="7IjdF9-mUBmC39GA9dpwrLpdu674KJkCRvziJruWiXM" />
@@ -379,9 +380,13 @@
         <button class="ranking-tab" data-period="month">Month</button>
         <button class="ranking-tab" data-period="all">All</button>
       </div>
-      <ol id="onlineRankingList"></ol>
+      <div class="ranking-board-heading"><h3 id="rankingBoardTitle">Today · Single</h3><span>LEADERBOARD</span></div>
+      <p class="ranking-medal-help">Medals after a name are career totals across all awarded periods and categories, not awards for this one result.</p>
+      <div id="rankingPodium" class="ranking-podium" hidden></div>
+      <ol id="onlineRankingList" class="ranking-results" start="4" role="list"></ol>
       <h3>Battle Rating Ranking</h3>
       <h4>Ranked players</h4>
+      <div id="battleRatingPodium" class="ranking-podium" hidden></div>
       <ol id="battleRatingList"></ol>
       <h4>New players · No ranked matches yet</h4>
       <ol id="newPlayerRatingList"></ol>
@@ -524,6 +529,7 @@
   <script src="ranking-medals.js"></script>
   <script src="medal-automation.js"></script>
   <script src="medal-display.js"></script>
+  <script src="ranking-view.js"></script>
   <script src="solve-analytics.js"></script>
   <script src="analytics-view.js"></script>
   <script type="module" src="online.js"></script>

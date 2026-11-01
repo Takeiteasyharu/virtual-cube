@@ -399,6 +399,7 @@ async function getRankedBattleEligibility() {
 }
 
 function setRankingMessage(message) {
+  const podium=document.getElementById('rankingPodium');if(podium){podium.replaceChildren();podium.hidden=true;}
   rankingList.innerHTML = "";
   const li = document.createElement("li");
   li.textContent = message;
@@ -565,6 +566,7 @@ async function refreshRanking(force = false) {
   }
 
   setRankingMessage("Loading...");
+  document.getElementById('rankingBoardTitle').textContent=`${{today:'Today',week:'Week',month:'Month',all:'All time'}[period]} · ${window.RankingView.labels[rankingType]}`;
 
   try {
     const entries = await getRankingEntries(rankingType, period, force);
@@ -575,19 +577,15 @@ async function refreshRanking(force = false) {
     rankingList.innerHTML = "";
 
     if (entries.length === 0) {
-      setRankingMessage("-");
+      setRankingMessage("No results for this period yet.");
       refreshAccountRank(entries);
       return;
     }
 
-    entries.slice(0, getRankingDisplayLimit(period)).forEach((solve, index) => {
-      const li = document.createElement("li");
-      li.textContent = formatRankingEntry(solve, index, rankingType);
-      window.MedalDisplay?.append(li,medals.totals.get(solve.uid));
-      rankingList.appendChild(li);
-    });
+    window.RankingView.render({podium:document.getElementById('rankingPodium'),list:rankingList,entries:entries.slice(0, getRankingDisplayLimit(period)),type:rankingType,medals:medals.totals});
     refreshAccountRank(entries);
   } catch (error) {
+    if(generation!==rankingLoadGeneration)return;
     if (isIndexError(error)) {
       setRankingMessage(`Firestore index required: ${getRankingIndexHint(activeRankingType, activePeriod)}`);
     } else {
@@ -630,6 +628,7 @@ async function refreshBattleRatingRanking(force = false, more = false) {
   battleRatingList.innerHTML = "";
   const newPlayersList = document.getElementById('newPlayerRatingList');
   newPlayersList.replaceChildren();
+  const podium=document.getElementById('battleRatingPodium');podium.replaceChildren();podium.hidden=true;
   if (!currentUser) {
     const item = document.createElement("li");
     item.textContent = "Log in to view battle ratings.";
@@ -639,15 +638,12 @@ async function refreshBattleRatingRanking(force = false, more = false) {
 
   try {
     const entries = await getBattleRatingEntries(force, more);
+    const medals=await loadMedalTotals(entries.map(entry=>entry.id),force);
     for (const [list, rows, empty] of [
       [battleRatingList, entries.filter(entry => Number(entry.data.rankedBattles || 0) > 0), 'No ranked players loaded yet.'],
       [newPlayersList, entries.filter(entry => Number(entry.data.rankedBattles || 0) === 0), 'No new players loaded yet.']
     ]) {
-      rows.forEach((entry,index)=>{
-        const item=document.createElement('li');
-        item.textContent=`${index + 1}. ${entry.data.name || 'Player'} - ${Math.round(Number(entry.data.rating) || INITIAL_RATING)}`;
-        list.appendChild(item);
-      });
+      window.RankingView.render({podium:list===battleRatingList?podium:null,list,entries:rows.map(entry=>({...entry.data,uid:entry.id,rating:Number(entry.data.rating)||INITIAL_RATING})),type:'rating',medals:medals.totals,showPodium:list===battleRatingList});
       if(!rows.length){const item=document.createElement('li');item.textContent=empty;list.appendChild(item);}
     }
     document.getElementById('battleRatingMoreBtn').hidden = !battleRatingHasMore;
@@ -684,21 +680,6 @@ async function getBattleRatingEntries(force = false, more = false) {
     battleRatingFetchPromise = null;
   });
   return battleRatingFetchPromise;
-}
-
-function formatRankingEntry(solve, index, rankingType) {
-  const name = solve.name || "Player";
-
-  if (rankingType === "tps") {
-    return `#${index + 1} ${Number(solve.tps).toFixed(2)} TPS - ${name}`;
-  }
-
-  if (rankingType === "moves") {
-    return `#${index + 1} ${Math.round(Number(solve.moveCount))} moves - ${name}`;
-  }
-
-  const label = rankingType === "ao5" ? "Ao5" : "Single";
-  return `#${index + 1} ${Number(solve.time).toFixed(2)} ${label} - ${name}`;
 }
 
 async function refreshBattleAccountRating(force = false) {

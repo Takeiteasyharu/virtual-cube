@@ -36,5 +36,7 @@
  function symbols(data){const c=counts(data);return '🥇'.repeat(c.gold)+'🥈'.repeat(c.silver)+'🥉'.repeat(c.bronze);}
  const TRACKING_START='2026-10-30';
  function first(kind,start=TRACKING_START){const base=period('today',start).start;if(kind==='today')return base;if(kind==='week'){const d=new Date(base);return base+((8-(d.getUTCDay()||7))%7)*86400000;}if(kind==='month'){const d=new Date(base);return d.getUTCDate()===1?base:Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,1);}throw Error('Invalid period kind');}
- const api={TRACKING_START,first,metrics,fields,keys,period,podium,counts,symbols};if(typeof module==='object'&&module.exports)module.exports=api;else root.RankingMedals=api;
+ // Stable certificate key: exactly one award per metric/kind/UTC period.
+ function awardId(kind,key,metric){if(!metrics.includes(metric))throw Error('Unsupported ranking metric');return period(kind,key).id+'_'+metric;}
+ const api={TRACKING_START,first,metrics,fields,keys,period,podium,counts,symbols,awardId};if(typeof module==='object'&&module.exports)module.exports=api;else root.RankingMedals=api;
 })(typeof window==='object'?window:globalThis);

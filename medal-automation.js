@@ -32,8 +32,9 @@
    }
   }
   async function finalize(p,metric){
-   const id=p.id+'_'+metric,certRef=ref('rankingMedalPeriods',id);if((await getDoc(certRef)).exists())return 'already-finalized';
+   const id=M.awardId(p.kind,p.key,metric),certRef=ref('rankingMedalPeriods',id);if((await getDoc(certRef)).exists())return 'already-finalized';
    const data=await candidates(p,metric);if(data.deferred)return 'deferred';if(!canWork())return 'deferred';
+   if(data.winners.length>3||new Set(data.winners.map(w=>w.uid)).size!==data.winners.length)throw Error('Invalid duplicate podium recipients');
    for(let attempt=0;;attempt++)try{return await runTransaction(db,async tx=>{
     const [cert,job]=await Promise.all([tx.get(certRef),tx.get(ref('rankingMedalJobs',p.kind))]);if(cert.exists())return 'already-finalized';const j=job.data();if(j?.leaseUid!==uid||j.nextStart.toMillis()!==p.start||j.leaseUntil.toMillis()<=now())return 'lease-lost';
     const totals=await Promise.all(data.winners.map(w=>tx.get(ref('rankingMedals',w.uid))));
