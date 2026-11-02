@@ -29,9 +29,25 @@ Global ranking authenticity for ordinary client-assisted awards remains the pre-
 - Read-only snapshot: `node tools/audit-medal-history.cjs` (25,000-document safety budget).
 - Offline dry-run: `node tools/prepare-medal-history.cjs --snapshot <private snapshot>`.
 - After tests/Rules: same preparation command with `--apply` backs up latest medal state and publishes only the immutable verified manifest/config. A changed All membership or conflicting existing manifest stops without writing.
-- `tests/medal-history.test.cjs`: eight model/cache/idle integration tests.
+- `tests/medal-history.test.cjs`: nine model/cache/idle integration tests, including unordered Firestore-map proof equality.
 - `tests/medal-history-rules.test.cjs`: historical recipients, valid three-player atomic writes, concurrent visitors/retries, malicious writes, immutable manifests, and progress bounds.
 - Combined Emulator regression: 54 tests including regular medals, normal profiles/statistics, battles/Elo and Daily.
 - `tools/test-medal-history-snapshot.cjs <private snapshot>`: the actual audited 16 events under three concurrent Emulator clients produce exactly 16/12/4; rerun adds zero.
 
 Backups, credentials, raw snapshots and generated plans are never copied to the deployment checkout or Pages artifact. Production outcome is reported after deployment and a read-only ledger verification.
+
+## Production outcome
+
+Rules were validated in Emulator and released to `virtual-cube-timer`. The latest All membership recheck still returned 42 users. Immediately before manifest publication, the current medal state was backed up again; the administrator tool created only the immutable plan/config and wrote zero medals.
+
+The deployed browser idle path completed all 16 events in eight bounded rounds: additions per round 4/4/4/4/2/2/6/6. Two subsequent browser runs each added zero. Final read-only verification at **2026-11-02 03:22:27 UTC** confirmed **gold +16, silver +12, bronze +4**, **five recipients**, **12 existing certificates unchanged**, **27 referenced solve document versions unchanged**, and the complete ledger matching all saved totals. Existing 28 medals remain; total saved medals are now 60. No erroneous existing award was found or removed.
+
+Application writes for this backfill: two manifest/config creations plus 16 certificates, 16 progress writes and 32 exact counter increments (66 total). The one-time archive audit read 6,621 document results/empty-collection equivalents; current All membership confirmation was bounded to 4,000 solve reads. Rules-dependent reads, retries, source-version checks and normal site traffic are additional, not asserted as a billing measurement. Future visitors reuse the completed progress and never reread the archive.
+
+Unit suite: 98 tests. Combined Emulator Rules regression: 54 tests. The actual-candidate Emulator replay and deployed browser both confirmed idempotency. Ranking layout regression also passed at widths 1440/1024/390/320 in light/dark themes. Service Worker v144 includes the new module. Backups and the detailed audit/postflight data remain locally under `.private-medal-backups/2026-11-02T01-48-57-447497Z/` and are not public artifacts.
+
+## Changed files
+
+- Runtime/deployment: `medal-history.js`, `medal-automation.js`, `firestore.rules`, `index.html`, `service-worker.js`, `.github/workflows/pages.yml`, `.gitignore`.
+- Read-only audit/manifest/browser/verification tools: `tools/audit-medal-history.cjs`, `tools/prepare-medal-history.cjs`, `tools/test-medal-history-snapshot.cjs`, `tools/run-medal-history-browser.cjs`, `tools/verify-medal-history.cjs`, `tools/audit-medals.cjs`.
+- Tests/report: `tests/medal-history.test.cjs`, `tests/medal-history-rules.test.cjs`, `docs/medal-history-backfill.md`.
