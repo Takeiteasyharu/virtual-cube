@@ -44,3 +44,5 @@ body .ranking-result-row .ranking-player { max-height:92px;overflow:auto; }
  body .ranking-position { font-size:15px; }
 }
 @media(prefers-reduced-motion:reduce) { body .podium-place { animation:none; } }
+.ranking-pagination { display:flex;flex-wrap:wrap;gap:10px;margin-top:16px; }
+.ranking-pagination button { max-width:100%; }

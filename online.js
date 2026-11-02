@@ -622,12 +622,17 @@ function getRankingIndexHint(rankingType, period) {
 let battleRatingCursor = null;
 let battleRatingHasMore = false;
 let battleRatingLoading = false;
+const BATTLE_RATING_PAGE_SIZE = 10;
+let battleRatingVisibleCount = BATTLE_RATING_PAGE_SIZE;
+let battleRatingRenderVersion = 0;
 async function refreshBattleRatingRanking(force = false, more = false) {
   if (!battleRatingList || !isConfigured()) return;
-
+  const version = ++battleRatingRenderVersion;
+  if (!more) battleRatingVisibleCount = BATTLE_RATING_PAGE_SIZE;
+  const target = more ? battleRatingVisibleCount + BATTLE_RATING_PAGE_SIZE : BATTLE_RATING_PAGE_SIZE;
   battleRatingList.innerHTML = "";
-  const newPlayersList = document.getElementById('newPlayerRatingList');
-  newPlayersList.replaceChildren();
+  document.getElementById('battleRatingMoreBtn').hidden = true;
+  document.getElementById('battleRatingLessBtn').hidden = true;
   const podium=document.getElementById('battleRatingPodium');podium.replaceChildren();podium.hidden=true;
   if (!currentUser) {
     const item = document.createElement("li");
@@ -637,17 +642,19 @@ async function refreshBattleRatingRanking(force = false, more = false) {
   }
 
   try {
-    const entries = await getBattleRatingEntries(force, more);
+    let loaded = await getBattleRatingEntries(force);
+    while (loaded.length <= target && battleRatingHasMore) loaded = await getBattleRatingEntries(false, true);
+    if (version !== battleRatingRenderVersion) return;
+    const entries = loaded.filter(entry => entry.data.loginType === 'google' && Number(entry.data.rankedBattles) > 0).slice(0, target);
     const medals=await loadMedalTotals(entries.map(entry=>entry.id),force);
-    for (const [list, rows, empty] of [
-      [battleRatingList, entries.filter(entry => Number(entry.data.rankedBattles || 0) > 0), 'No ranked players loaded yet.'],
-      [newPlayersList, entries.filter(entry => Number(entry.data.rankedBattles || 0) === 0), 'No new players loaded yet.']
-    ]) {
-      window.RankingView.render({podium:list===battleRatingList?podium:null,list,entries:rows.map(entry=>({...entry.data,uid:entry.id,rating:Number(entry.data.rating)||INITIAL_RATING})),type:'rating',medals:medals.totals,showPodium:list===battleRatingList});
-      if(!rows.length){const item=document.createElement('li');item.textContent=empty;list.appendChild(item);}
-    }
-    document.getElementById('battleRatingMoreBtn').hidden = !battleRatingHasMore;
+    if (version !== battleRatingRenderVersion) return;
+    battleRatingVisibleCount = Math.max(BATTLE_RATING_PAGE_SIZE, entries.length);
+    window.RankingView.render({podium,list:battleRatingList,entries:entries.map(entry=>({...entry.data,uid:entry.id,rating:Number(entry.data.rating)||INITIAL_RATING})),type:'rating',medals:medals.totals,showPodium:true});
+    if (!entries.length) { const item=document.createElement('li'); item.textContent='No ranked players yet.'; battleRatingList.appendChild(item); }
+    document.getElementById('battleRatingMoreBtn').hidden = loaded.length <= entries.length && !battleRatingHasMore;
+    document.getElementById('battleRatingLessBtn').hidden = entries.length <= BATTLE_RATING_PAGE_SIZE;
   } catch (error) {
+    if (version !== battleRatingRenderVersion) return;
     const item = document.createElement("li");
     item.textContent = "Battle rating ranking could not be loaded.";
     battleRatingList.appendChild(item);
@@ -662,18 +669,23 @@ async function getBattleRatingEntries(force = false, more = false) {
   }
   if (battleRatingFetchPromise) return battleRatingFetchPromise;
 
+  const pageSize = more ? BATTLE_RATING_PAGE_SIZE : BATTLE_RATING_PAGE_SIZE + 1;
   battleRatingFetchPromise = getDocs(query(
     collection(db, USERS_COLLECTION),
+    where('loginType', '==', 'google'),
+    where('rankedBattles', '>', 0),
+    // A rating range allows the rating-first multi-range index, without excluding any valid rating.
+    where('rating', '>=', Number.MIN_SAFE_INTEGER),
     orderBy("rating", "desc"),
     ...(more && battleRatingCursor ? [startAfter(battleRatingCursor)] : []),
-    limit(RANKING_LIMIT)
+    limit(pageSize)
   )).then(snapshot => {
-    battleRatingCursor = snapshot.docs.at(-1) || null;
-    battleRatingHasMore = snapshot.size === RANKING_LIMIT;
+    battleRatingCursor = snapshot.docs.at(-1) || battleRatingCursor;
+    battleRatingHasMore = snapshot.size === pageSize;
     const entries = snapshot.docs
       .map(entryDoc => ({ id: entryDoc.id, data: entryDoc.data() }))
-      .filter(entry => entry.data.loginType === 'google');
-    const combined = more ? [...battleRatingCache.entries, ...entries] : entries;
+      .filter(entry => entry.data.loginType === 'google' && Number(entry.data.rankedBattles) > 0);
+    const combined = [...new Map((more ? [...battleRatingCache.entries, ...entries] : entries).map(entry => [entry.id, entry])).values()];
     battleRatingCache = { entries: combined, timestamp: Date.now() };
     return combined;
   }).finally(() => {
@@ -4513,6 +4525,9 @@ rankingTypeButtons.forEach(button => {
 });
 
 setupModalUi();
+document.getElementById('battleRatingLessBtn')?.addEventListener('click', () => {
+  refreshBattleRatingRanking().catch(console.error);
+});
 document.getElementById('battleRatingMoreBtn')?.addEventListener('click',async()=>{
   if(battleRatingLoading)return;
   battleRatingLoading=true;
