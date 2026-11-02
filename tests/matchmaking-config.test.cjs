@@ -6,10 +6,11 @@ test('unrestricted matching default preserves the former rating ranges behind on
  const enabled=new Function('module',fs.readFileSync('matchmaking-config.js','utf8').replace('useRatingRange:false','useRatingRange:true')+';return module.exports;')({exports:{}});
  assert.deepEqual([0,10000,20000,30000].map(enabled.ratingRange),[50,100,200,Infinity]);
 });
-test('BOT preference defaults on, persists off, and gracefully tolerates blocked storage',()=>{
+test('BOT preference defaults off, preserves explicit choices, and tolerates blocked storage',()=>{
  const store=new Map(),storage={getItem:k=>store.get(k)??null,setItem:(k,v)=>store.set(k,v)};
- assert.equal(M.load(storage),true);M.save(storage,false);assert.equal(M.load(storage),false);M.save(storage,true);assert.equal(M.load(storage),true);
- const broken={getItem(){throw Error('blocked')},setItem(){throw Error('full')}};assert.equal(M.load(broken),true);assert.doesNotThrow(()=>M.save(broken,false));
+ assert.equal(M.load(storage),false);M.save(storage,false);assert.equal(M.load(storage),false);M.save(storage,true);assert.equal(M.load(storage),true);
+ store.set(M.preferenceKey,'invalid');assert.equal(M.load(storage),false);
+ const broken={getItem(){throw Error('blocked')},setItem(){throw Error('full')}};assert.equal(M.load(broken),false);assert.doesNotThrow(()=>M.save(broken,false));
 });
 test('only fresh waiting queue entries are eligible; server timestamp takes priority over client start time',()=>{
  const now=100000,entry={status:'waiting',startedAtMs:1,createdAt:{toMillis:()=>now-1000}};

@@ -5,6 +5,15 @@ service cloud.firestore {
     function signedIn() {
       return request.auth != null;
     }
+    match /playerPresence/{uid} {
+      allow get: if false;
+      allow list: if signedIn() && request.query.limit != null && request.query.limit <= 2;
+      allow create, update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['lastSeen','v'])
+        && request.resource.data.v == 1 && request.resource.data.lastSeen == request.time
+        && (resource == null || request.time >= resource.data.lastSeen + duration.value(25,'s'));
+      allow delete: if false;
+    }
 
     // Client-assisted podiums: source membership and exact increments are checked,
     // but Rules cannot prove that a browser selected the global best three.

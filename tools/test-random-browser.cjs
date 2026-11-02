@@ -37,6 +37,8 @@ async function turn(p,m){await p.evaluate(m=>performMove(m),m);await p.waitForFu
   for(const viewport of [{width:1440,height:1000},{width:390,height:844}]){
    const uid=viewport.width>600?'solo':'mobile',{context,p,errors}=await open(browser,uid,viewport);
    for(const dark of [false,true]){await p.evaluate(d=>document.body.classList.toggle('dark',d),dark);assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);assert(await p.locator('#botEnabledToggle').isVisible());await p.screenshot({path:path.join(root,'.bot-verification',`random-${viewport.width}-${dark}.png`)});}
+   assert.equal(await p.locator('#botEnabledToggle').isChecked(),false);
+   await p.locator('#botEnabledToggle').check();
    const history=await p.evaluate(()=>JSON.stringify(getAllSolves())),replay=await p.evaluate(()=>JSON.stringify(SolveReplay.data)),started=Date.now();
    await p.evaluate(()=>__randomTest.start());assert(await p.locator('#botEnabledToggle').isDisabled());assert(await p.locator('#cancelMatchBtn').isVisible());
    if(viewport.width>600){const other=await context.newPage();await other.goto('http://127.0.0.1:8777/');await other.waitForFunction(()=>!!window.__randomTest);await other.evaluate(()=>__randomTest.start());assert.equal(await other.evaluate(()=>__randomTest.own),'');await other.close();}

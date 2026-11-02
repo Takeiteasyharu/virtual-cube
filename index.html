@@ -439,9 +439,9 @@
       <div id="randomBattleControls" hidden>
         <label class="bot-preference" for="botEnabledToggle">
           <span>Play against BOT</span>
-          <input type="checkbox" id="botEnabledToggle" role="switch" checked aria-describedby="botEnabledHint" />
+          <input type="checkbox" id="botEnabledToggle" role="switch" aria-describedby="botEnabledHint" />
         </label>
-        <p class="bot-preference-hint" id="botEnabledHint">Start a BOT match after 5 seconds</p>
+        <p class="bot-preference-hint" id="botEnabledHint">Wait for a real player only</p>
         <div class="buttons battle-buttons">
           <button id="randomBattleBtn">Find Ranked Match</button>
           <button id="cancelMatchBtn" hidden>Cancel</button>
@@ -531,6 +531,7 @@
   <script src="bot-model.js"></script>
   <script src="bot-battle.js"></script>
   <script src="matchmaking-config.js"></script>
+  <script src="player-presence.js"></script>
   <script type="module" src="daily-challenge.js"></script>
   <script src="solve-replay.js"></script>
   <script src="battle-end.js"></script>

@@ -4613,7 +4613,13 @@ if (isConfigured()) {
 
   setupAuthUi();
 
+  const presence = window.PlayerPresence?.create({db,
+    sdk:{setDoc,doc,serverTimestamp,query,collection,where,Timestamp,orderBy,limit,onSnapshot},
+    openBattle(){document.getElementById('openBattleBtn')?.click();setBattleChoice('ranked');}
+  });
+
   onAuthStateChanged(auth, user => {
+    presence?.setUser(user);
     if (currentUser?.uid && currentUser.uid !== user?.uid) {
       ++rankedSearchGeneration;clearMatchmakingListeners();clearFriendLobby();releaseRankedSearchLock();
       if(window.BotBattle?.active)leaveBattleMode().catch(console.error);
