@@ -9,4 +9,7 @@ test('experienced-only server pages exclude 100 unplayed profiles and retain 120
  const first=await getDocs(query(collection(db,'users'),...constraints,limit(11)));assert.equal(first.size,11);assert(first.docs.every(d=>d.data().rating===1200));
  const all=[...first.docs];let cursor=first.docs.at(-1);while(true){const next=await getDocs(query(collection(db,'users'),...constraints,startAfter(cursor),limit(10)));all.push(...next.docs);if(next.size<10)break;cursor=next.docs.at(-1);}
  assert.equal(all.length,23);assert.equal(new Set(all.map(d=>d.id)).size,23);assert(all.every(d=>d.data().rankedBattles>0&&d.data().loginType==='google'));assert.equal(all.filter(d=>d.data().rating===1200).length,15);
+ const freshConstraints=[where('loginType','==','google'),where('rankedBattles','==',0),where('rating','==',1200),orderBy(require('firebase/firestore').documentId(),'desc')];
+ const peek=await getDocs(query(collection(db,'users'),...freshConstraints,limit(1)));assert.equal(peek.size,1);
+ const page=await getDocs(query(collection(db,'users'),...freshConstraints,startAfter(peek.docs[0]),limit(10)));assert.equal(page.size,10);assert(page.docs.every(d=>d.data().rankedBattles===0&&d.data().rating===1200));assert(!page.docs.some(d=>d.id===peek.docs[0].id));
 });

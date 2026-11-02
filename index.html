@@ -367,6 +367,11 @@
   <div class="app-modal feature-modal" id="rankingModal" hidden role="dialog" aria-modal="true" aria-labelledby="rankingTitle">
     <section class="modal-content feature-content">
       <div class="modal-heading"><h2 id="rankingTitle">Online Ranking</h2><button class="modal-close" data-close-modal="rankingModal" aria-label="Close Online Ranking">Close</button></div>
+      <div class="ranking-mode-tabs" role="tablist" aria-label="Ranking category">
+        <button id="solveRankingsTab" class="ranking-mode-tab active" role="tab" aria-selected="true" aria-controls="solveRankingsPanel" data-ranking-mode="solve">Solve Rankings</button>
+        <button id="battleRatingsTab" class="ranking-mode-tab" role="tab" tabindex="-1" aria-selected="false" aria-controls="battleRatingsPanel" data-ranking-mode="battle">Battle Ratings</button>
+      </div>
+      <div id="solveRankingsPanel" role="tabpanel" aria-labelledby="solveRankingsTab">
       <p id="rankingScopeNote" class="ranking-scope-note">Best result per player · Up to 10 players per UTC period · All shows up to 50 players.</p>
       <div class="ranking-type-tabs">
         <button class="ranking-type-tab active" data-ranking-type="single">Single</button>
@@ -384,13 +389,21 @@
       <p class="ranking-medal-help">Medals after a name are career totals across all awarded periods and categories, not awards for this one result.</p>
       <div id="rankingPodium" class="ranking-podium" hidden></div>
       <ol id="onlineRankingList" class="ranking-results" start="4" role="list"></ol>
+      </div>
+      <div id="battleRatingsPanel" role="tabpanel" aria-labelledby="battleRatingsTab" hidden>
       <h3>Battle Rating Ranking</h3>
       <h4>Ranked players</h4>
       <div id="battleRatingPodium" class="ranking-podium" hidden></div>
       <ol id="battleRatingList"></ol>
+      <section id="unplayedRatingSection" hidden aria-labelledby="unplayedRatingTitle">
+        <h4 id="unplayedRatingTitle">Not played yet · 1200 pts</h4>
+        <p class="ranking-scope-note">These players have not completed a ranked battle and do not have a battle rank.</p>
+        <ol id="unplayedRatingList" class="ranking-results" role="list"></ol>
+      </section>
       <div class="ranking-pagination">
         <button id="battleRatingMoreBtn" hidden>Load More</button>
         <button id="battleRatingLessBtn" hidden>Show Less</button>
+      </div>
       </div>
     </section>
   </div>

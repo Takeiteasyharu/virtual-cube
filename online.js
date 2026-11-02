@@ -625,11 +625,19 @@ let battleRatingLoading = false;
 const BATTLE_RATING_PAGE_SIZE = 10;
 let battleRatingVisibleCount = BATTLE_RATING_PAGE_SIZE;
 let battleRatingRenderVersion = 0;
+let unplayedRatingCache = { entries: [], timestamp: 0 };
+let unplayedRatingCursor = null;
+let unplayedRatingHasMore = false;
+let unplayedRatingFetchPromise = null;
+let unplayedRatingVisibleCount = 0;
 async function refreshBattleRatingRanking(force = false, more = false) {
   if (!battleRatingList || !isConfigured()) return;
   const version = ++battleRatingRenderVersion;
   if (!more) battleRatingVisibleCount = BATTLE_RATING_PAGE_SIZE;
   const target = more ? battleRatingVisibleCount + BATTLE_RATING_PAGE_SIZE : BATTLE_RATING_PAGE_SIZE;
+  const unplayedTarget = more ? unplayedRatingVisibleCount + BATTLE_RATING_PAGE_SIZE : 0;
+  document.getElementById('unplayedRatingSection').hidden = true;
+  document.getElementById('unplayedRatingList').replaceChildren();
   battleRatingList.innerHTML = "";
   document.getElementById('battleRatingMoreBtn').hidden = true;
   document.getElementById('battleRatingLessBtn').hidden = true;
@@ -644,15 +652,21 @@ async function refreshBattleRatingRanking(force = false, more = false) {
   try {
     let loaded = await getBattleRatingEntries(force);
     while (loaded.length <= target && battleRatingHasMore) loaded = await getBattleRatingEntries(false, true);
+    let unplayed = await getUnplayedRatingEntries(force);
+    while (unplayed.length <= unplayedTarget && unplayedRatingHasMore) unplayed = await getUnplayedRatingEntries(false, true);
     if (version !== battleRatingRenderVersion) return;
     const entries = loaded.filter(entry => entry.data.loginType === 'google' && Number(entry.data.rankedBattles) > 0).slice(0, target);
-    const medals=await loadMedalTotals(entries.map(entry=>entry.id),force);
+    const unplayedEntries = unplayed.slice(0, unplayedTarget);
+    const medals=await loadMedalTotals([...entries,...unplayedEntries].map(entry=>entry.id),force);
     if (version !== battleRatingRenderVersion) return;
     battleRatingVisibleCount = Math.max(BATTLE_RATING_PAGE_SIZE, entries.length);
+    unplayedRatingVisibleCount = unplayedEntries.length;
     window.RankingView.render({podium,list:battleRatingList,entries:entries.map(entry=>({...entry.data,uid:entry.id,rating:Number(entry.data.rating)||INITIAL_RATING})),type:'rating',medals:medals.totals,showPodium:true});
     if (!entries.length) { const item=document.createElement('li'); item.textContent='No ranked players yet.'; battleRatingList.appendChild(item); }
-    document.getElementById('battleRatingMoreBtn').hidden = loaded.length <= entries.length && !battleRatingHasMore;
-    document.getElementById('battleRatingLessBtn').hidden = entries.length <= BATTLE_RATING_PAGE_SIZE;
+    window.RankingView.render({list:document.getElementById('unplayedRatingList'),entries:unplayedEntries.map(entry=>({...entry.data,uid:entry.id})),type:'rating',medals:medals.totals,showPodium:false,unranked:true});
+    document.getElementById('unplayedRatingSection').hidden = !unplayedEntries.length;
+    document.getElementById('battleRatingMoreBtn').hidden = loaded.length <= entries.length && !battleRatingHasMore && unplayed.length <= unplayedEntries.length && !unplayedRatingHasMore;
+    document.getElementById('battleRatingLessBtn').hidden = !more;
   } catch (error) {
     if (version !== battleRatingRenderVersion) return;
     const item = document.createElement("li");
@@ -660,6 +674,23 @@ async function refreshBattleRatingRanking(force = false, more = false) {
     battleRatingList.appendChild(item);
     console.error(error);
   }
+}
+
+async function getUnplayedRatingEntries(force = false, more = false) {
+  if (!more && !force && Date.now() - unplayedRatingCache.timestamp < RANKING_CACHE_TTL_MS) return unplayedRatingCache.entries;
+  if (unplayedRatingFetchPromise) return unplayedRatingFetchPromise;
+  const pageSize = more ? BATTLE_RATING_PAGE_SIZE : 1;
+  unplayedRatingFetchPromise = getDocs(query(collection(db, USERS_COLLECTION),
+    where('loginType','==','google'), where('rankedBattles','==',0), where('rating','==',INITIAL_RATING),
+    orderBy(documentId(), 'desc'), ...(more && unplayedRatingCursor ? [startAfter(unplayedRatingCursor)] : []), limit(pageSize)
+  )).then(snapshot => {
+    unplayedRatingCursor = snapshot.docs.at(-1) || unplayedRatingCursor;
+    unplayedRatingHasMore = snapshot.size === pageSize;
+    const entries = snapshot.docs.map(d => ({id:d.id,data:d.data()}));
+    unplayedRatingCache = {entries:[...new Map((more ? [...unplayedRatingCache.entries,...entries] : entries).map(e => [e.id,e])).values()],timestamp:Date.now()};
+    return unplayedRatingCache.entries;
+  }).finally(() => { unplayedRatingFetchPromise = null; });
+  return unplayedRatingFetchPromise;
 }
 
 async function getBattleRatingEntries(force = false, more = false) {
@@ -4535,12 +4566,30 @@ document.getElementById('battleRatingMoreBtn')?.addEventListener('click',async()
   try{await refreshBattleRatingRanking(false,true);}finally{battleRatingLoading=false;button.disabled=false;}
 });
 
-document.getElementById("openRankingBtn")?.addEventListener("click", () => {
-  Promise.all([
-    refreshRanking(),
-    refreshBattleRatingRanking()
-  ]).catch(console.error);
+function selectRankingMode(mode) {
+  const battle = mode === 'battle';
+  document.getElementById('solveRankingsPanel').hidden = battle;
+  document.getElementById('battleRatingsPanel').hidden = !battle;
+  document.querySelectorAll('[data-ranking-mode]').forEach(button => {
+    const selected = button.dataset.rankingMode === mode;
+    button.classList.toggle('active', selected);
+    button.setAttribute('aria-selected', String(selected));
+    button.tabIndex = selected ? 0 : -1;
+  });
+  if (battle) refreshBattleRatingRanking().catch(console.error);
+  else { ++battleRatingRenderVersion; refreshRanking().catch(console.error); }
+}
+document.querySelectorAll('[data-ranking-mode]').forEach(button => {
+  button.addEventListener('click', () => selectRankingMode(button.dataset.rankingMode));
+  button.addEventListener('keydown', event => {
+    if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+    event.preventDefault();
+    const mode = event.key === 'Home' ? 'solve' : event.key === 'End' ? 'battle' : button.dataset.rankingMode === 'solve' ? 'battle' : 'solve';
+    selectRankingMode(mode);
+    document.querySelector('[data-ranking-mode="'+mode+'"]').focus();
+  });
 });
+document.getElementById("openRankingBtn")?.addEventListener("click", () => selectRankingMode('solve'));
 
 if (isConfigured()) {
   const app = initializeApp(config);

@@ -46,3 +46,10 @@ body .ranking-result-row .ranking-player { max-height:92px;overflow:auto; }
 @media(prefers-reduced-motion:reduce) { body .podium-place { animation:none; } }
 .ranking-pagination { display:flex;flex-wrap:wrap;gap:10px;margin-top:16px; }
 .ranking-pagination button { max-width:100%; }
+.ranking-mode-tabs { display:flex;gap:12px;margin:8px 0 22px;flex-wrap:wrap; }
+.ranking-mode-tabs .ranking-mode-tab { flex:1;min-width:130px; }
+.ranking-mode-tabs .ranking-mode-tab.active { background:var(--toy-blue,#dceffa);color:var(--text,#23344b);border-color:var(--primary,#2777bc);box-shadow:0 4px 0 var(--primary,#2777bc); }
+.ranking-mode-tab:focus-visible { outline:3px solid #9875d5;outline-offset:4px; }
+body .ranking-results>.ranking-unplayed-row { grid-template-columns:minmax(0,1fr) auto; }
+.ranking-unplayed-row .ranking-unplayed { grid-column:1 / -1;font-size:12px;opacity:.75; }
+#unplayedRatingSection { margin-top:24px; }

@@ -1,9 +1,10 @@
-# Battle Rating ranking (2026-11-02)
+# Ranking tabs and Battle Ratings (2026-11-02)
 
 - Eligibility: Google profiles with `rankedBattles > 0`, including rating 1200. Friend-only and BOT matches do not increment this existing Ranked counter.
 - Rating remains descending; Elo, battle history, and the existing exact profile rank count are unchanged.
-- Initially display ten players, including the three podium places. Load More adds ten; Show Less and reopening restore ten. Render-version guards discard outdated asynchronous UI responses.
-- Initial query reads at most eleven eligible profiles (one lookahead). Subsequent pages read ten. Five-minute cache and snapshot cursors are reused; collapsing does not fetch when cached. Medal totals are requested for visible users only.
+- Solve Rankings and Battle Ratings are separate accessible tabs. Opening the modal defaults to Solve Rankings. Existing solve categories, periods, podium and medals remain unchanged. Arrow keys/Home/End switch the tabs.
+- Battle Ratings initially displays ten experienced players, including the three podium places. Load More adds ten experienced players and ten unplayed profiles per click; Show Less restores the experienced top ten. Unplayed Google profiles at 1200 are in a separate unranked section, labelled Not played yet, so they never acquire or displace an experienced player's rank. Render-version guards discard outdated asynchronous UI responses.
+- Initial queries read at most eleven experienced profiles (one lookahead), plus one unplayed profile to determine whether Load More is needed. Subsequent pages read ten per group. Five-minute caches and snapshot cursors are reused; collapsing does not fetch when cached. Medal totals are requested for visible users only.
 - Server filters: `loginType == google`, `rankedBattles > 0`, `rating >= Number.MIN_SAFE_INTEGER`, order by rating descending. The inclusive numeric bound enables a rating-first multi-range query and does not remove valid Elo ratings. Firestore adds its deterministic secondary inequality/document-key ordering for equal ratings; rating is still the sole ranking score.
 - Additive production composite index: collection `users`, collection scope, `loginType ASC`, `rating DESC`, `rankedBattles DESC`, `__name__ DESC`. No Rules or user-document changes. Multiple-range queries can incur index-entry reads; eligible document results are bounded, but index scans are not guaranteed to be eleven entries.
 
@@ -15,4 +16,4 @@
 
 `node tools/test-rating-pagination.cjs` checks real page controls/rendering with in-memory fixtures at 1440/390/320 pixels, both themes, populations 3/10/11/23, ranks and horizontal overflow. `--public` repeats against deployed HTML/JS. Fixtures never write Firestore. It is not a real Google-account login test.
 
-The existing 82-test unit suite passed. Firebase Spark and deployment scope remain unchanged.
+The 85-test unit suite passed. The Emulator also verifies the unplayed equality query, cursor and bounded page size. Browser checks cover tabs, keyboard navigation, default reset, expansion, unranked labels and both themes. Firebase Spark and deployment scope remain unchanged. The production unplayed query was checked read-only and works with existing indexes; no Rules or index changes are needed for this update.
