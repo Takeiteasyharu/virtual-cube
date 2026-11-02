@@ -4,6 +4,7 @@
  'use strict';
  const M=root.RankingMedals||(typeof require==='function'?require('./ranking-medals.js'):null);
  const awarded=certificate=>(certificate.winners||[]).filter(w=>certificate.v!==2||(certificate.awardedUids||[]).includes(w.uid));
+ const sameWinners=(a,b)=>Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&a.every((w,i)=>w.uid===b[i].uid&&w.solveId===b[i].solveId&&w.value===b[i].value);
  function allTargets(rows){
   const byMetric={},union=new Set(),lex=(a,b)=>a<b?-1:a>b?1:0;
   for(const metric of M.metrics){const field=metric==='tps'?'tps':metric==='moves'?'moveCount':'time',direction=metric==='tps'?-1:1;
@@ -22,7 +23,7 @@
    for(const metric of M.metrics){const id=M.awardId(kind,key,metric),records=rows.filter(r=>r.data.valid===true&&r.data.rankingType===(metric==='ao5'?'ao5':'single')&&r.data[p.field]===key);let result;
     try{result=M.podium(records,metric,p,0,now);}catch(e){skipped.push({id,reason:e.message});continue;}
     const winners=result.winners.map(({uid,solveId,value})=>({uid,solveId,value})),old=existing.get(id);
-    if(old){if(old.status==='finalized'&&JSON.stringify(old.winners)===JSON.stringify(winners))matched.push(id);else conflicts.push(id);continue;}
+    if(old){if(old.status==='finalized'&&sameWinners(old.winners,winners))matched.push(id);else conflicts.push(id);continue;}
     const awardedUids=winners.filter(w=>wanted.has(w.uid)).map(w=>w.uid);
     if(!awardedUids.length)continue;
     events[id]={kind,key,metric,startAt:p.start,endAt:p.end,winners,awardedUids};
@@ -48,7 +49,7 @@
     const eventId=plan.order[index],proof=plan.events[eventId],certificateRef=ref('rankingMedalPeriods',eventId),certificate=await tx.get(certificateRef);
     if(!proof||!Array.isArray(proof.winners)||!Array.isArray(proof.awardedUids))throw Error('Invalid historical event');
     if(certificate.exists()){
-     const old=certificate.data();if(old.status!=='finalized'||JSON.stringify(old.winners)!==JSON.stringify(proof.winners)||(old.v===2&&JSON.stringify(old.awardedUids)!==JSON.stringify(proof.awardedUids)))throw Error('Historical medal certificate conflict');
+     const old=certificate.data();if(old.status!=='finalized'||!sameWinners(old.winners,proof.winners)||(old.v===2&&JSON.stringify(old.awardedUids)!==JSON.stringify(proof.awardedUids)))throw Error('Historical medal certificate conflict');
     }else{
      const winners=proof.winners.filter(w=>proof.awardedUids.includes(w.uid)),totals=await Promise.all(winners.map(w=>tx.get(ref('rankingMedals',w.uid))));
      winners.forEach((w,i)=>{const count=M.counts(totals[i].data()),rank=proof.winners.findIndex(x=>x.uid===w.uid);count[['gold','silver','bronze'][rank]]++;tx.set(ref('rankingMedals',w.uid),{v:1,uid:w.uid,...count,lastPeriodId:eventId,updatedAt:serverTimestamp()});});
@@ -72,5 +73,5 @@
   }
   return {status:complete?'complete':'deferred',awarded:awardedCount,processed};
  }
- const api={allTargets,buildPlan,run,awarded};if(typeof module==='object'&&module.exports)module.exports=api;else root.MedalHistory=api;
+ const api={allTargets,buildPlan,run,awarded,sameWinners};if(typeof module==='object'&&module.exports)module.exports=api;else root.MedalHistory=api;
 })(typeof window==='object'?window:globalThis);
