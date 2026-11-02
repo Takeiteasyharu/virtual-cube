@@ -800,6 +800,7 @@ function startNormalInspection() {
   normalSolveState = "inspecting";
   renderNormalRealCubeUi();
   document.body.classList.add("inspection-active");
+  renderSoloActions();
   syncRealTimerScreenState();
 
   const inspectionStartedAt = Date.now();
@@ -1259,6 +1260,49 @@ function renderSoloActions() {
   if (abort) abort.hidden = isBattleModeActive() || !active;
   if (hint) hint.hidden = isBattleModeActive() || active;
   window.GuidedSolve?.refresh();
+  syncNormalFocusView();
+}
+
+let normalFocusHome = null;
+function syncNormalFocusView() {
+  const active = ['inspecting', 'solving'].includes(normalSolveState)
+    && !isBattleModeActive() && !isNormalRealCubeMode()
+    && !window.BotBattle?.active && !window.DailyChallenge?.active
+    && !window.DailyChallenge?.isPractice && !window.GuidedSolve?.enabled
+    && !window.GuidedSolve?.isPractice && !window.SolveReplay?.active;
+  const focused = document.body.classList.contains('normal-solve-focus');
+  if (active === focused) return;
+  const area = document.getElementById('mainCubeArea');
+  const cube = document.getElementById('cubeContainer');
+  const abort = document.getElementById('resetBtn');
+  const overlay = document.getElementById('battleInspectionOverlay');
+  const guide = document.getElementById('battleGuideLink');
+  if (active) {
+    normalFocusHome = {
+      nodes: [abort, overlay].map(node => ({node, parent:node.parentNode, next:node.nextSibling})),
+      target: guide.getAttribute('target'), rel: guide.getAttribute('rel'), scrollY:window.scrollY
+    };
+    area.style.setProperty('--focus-area-width', area.getBoundingClientRect().width+'px');
+    area.style.setProperty('--focus-cube-size', cube.getBoundingClientRect().width+'px');
+    // Move the existing controls, preserving their listeners and state.
+    area.append(abort, overlay);
+    guide.setAttribute('target', '_blank');
+    guide.setAttribute('rel', 'noopener noreferrer');
+    document.body.classList.add('normal-solve-focus');
+    window.scrollTo(0, 0);
+  } else {
+    document.body.classList.remove('normal-solve-focus');
+    for (const {node,parent,next} of normalFocusHome?.nodes || []) parent.insertBefore(node, next?.parentNode === parent ? next : null);
+    for (const name of ['target','rel']) {
+      const value = normalFocusHome?.[name];
+      if (value == null) guide.removeAttribute(name); else guide.setAttribute(name,value);
+    }
+    area.style.removeProperty('--focus-area-width');
+    area.style.removeProperty('--focus-cube-size');
+    window.scrollTo(0, normalFocusHome?.scrollY || 0);
+    normalFocusHome = null;
+  }
+  window.resizeMainCube?.();
 }
 
 // Practice enters/exits without resetting the cube or calling stopTimer(),

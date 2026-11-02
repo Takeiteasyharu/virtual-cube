@@ -216,3 +216,29 @@ body.solving .cube-area,body.solving .timer,body.battle-mode #cubeContainer { an
 @media(prefers-reduced-motion:reduce) {
   body *,body *::before,body *::after { animation:none!important;transition:none!important;scroll-behavior:auto!important; }
 }
+/* Normal virtual inspection/solve: presentation only, with no per-frame work. */
+body.normal-solve-focus { overflow:hidden; }
+body.normal-solve-focus .toy-room-decor,
+body.normal-solve-focus .app>:not(header):not(main),
+body.normal-solve-focus header>:not(#scrambleText):not(.header-actions),
+body.normal-solve-focus .header-actions>:not(#openSettingsBtn):not(#battleGuideLink),
+body.normal-solve-focus main>:not(#mainCubeArea),
+body.normal-solve-focus #mainCubeArea>:not(#timerDisplay):not(#cubeContainer):not(#resetBtn):not(#battleInspectionOverlay):not(#moveInput) { display:none!important; }
+body.normal-solve-focus .app { height:100dvh;min-height:0; }
+body.normal-solve-focus:not(.battle-mode) header { display:flex;flex-direction:column;gap:8px;height:108px;padding:8px 16px;min-height:0; }
+body.normal-solve-focus #scrambleText { order:0;width:min(940px,100%);height:44px;min-height:44px;max-height:44px;padding:5px 10px;overflow:auto;font-size:clamp(10px,1.2vw,14px); }
+body.normal-solve-focus .header-actions { display:flex;order:1;gap:10px;justify-content:center; }
+body.normal-solve-focus .header-actions>:is(#openSettingsBtn,#battleGuideLink) { width:auto;min-width:104px;min-height:40px;height:40px;grid-area:auto;padding:7px 12px;font-size:12px; }
+body.normal-solve-focus main { display:flex;justify-content:center;align-items:flex-start;height:calc(100dvh - 108px);min-height:0;padding:8px 12px;gap:0; }
+body.normal-solve-focus #mainCubeArea { display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:76px minmax(0,1fr) 52px;width:min(var(--focus-area-width),100%);height:calc(var(--focus-cube-size) + 128px);max-height:calc(100dvh - 124px);min-height:0;align-self:auto;padding:0;gap:0;overflow:hidden; }
+body.normal-solve-focus #mainCubeArea::before { display:none; }
+body.normal-solve-focus #cubeContainer { grid-row:2;width:min(var(--focus-cube-size),100%,calc(100dvh - 252px));height:auto;aspect-ratio:1;max-height:100%;margin:0; }
+body.normal-solve-focus #timerDisplay { grid-row:1;height:76px;font-size:clamp(44px,6vw,62px);margin:0; }
+body.normal-solve-focus.inspection-active #timerDisplay { visibility:hidden; }
+body.normal-solve-focus #battleInspectionOverlay { position:absolute;inset:0 0 auto;width:100%;min-width:0;height:76px;padding:0;display:flex;gap:12px;align-items:center;justify-content:center;transform:none;background:transparent; }
+body.normal-solve-focus #battleInspectionOverlay[hidden] { display:none; }
+body.normal-solve-focus #battleInspectionLabel { font-size:12px;color:var(--text-muted)!important; }
+body.normal-solve-focus #battleInspectionCount { font-size:clamp(44px,6vw,62px);line-height:1;color:var(--text)!important; }
+body.normal-solve-focus #resetBtn { grid-row:3;align-self:center;min-width:110px;height:40px;min-height:40px;padding:6px 18px;background:var(--surface);color:var(--danger);border-color:var(--danger); }
+/* Keep the existing mobile keyboard input tappable on the cube, without extra UI. */
+body.normal-solve-focus #mainCubeArea>.move-input { position:absolute;inset:76px 0 52px;transform:none;width:100%;height:auto;min-height:0;margin:0;padding:0;opacity:0;z-index:2;cursor:text;font-size:16px; }
