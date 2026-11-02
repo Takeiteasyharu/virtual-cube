@@ -61,8 +61,9 @@
   const work=async()=>{if(!canWork())return;let connection;
    try{let cache=0;try{cache=Number(localStorage.getItem('stcubeMedalNextSweepV1')||0);}catch(_){}if(cache>Date.now())return;
     connection=await ensureConnection();const runner=create(sdk,connection.db,connection.uid,{canWork});const result=await runner.sweep();api.lastRun=result;
-    const pending=result.deferred||result.results.some(r=>['deferred','lease-lost'].includes(r.status));try{localStorage.setItem('stcubeMedalNextSweepV1',String(Date.now()+(pending?60000:300000)));}catch(_){}
-    if(result.results.some(r=>r.status==='advanced'))root.dispatchEvent(new Event('stcube:medals-updated'));
+    const history=root.MedalHistory?await root.MedalHistory.run(sdk,connection.db,connection.uid,{canWork}):null;api.lastHistoryRun=history;
+    const pending=history?.status==='deferred'||result.deferred||result.results.some(r=>['deferred','lease-lost'].includes(r.status));try{localStorage.setItem('stcubeMedalNextSweepV1',String(Date.now()+(pending?60000:300000)));}catch(_){}
+    if(history?.awarded||result.results.some(r=>r.status==='advanced'))root.dispatchEvent(new Event('stcube:medals-updated'));
    }catch(error){api.lastError=error.code||error.message;console.warn('Medal catch-up deferred',api.lastError);}finally{await connection?.release?.();}
   };
   const dispatch=()=>{if(root.requestIdleCallback)root.requestIdleCallback(work,{timeout:10000});else setTimeout(work,0);};

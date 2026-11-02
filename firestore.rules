@@ -10,6 +10,46 @@ service cloud.firestore {
     // but Rules cannot prove that a browser selected the global best three.
     match /rankingMedalConfig/{id} { allow read: if true; allow write: if false; }
     match /rankingMedalAwards/{id} { allow read: if true; allow write: if false; }
+    // Audited manifests are read-only to browsers. Ordinary users cannot create
+    // new historical periods, recipients or values by submitting their own plan.
+    match /rankingMedalBackfillPlans/{id} { allow read: if true; allow write: if false; }
+    match /rankingMedalBackfillProgress/{id} {
+      allow read: if true;
+      allow create,update: if signedIn() && validMedalHistoryProgress(id);
+      allow delete: if false;
+    }
+    function validMedalHistoryProgress(id) {
+      let plan=get(/databases/$(database)/documents/rankingMedalBackfillPlans/$(id)).data;
+      let d=request.resource.data;
+      let previous=resource==null?0:resource.data.nextIndex;
+      return d.keys().hasOnly(['v','planId','nextIndex','complete','updatedAt'])
+        && d.v==1 && d.planId==id && d.updatedAt==request.time
+        && previous<plan.order.size() && d.nextIndex==previous+1
+        && d.complete==(d.nextIndex==plan.order.size())
+        && existsAfter(/databases/$(database)/documents/rankingMedalPeriods/$(plan.order[previous]));
+    }
+    function medalHistoryWinner(d,i,id) {
+      let w=d.winners[i];
+      // Exact source/value/rank proof is pinned in the administrator-published,
+      // immutable manifest. Re-scanning it here would exceed expression limits
+      // for three simultaneous recipients; browsers cannot edit that manifest.
+      return !(w.uid in d.awardedUids) || (
+          getAfter(/databases/$(database)/documents/rankingMedals/$(w.uid)).data.lastPeriodId==id
+          && getAfter(/databases/$(database)/documents/rankingMedals/$(w.uid)).data.updatedAt==request.time);
+    }
+    function medalHistoryCertificate(d,id) {
+      let p=get(/databases/$(database)/documents/rankingMedalBackfillPlans/$(d.backfillId)).data;
+      let proof=p.events[id];
+      return d.keys().hasOnly(['v','backfillId','kind','key','metric','startAt','endAt','status','winners','awardedUids','problemSolveId','finalizedBy','finalizedAt'])
+        && d.v==2 && p.v==1 && id==d.kind+'_'+d.key+'_'+d.metric
+        && d.kind==proof.kind && d.key==proof.key && d.metric==proof.metric
+        && d.startAt==proof.startAt && d.endAt==proof.endAt && d.endAt<=request.time
+        && d.status=='finalized' && d.problemSolveId=='' && d.winners==proof.winners && d.awardedUids==proof.awardedUids
+        && d.winners.size()>0 && d.winners.size()<=3 && d.awardedUids.size()>0 && d.awardedUids.size()<=3
+        && d.finalizedBy==request.auth.uid && d.finalizedAt==request.time
+        && medalHistoryWinner(d,0,id) && (d.winners.size()<2 || medalHistoryWinner(d,1,id))
+        && (d.winners.size()<3 || medalHistoryWinner(d,2,id));
+    }
     function medalStart() { return timestamp.date(2026,10,30); }
     function medalPad(n) { return n < 10 ? '0'+string(n) : string(n); }
     function medalDay(t) { return string(t.year())+'-'+medalPad(t.month())+'-'+medalPad(t.day()); }
@@ -106,7 +146,8 @@ service cloud.firestore {
     }
     match /rankingMedalPeriods/{id} {
       allow read: if true;
-      allow create: if signedIn() && medalCertificate(request.resource.data,id);
+      allow create: if signedIn() && ((request.resource.data.v==1 && medalCertificate(request.resource.data,id))
+        || (request.resource.data.v==2 && medalHistoryCertificate(request.resource.data,id)));
       allow update,delete: if false;
     }
     function medalIncrement(uid,before,after) {
@@ -118,7 +159,7 @@ service cloud.firestore {
         && after.gold is int && after.silver is int && after.bronze is int
         && after.gold>=0 && after.silver>=0 && after.bronze>=0
         && !exists(/databases/$(database)/documents/rankingMedalPeriods/$(id))
-        && d.status=='finalized' && rank>=0
+        && d.status=='finalized' && rank>=0 && (d.v==1 || uid in d.awardedUids)
         && after.gold==before.get('gold',0)+(rank==0?1:0)
         && after.silver==before.get('silver',0)+(rank==1?1:0)
         && after.bronze==before.get('bronze',0)+(rank==2?1:0);

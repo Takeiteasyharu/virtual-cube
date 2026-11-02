@@ -1,4 +1,4 @@
-const CACHE_NAME = "virtual-cube-timer-v142";
+const CACHE_NAME = "virtual-cube-timer-v143";
 const BASE_PATH = new URL("./", self.location.href).pathname;
 const APP_FILE_EXTENSIONS = [".html", ".css", ".js", ".json"];
 
@@ -39,6 +39,7 @@ const CACHE_URLS = [
   `${BASE_PATH}profile-view.js`,
   `${BASE_PATH}ranking-medals.js`,
   `${BASE_PATH}medal-automation.js`,
+  `${BASE_PATH}medal-history.js`,
   `${BASE_PATH}medal-display.js`,
   `${BASE_PATH}ranking-view.js`,
   `${BASE_PATH}ranking-view.css`,
