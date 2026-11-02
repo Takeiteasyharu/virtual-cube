@@ -10,7 +10,7 @@ Battle, BOT, Daily, Guided, Replay and legacy real-cube timer modes are excluded
 
 ## Verification
 
-- 88 unit tests pass, including three focus lifecycle/mode-exclusion/scheduling tests.
+- 89 unit tests pass, including four focus lifecycle/mode-exclusion/cancellation/scheduling tests. Cleared inspection/timer flags cannot leave a stale phase name in focus after cancellation.
 - `node tools/test-normal-focus.cjs`: real Edge browser, widths 1440/1024/390/320, both themes. Space starts inspection; keyboard turns start/complete a deterministic `R U F2` solve; mobile tap/input works; inspection and solve cube rectangles remain identical; Settings and Guide preserve state; completion/Abort restore the UI; normal Replay data is recorded; Guided is excluded. Desktop additionally waits for the real 15-second inspection timeout and tests Abort after automatic solve start. Snapshots saved under `.focus-verification/` are local verification artifacts, not deployed assets.
 - Existing `tools/test-toy-room.cjs` exercises regular screens, mobile scramble/input, normal completion and Replay controls.
 - `--public` on the focus browser command repeats the same checks against the deployed page. Tests use local storage and unsigned normal solves; no synthetic production Firestore records are created.

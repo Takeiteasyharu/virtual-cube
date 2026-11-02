@@ -1265,7 +1265,8 @@ function renderSoloActions() {
 
 let normalFocusHome = null;
 function syncNormalFocusView() {
-  const active = ['inspecting', 'solving'].includes(normalSolveState)
+  const active = ((normalSolveState === 'inspecting' && normalInspectionActive)
+    || (normalSolveState === 'solving' && (isTimerRunning() || document.body.classList.contains('solving'))))
     && !isBattleModeActive() && !isNormalRealCubeMode()
     && !window.BotBattle?.active && !window.DailyChallenge?.active
     && !window.DailyChallenge?.isPractice && !window.GuidedSolve?.enabled
