@@ -17,6 +17,7 @@ test('recent bounded query excludes expired users; unauthenticated/unbounded rea
  await env.withSecurityRulesDisabled(async c=>{await setDoc(doc(c.firestore(),'playerPresence/old'),{v:1,lastSeen:Timestamp.fromMillis(Date.now()-91000)});});
  const a=db('reader'),recent=query(collection(a,'playerPresence'),where('lastSeen','>',Timestamp.fromMillis(Date.now()-90000)),orderBy('lastSeen','desc'),limit(2));
  const snap=await assertSucceeds(getDocs(recent));assert(snap.size<=2);assert(!snap.docs.some(x=>x.id==='old'));
- await assertFails(getDocs(collection(a,'playerPresence')));await assertFails(getDocs(query(collection(a,'playerPresence'),limit(3))));
+ await assertSucceeds(getDocs(query(collection(a,'playerPresence'),limit(50))));
+ await assertFails(getDocs(collection(a,'playerPresence')));await assertFails(getDocs(query(collection(a,'playerPresence'),limit(51))));
  await assertFails(getDocs(query(collection(env.unauthenticatedContext().firestore(),'playerPresence'),limit(2))));
 });

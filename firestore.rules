@@ -7,7 +7,7 @@ service cloud.firestore {
     }
     match /playerPresence/{uid} {
       allow get: if false;
-      allow list: if signedIn() && request.query.limit != null && request.query.limit <= 2;
+      allow list: if signedIn() && request.query.limit != null && request.query.limit <= 50;
       allow create, update: if signedIn() && request.auth.uid == uid
         && request.resource.data.keys().hasOnly(['lastSeen','v'])
         && request.resource.data.v == 1 && request.resource.data.lastSeen == request.time
