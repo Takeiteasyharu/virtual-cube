@@ -12,5 +12,8 @@ const raw=await get('rankingMedalPeriods?pageSize=100');if(raw.nextPageToken)thr
 for(const p of top){const saved=await get('rankingMedals/'+p.uid);p.saved=saved?dec(saved.fields):null;p.events=certs.flatMap(c=>(c.winners||[]).flatMap((w,i)=>w.uid===p.uid?[{id:c.id,rank:i+1,awarded:c.v!==2||c.awardedUids.includes(p.uid)}]:[]));}
 const totalRaw=await get('rankingMedals?pageSize=100');if(totalRaw.nextPageToken)throw Error('Totals budget exceeded');
 const totals=(totalRaw.documents||[]).map(d=>({uid:d.name.split('/').at(-1),...dec(d.fields)}));
+const specialRaw=await get('rankingSpecialAwards?pageSize=100');if(specialRaw.nextPageToken)throw Error('Special award budget exceeded');
+const special=(specialRaw.documents||[]).map(d=>dec(d.fields));
+for(const p of top)p.specialEvents=special.filter(s=>s.status==='complete').flatMap(s=>(s.awards||[]).filter(a=>a.uid===p.uid));
 console.log(JSON.stringify({readOnly:true,top,certificateCount:certs.length,totals},null,2));
 })().catch(e=>{console.error(e.message);process.exitCode=1;});

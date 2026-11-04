@@ -13,7 +13,7 @@ const {chromium}=require('C:/Users/harut/.cache/codex-runtimes/codex-primary-run
  const uidList=[...audit.top.map(p=>p.uid),...audit.totals.map(p=>p.uid)],loaded=await __readMedals(uidList,true);
  if(loaded.status!=='available')throw Error('Medal read unavailable');
  for(const t of audit.totals){const actual=RankingMedals.counts(loaded.totals.get(t.uid));for(const k of ['gold','silver','bronze'])if(actual[k]!==t[k])throw Error('Total mismatch '+k);}
- for(const top of audit.top)if(loaded.totals.get(top.uid)!==null)throw Error('Unexpected saved total');
+ for(const top of audit.top){const actual=RankingMedals.counts(loaded.totals.get(top.uid)),expected=RankingMedals.counts(top.saved);for(const k of ['gold','silver','bronze'])if(actual[k]!==expected[k])throw Error('Top saved total mismatch');}
  let cases=0;
  for(const dark of [false,true])for(const period of ['all','today','week','month'])for(const type of ['single','ao5','tps','moves']){
  document.body.classList.toggle('dark',dark);document.getElementById('rankingModal').hidden=false;
@@ -23,10 +23,10 @@ const {chromium}=require('C:/Users/harut/.cache/codex-runtimes/codex-primary-run
  if(spans.length!==entries.length)throw Error('Missing medal span '+period+' '+type);
  spans.forEach((s,i)=>{if(s.textContent!==RankingMedals.symbols(audit.totals[i]))throw Error('Symbol count mismatch');});
  document.getElementById('rankingModal').hidden=true;
- const first=audit.totals[0];ProfileView.render(document.getElementById('profileBody'),{name:'Stored recipient',guest:true,account:{rating:1200},stats:null,detail:null,ranks:{},real:[],medals:loaded.totals.get(first.uid),medalStatus:'available'});
- if(document.querySelector('#profileBody .player-medals').textContent!==RankingMedals.symbols(first))throw Error('Profile mismatch');cases++;
+ for(const recipient of audit.totals){ProfileView.render(document.getElementById('profileBody'),{name:'Stored recipient',guest:true,account:{rating:1200},stats:null,detail:null,ranks:{},real:[],medals:loaded.totals.get(recipient.uid),medalStatus:'available'});
+ if(document.querySelector('#profileBody .player-medals').textContent!==RankingMedals.symbols(recipient))throw Error('Profile mismatch');}cases++;
  }
- return {publicSdkRead:true,topThreeHaveZero:true,storedRecipients:audit.totals.length,presentationCases:cases};
+ return {publicSdkRead:true,topThreeMatchSaved:true,storedRecipients:audit.totals.length,presentationCases:cases};
  },audit);assert.deepEqual(errors,[]);console.log(JSON.stringify({width,...result,errors}));await context.close();
  }
  }finally{await browser.close();}

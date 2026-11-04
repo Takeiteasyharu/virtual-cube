@@ -5,6 +5,12 @@ service cloud.firestore {
     function signedIn() {
       return request.auth != null;
     }
+    // One-off inaugural All awards: only a trusted administrator may write.
+    match /rankingSpecialAwards/{id} {
+      allow read: if true;
+      allow write: if false;
+      match /events/{eventId} { allow read: if true; allow write: if false; }
+    }
     match /playerPresence/{uid} {
       allow get: if false;
       allow list: if signedIn() && request.query.limit != null && request.query.limit <= 50;
