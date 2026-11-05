@@ -5,6 +5,129 @@ service cloud.firestore {
     function signedIn() {
       return request.auth != null;
     }
+    // Link metadata is private to the two authenticated accounts, never public.
+    function linkedOwner(source,target) {
+      let p=/databases/$(database)/documents/accountLinks/$(source);
+      return exists(p) && get(p).data.targetUid==target && get(p).data.status in ['accepted','complete'];
+    }
+    function frozenGuest(uid) {
+      let p=/databases/$(database)/documents/accountLinks/$(uid);
+      return exists(p) && get(p).data.status in ['accepted','complete'];
+    }
+    match /accountLinks/{source} {
+      allow get: if signedIn() && (request.auth.uid==source || (resource!=null && request.auth.uid==resource.data.targetUid));
+      allow list: if signedIn() && request.query.limit!=null && request.query.limit<=30 && resource.data.targetUid==request.auth.uid;
+      allow create: if signedIn() && request.auth.uid==source
+        && request.auth.token.firebase.sign_in_provider=='anonymous'
+        && request.resource.data.keys().hasOnly(['v','sourceUid','targetUid','status','createdAt'])
+        && request.resource.data.v==1 && request.resource.data.sourceUid==source
+        && request.resource.data.targetUid is string && request.resource.data.targetUid!=source
+        && request.resource.data.targetUid.size()>0 && request.resource.data.targetUid.size()<=128
+        && request.resource.data.status=='offered' && request.resource.data.createdAt==request.time;
+      allow update: if signedIn() && request.auth.uid==resource.data.targetUid
+        && request.auth.token.firebase.sign_in_provider=='google.com'
+        && ((resource.data.status=='offered'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','targetName','acceptedAt'])
+          && request.resource.data.status=='accepted' && request.resource.data.acceptedAt==request.time
+          && request.resource.data.targetName is string && request.resource.data.targetName.size()<=24)
+        || (resource.data.status in ['accepted','complete']
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','cursor','updatedAt'])
+          && request.resource.data.status in ['accepted','complete'] && request.resource.data.updatedAt==request.time
+          && request.resource.data.cursor is string && request.resource.data.cursor.size()<=1500));
+      allow delete: if false;
+    }
+    // Public ranking-only flag: no destination UID, email, link or token is exposed.
+    match /rankingRetirements/{source} {
+      allow get: if true;
+      allow list: if request.query.limit!=null && request.query.limit<=30;
+      allow create: if signedIn() && linkedOwner(source,request.auth.uid)
+        && get(/databases/$(database)/documents/accountLinks/$(source)).data.status=='complete'
+        && request.resource.data.keys().hasOnly(['v','retired','retiredAt']) && request.resource.data.v==1 && request.resource.data.retired==true && request.resource.data.retiredAt==request.time;
+      allow update,delete: if false;
+    }
+    match /solveImportClaims/{key} {
+      allow get: if signedIn() && (resource==null || resource.data.uid==request.auth.uid);
+      allow list,update,delete: if false;
+      allow create: if signedIn() && request.resource.data.uid==request.auth.uid
+        && request.resource.data.keys().hasOnly(['v','uid','key','singleId','ao5Id','createdAt','kind','originUid','originId'])
+        && request.resource.data.v==1 && request.resource.data.key==key && key.matches('[A-Za-z0-9_-]{10,100}')
+        && request.resource.data.createdAt==request.time
+        && !exists(/databases/$(database)/documents/solves/$('normal_'+key+'_single'))
+        && request.resource.data.singleId in ['', 'import_'+key+'_single']
+        && request.resource.data.ao5Id in ['', 'import_'+key+'_ao5']
+        && (request.resource.data.kind=='local' ? (request.resource.data.originUid=='' && request.resource.data.originId=='') :
+          (request.resource.data.kind in ['linked','linked-local'] && linkedOwner(request.resource.data.originUid,request.auth.uid)))
+        && getAfter(/databases/$(database)/documents/solves/$(request.resource.data.singleId!=''?request.resource.data.singleId:request.resource.data.ao5Id)).data.uid==request.auth.uid
+        && getAfter(/databases/$(database)/documents/solves/$(request.resource.data.singleId!=''?request.resource.data.singleId:request.resource.data.ao5Id)).data.schemaVersion==3;
+    }
+    function importedSolveValid(a,id) {
+      let c=getAfter(/databases/$(database)/documents/solveImportClaims/$(a.solveId)).data;
+      return a.schemaVersion==3 && a.source=='normal' && a.mode=='virtual' && a.valid==true && a.completed==true
+        && a.createdAt==request.time && a.solvedAt is timestamp && a.solvedAt<=request.time
+        && a.eventId=='import_'+a.solveId && id=='import_'+a.solveId+'_'+a.rankingType
+        && a.tps is number && a.tps>=0 && a.tps<=100 && a.moveCount<=1000
+        && c.uid==a.uid && c.createdAt==request.time
+        && !exists(/databases/$(database)/documents/solveImportClaims/$(a.solveId))
+        && (a.rankingType=='single'?c.singleId==id:c.ao5Id==id)
+        && a.importKind==c.kind && (c.kind=='linked'?linkedSolveProof(c,a):true);
+    }
+    function linkedSolveProof(c,a) {
+      let s=get(/databases/$(database)/documents/solves/$(c.originId)).data;
+      return linkedOwner(c.originUid,a.uid) && s.uid==c.originUid
+        && s.valid==true && s.get('mode','virtual')!='real' && s.get('source','normal')=='normal'
+        && s.rankingType==a.rankingType && s.time==a.time && s.scramble==a.scramble
+        && a.moveCount==(s.get('moveCount',0)==null?0:s.get('moveCount',0))
+        && a.tps==(s.get('tps',0)==null?0:s.get('tps',0))
+        && a.solvedAt==s.get('solvedAt',s.createdAt);
+    }
+    match /users/{uid}/mergeProgress/{source} {
+      allow read: if signedIn() && request.auth.uid==uid;
+      allow create,update: if signedIn() && request.auth.uid==uid && linkedOwner(source,uid)
+        && request.resource.data.keys().hasOnly(['v','sourceUid','score','cursor','complete','updatedAt'])
+        && request.resource.data.v==1 && request.resource.data.sourceUid==source
+        && request.resource.data.score is string && request.resource.data.score.size()<=200
+        && request.resource.data.cursor is string && request.resource.data.cursor.size()<=1500
+        && request.resource.data.complete is bool && request.resource.data.updatedAt==request.time;
+      allow delete: if false;
+    }
+    function transferProof(d) {
+      return d.kind=='period'?periodTransferProof(d):specialTransferProof(d);
+    }
+    function periodTransferProof(d) {
+      let p=get(/databases/$(database)/documents/rankingMedalPeriods/$(d.awardId)).data;
+      return d.id=='period_'+d.awardId+'_'+d.sourceUid && d.specialRoot=='' && p.status=='finalized'
+        && p.winners.size()>d.rank && p.winners[d.rank].uid==d.sourceUid
+        && (p.v==1||d.sourceUid in p.awardedUids);
+    }
+    function specialTransferProof(d) {
+      let e=get(/databases/$(database)/documents/rankingSpecialAwards/$(d.specialRoot)/events/$(d.awardId)).data;
+      return d.kind=='special' && d.id=='special_'+d.awardId && e.uid==d.sourceUid && e.rank==d.rank+1 && e.color==d.color;
+    }
+    match /users/{uid}/medalImports/{id} {
+      allow read: if signedIn() && request.auth.uid==uid;
+      allow create: if signedIn() && request.auth.uid==uid
+        && request.resource.data.keys().hasOnly(['v','id','uid','sourceUid','awardId','kind','rank','color','specialRoot','createdAt'])
+        && request.resource.data.v==1 && request.resource.data.id==id && request.resource.data.uid==uid
+        && request.resource.data.rank is int && request.resource.data.rank>=0 && request.resource.data.rank<=2
+        && request.resource.data.color==['gold','silver','bronze'][request.resource.data.rank]
+        && request.resource.data.createdAt==request.time && linkedOwner(request.resource.data.sourceUid,uid)
+        && transferProof(request.resource.data)
+        && getAfter(/databases/$(database)/documents/rankingMedals/$(uid)).data.transferEventId==id
+        && getAfter(/databases/$(database)/documents/rankingMedals/$(uid)).data.updatedAt==request.time;
+      allow update,delete: if false;
+    }
+    function transferIncrement(uid,before,after) {
+      let id=after.transferEventId;
+      let d=getAfter(/databases/$(database)/documents/users/$(uid)/medalImports/$(id)).data;
+      return request.auth.uid==uid && after.keys().hasOnly(['v','uid','gold','silver','bronze','lastPeriodId','transferEventId','updatedAt'])
+        && after.v==1 && after.uid==uid && after.updatedAt==request.time
+        && d.uid==uid && !exists(/databases/$(database)/documents/users/$(uid)/medalImports/$(id))
+        && d.createdAt==request.time
+        && after.lastPeriodId==before.get('lastPeriodId','')
+        && after.gold==before.get('gold',0)+(d.rank==0?1:0)
+        && after.silver==before.get('silver',0)+(d.rank==1?1:0)
+        && after.bronze==before.get('bronze',0)+(d.rank==2?1:0);
+    }
     // One-off inaugural All awards: only a trusted administrator may write.
     match /rankingSpecialAwards/{id} {
       allow read: if true;
@@ -120,7 +243,7 @@ service cloud.firestore {
       // Immutable v2 solves already passed the normal-event transaction Rules.
       // Recheck provenance, period and the selected metric without duplicating
       // the entire solve validator (Firestore has a 1,000-expression limit).
-      return s.get('schemaVersion',0)==2 && s.source=='normal' && s.mode=='virtual'
+      return s.get('schemaVersion',0) in [2,3] && s.source=='normal' && s.mode=='virtual'
         && s.valid==true && s.rankingType==type
         && s.createdAt>=d.startAt && s.createdAt<d.endAt && s[field]==d.key;
     }
@@ -181,8 +304,8 @@ service cloud.firestore {
     }
     match /rankingMedals/{uid} {
       allow read: if true;
-      allow create: if signedIn() && medalIncrement(uid,{},request.resource.data);
-      allow update: if signedIn() && medalIncrement(uid,resource.data,request.resource.data);
+      allow create: if signedIn() && (medalIncrement(uid,{},request.resource.data)||transferIncrement(uid,{},request.resource.data));
+      allow update: if signedIn() && (medalIncrement(uid,resource.data,request.resource.data)||transferIncrement(uid,resource.data,request.resource.data));
       allow delete: if false;
     }
     
@@ -196,6 +319,7 @@ service cloud.firestore {
 
     function validSolve() {
       return signedIn()
+        && !frozenGuest(request.auth.uid)
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.time is number
         && request.resource.data.time > 2
@@ -456,6 +580,7 @@ function profileMin(a,b) { return a < b ? a : b; }
         && e.ao5Ms is int && (e.ao5Ms == 0 || (e.ao5Ms > 2000 && e.ao5Ms < 3600000))
         && e.ao12Ms is int && e.ao12Ms >= 0 && e.ao12Ms < 3600000
         && !exists(/databases/$(database)/documents/solves/$(e.singleId))
+        && !exists(/databases/$(database)/documents/solveImportClaims/$(single.solveId))
         && single.uid == uid && single.eventId == e.id && single.schemaVersion == 2
         && single.source == 'normal' && single.rankingType == 'single'
         && single.time * 1000 >= e.timeMs - 0.01 && single.time * 1000 <= e.timeMs + 0.01
@@ -498,11 +623,12 @@ function profileMin(a,b) { return a < b ? a : b; }
       let e = getAfter(/databases/$(database)/documents/users/$(a.uid)/profileEvents/$(a.eventId)).data;
       return a.schemaVersion == 2 && a.source == 'normal' && a.mode == 'virtual'
         && a.completed == true && a.valid == true && a.createdAt == request.time
+        && a.get('solvedAt',request.time) is timestamp && a.get('solvedAt',request.time)<=request.time
         && a.eventId == 'normal_' + a.solveId && e.kind == 'normal' && e.uid == a.uid
         && (a.rankingType == 'single' ? (e.singleId == solveId && a.time * 1000 >= e.timeMs - 0.01 && a.time * 1000 <= e.timeMs + 0.01) : (e.ao5Id == solveId && a.time * 1000 >= e.ao5Ms - 0.01 && a.time * 1000 <= e.ao5Ms + 0.01));
     }
     match /users/{uid}/profileStats/{id} {
-      allow read: if signedIn() && request.auth.uid == uid;
+      allow read: if signedIn() && (request.auth.uid == uid || linkedOwner(uid,request.auth.uid));
       allow create, update: if signedIn() && request.auth.uid == uid && ((id == 'current' && profileSummaryValid(uid,request.resource.data)) || (id == 'details' && profileDetailsValid(uid,request.resource.data)));
       allow delete: if false;
     }
@@ -516,7 +642,7 @@ function profileMin(a,b) { return a < b ? a : b; }
       allow create: if validSolve()
         && request.resource.data.get('source','normal') == 'normal'
         && request.resource.data.get('mode','virtual') == 'virtual'
-        && (!('schemaVersion' in request.resource.data) || versionedSolveValid(request.resource.data,solveId));
+        && (!('schemaVersion' in request.resource.data) || (request.resource.data.schemaVersion==2 && versionedSolveValid(request.resource.data,solveId)) || (request.resource.data.schemaVersion==3 && importedSolveValid(request.resource.data,solveId)));
       allow update, delete: if false;
     }
     
@@ -855,6 +981,9 @@ function profileMin(a,b) { return a < b ? a : b; }
         && !request.resource.data.keys().hasAny(['normalSinglePbMs','ratingPeakObserved','ratingPeakTrackingStartedAt']);
 
       allow update: if signedIn() && profilePublicPbValid(uid) && profilePeakValid(uid) && (
+  (linkedOwner(uid,request.auth.uid)
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rankArchived','updatedAt'])
+    && request.resource.data.rankArchived==true && request.resource.data.updatedAt==request.time) ||
   (
     request.auth.uid == uid
     && request.resource.data.rating == resource.data.rating

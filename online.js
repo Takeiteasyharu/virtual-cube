@@ -6,7 +6,7 @@ import {
   signInAnonymously,
   signInWithPopup,
   signOut,
-  updateProfile
+  updateProfile,linkWithPopup,signInWithCredential,setPersistence,browserLocalPersistence
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 import {
   addDoc,
@@ -192,6 +192,18 @@ let auth = null;
 let db = null;
 let currentUser = null;
 let googleLoginPending = false;
+let authReady=false,authTransition=false,pendingGuestName='',profileDisplayName='';
+const migrationSdk={doc,getDoc,getDocs,getCountFromServer,collection,query,where,limit,runTransaction,serverTimestamp,Timestamp,orderBy,documentId,startAfter,updateDoc,setDoc};
+function renderAuthState(){
+ document.getElementById('signedOutAuth').hidden=!authReady||!!currentUser;
+ document.getElementById('battleAuthChoices').hidden=!authReady||!!currentUser;
+ document.getElementById('linkGoogleBtn').hidden=!authReady||!currentUser?.isAnonymous;
+ document.getElementById('accountLogoutBtn').hidden=!authReady||!currentUser;
+ document.getElementById('resumeSyncBtn').hidden=!authReady||!currentUser;
+ document.getElementById('guestAccountHint').hidden=!authReady||!currentUser?.isAnonymous;
+ for(const id of ['linkGoogleBtn','accountLogoutBtn','resumeSyncBtn'])document.getElementById(id).disabled=authTransition;
+ logoutBtn.hidden=!authReady||!currentUser;profileBtn.hidden=!authReady||!currentUser;
+}
 let activePeriod = "today";
 let activeRankingType = "single";
 let activeRoomId = "";
@@ -354,6 +366,8 @@ async function ensureUserProfile() {
       profileAlreadyExists = profileSnapshot.exists();
 
       if (profileAlreadyExists) {
+        profile.name=profileSnapshot.data().name||profile.name;
+        profileDisplayName=profile.name;
         transaction.set(reference, profile, { merge: true });
         return;
       }
@@ -367,13 +381,17 @@ async function ensureUserProfile() {
       }, { merge: true });
     });
   } catch (error) {
-    // Keep authentication usable while the optional counter rule is being deployed.
-    await setDoc(
-      reference,
-      profileAlreadyExists ? profile : { ...profile, ...defaultUserStats() },
-      { merge: true }
-    );
-    console.warn("The total user counter could not be updated.", error);
+    // A failed read must never be mistaken for a new account. In particular,
+    // default rating/statistics must not overwrite an existing Google account.
+    console.warn("Profile initialization deferred; existing data was not changed.", error.code || error.message);
+    // Another auth callback/tab may have created this profile concurrently.
+    // A fresh read is safe; never repair a failed transaction with default data.
+    const saved=await getDoc(reference);
+    if(saved.exists()){
+      profileDisplayName=saved.data().name||profile.name;
+      return;
+    }
+    throw error;
   }
 }
 
@@ -391,8 +409,8 @@ async function refreshTotalUsers() {
 }
 
 async function getRankedBattleEligibility() {
-  if (!currentUser || currentUser.isAnonymous) {
-    return { eligible: false, message: "Ranked Battle requires Google Login." };
+  if (!currentUser) {
+    return { eligible: false, message: "Choose Google Login or Guest Login to play online." };
   }
 
   return { eligible: true, message: "" };
@@ -432,7 +450,9 @@ function getPeriodKeys(date = new Date()) {
 }
 
 function getPlayerName() {
-  const typedName = nameInput.value.trim();
+  if(currentUser?.isAnonymous&&pendingGuestName)return pendingGuestName;
+  if(currentUser&&profileDisplayName)return profileDisplayName.slice(0,24);
+  const typedName = currentUser ? '' : nameInput.value.trim();
   const fallbackName = currentUser?.displayName || "Guest";
   return (typedName || fallbackName).slice(0, 24);
 }
@@ -514,7 +534,7 @@ function queuePendingSolve(time,scramble,ao5,stats={}) {
 async function addOnlineSolve(time,scramble,ao5,solvedAt,stats={}) {
   if(!currentUser||!window.ProfileRecords.eligible(stats)||!isValidOnlineSolve(time,scramble))return false;
   if(stats.ownerUid&&stats.ownerUid!==currentUser.uid)throw Error("Pending solve belongs to another account");
-  const writer=window.ProfileRecords.create({doc,runTransaction,serverTimestamp},db);
+  const writer=window.ProfileRecords.create({doc,runTransaction,serverTimestamp,Timestamp},db);
   const saved=await writer.normal(currentUser.uid,getPlayerName(),{...stats,time,scramble,ao5,moves:Array.isArray(stats.moves)?stats.moves.map(m=>typeof m==="string"?m:m?.move).filter(Boolean):[]},getPeriodKeys(new Date(solvedAt)));
   invalidateRankingCache();return saved;
 }
@@ -543,11 +563,16 @@ async function submitPendingSolves() {
     for(const value of getPendingSolves()){
       if(value.ownerUid&&value.ownerUid!==currentUser?.uid)continue;
       if(!currentUser)break;
+      if(!value.ownerUid&&localStorage.getItem('stcube-history-consent-'+currentUser.uid)!=='yes')continue;
       value.ownerUid=currentUser.uid;
       localStorage.setItem(PENDING_V2_PREFIX+value.solveId,JSON.stringify(value));
       try{
         await addOnlineSolve(value.time,value.scramble,value.ao5,value.solvedAt,value);
         localStorage.removeItem(PENDING_V2_PREFIX+value.solveId);
+        const rows=JSON.parse(localStorage.getItem('virtualCubeSolveHistory')||'[]'),local=rows.find(r=>r.solveId===value.solveId);
+        if(local&&(!local.ownerUid||local.ownerUid===value.ownerUid)&&(!local.syncOwnerUid||local.syncOwnerUid===value.ownerUid)){
+          local.syncOwnerUid=value.ownerUid;localStorage.setItem('virtualCubeSolveHistory',JSON.stringify(rows));
+        }
       }catch(error){console.warn("Normal solve remains pending",error);}
     }
   };
@@ -558,6 +583,11 @@ window.addEventListener("online",()=>{
 });
 
 let rankingLoadGeneration = 0;
+async function retiredPlayers(uids){
+ const ids=[...new Set(uids.filter(v=>typeof v==='string'&&v))],retired=new Set();
+ for(let i=0;i<ids.length;i+=30){const snap=await getDocs(query(collection(db,'rankingRetirements'),where(documentId(),'in',ids.slice(i,i+30)),limit(30)));for(const d of snap.docs)if(d.data().retired)retired.add(d.id);}
+ return retired;
+}
 async function refreshRanking(force = false) {
   const generation=++rankingLoadGeneration,rankingType=activeRankingType,period=activePeriod;
   if (!isConfigured()) {
@@ -655,7 +685,7 @@ async function refreshBattleRatingRanking(force = false, more = false) {
     let unplayed = await getUnplayedRatingEntries(force);
     while (unplayed.length <= unplayedTarget && unplayedRatingHasMore) unplayed = await getUnplayedRatingEntries(false, true);
     if (version !== battleRatingRenderVersion) return;
-    const entries = loaded.filter(entry => entry.data.loginType === 'google' && Number(entry.data.rankedBattles) > 0).slice(0, target);
+    const entries = loaded.filter(entry => ['google','guest'].includes(entry.data.loginType) && Number(entry.data.rankedBattles) > 0).slice(0, target);
     const unplayedEntries = unplayed.slice(0, unplayedTarget);
     const medals=await loadMedalTotals([...entries,...unplayedEntries].map(entry=>entry.id),force);
     if (version !== battleRatingRenderVersion) return;
@@ -681,12 +711,13 @@ async function getUnplayedRatingEntries(force = false, more = false) {
   if (unplayedRatingFetchPromise) return unplayedRatingFetchPromise;
   const pageSize = more ? BATTLE_RATING_PAGE_SIZE : 1;
   unplayedRatingFetchPromise = getDocs(query(collection(db, USERS_COLLECTION),
-    where('loginType','==','google'), where('rankedBattles','==',0), where('rating','==',INITIAL_RATING),
+    where('loginType','in',['google','guest']), where('rankedBattles','==',0), where('rating','==',INITIAL_RATING),
     orderBy(documentId(), 'desc'), ...(more && unplayedRatingCursor ? [startAfter(unplayedRatingCursor)] : []), limit(pageSize)
-  )).then(snapshot => {
+  )).then(async snapshot => {
     unplayedRatingCursor = snapshot.docs.at(-1) || unplayedRatingCursor;
     unplayedRatingHasMore = snapshot.size === pageSize;
-    const entries = snapshot.docs.map(d => ({id:d.id,data:d.data()}));
+    const retired=await retiredPlayers(snapshot.docs.map(d=>d.id));
+    const entries = snapshot.docs.filter(d=>!retired.has(d.id)).map(d => ({id:d.id,data:d.data()}));
     unplayedRatingCache = {entries:[...new Map((more ? [...unplayedRatingCache.entries,...entries] : entries).map(e => [e.id,e])).values()],timestamp:Date.now()};
     return unplayedRatingCache.entries;
   }).finally(() => { unplayedRatingFetchPromise = null; });
@@ -703,19 +734,20 @@ async function getBattleRatingEntries(force = false, more = false) {
   const pageSize = more ? BATTLE_RATING_PAGE_SIZE : BATTLE_RATING_PAGE_SIZE + 1;
   battleRatingFetchPromise = getDocs(query(
     collection(db, USERS_COLLECTION),
-    where('loginType', '==', 'google'),
+    where('loginType', 'in', ['google','guest']),
     where('rankedBattles', '>', 0),
     // A rating range allows the rating-first multi-range index, without excluding any valid rating.
     where('rating', '>=', Number.MIN_SAFE_INTEGER),
     orderBy("rating", "desc"),
     ...(more && battleRatingCursor ? [startAfter(battleRatingCursor)] : []),
     limit(pageSize)
-  )).then(snapshot => {
+  )).then(async snapshot => {
     battleRatingCursor = snapshot.docs.at(-1) || battleRatingCursor;
     battleRatingHasMore = snapshot.size === pageSize;
-    const entries = snapshot.docs
+    const retired=await retiredPlayers(snapshot.docs.map(d=>d.id));
+    const entries = snapshot.docs.filter(d=>!retired.has(d.id))
       .map(entryDoc => ({ id: entryDoc.id, data: entryDoc.data() }))
-      .filter(entry => entry.data.loginType === 'google' && Number(entry.data.rankedBattles) > 0);
+      .filter(entry => ['google','guest'].includes(entry.data.loginType) && Number(entry.data.rankedBattles) > 0);
     const combined = [...new Map((more ? [...battleRatingCache.entries, ...entries] : entries).map(entry => [entry.id, entry])).values()];
     battleRatingCache = { entries: combined, timestamp: Date.now() };
     return combined;
@@ -726,7 +758,7 @@ async function getBattleRatingEntries(force = false, more = false) {
 }
 
 async function refreshBattleAccountRating(force = false) {
-  if (!currentUser || currentUser.isAnonymous) {
+  if (!currentUser) {
     accountRating.textContent = "Rating: -";
     accountBattleRank.textContent = "World Rank: -";
     return;
@@ -783,7 +815,8 @@ async function getRankingEntries(rankingType, period, force = false) {
     const size=Math.min(displayLimit,budget-scanned);
     const snapshot=await getDocs(query(collection(db,"solves"),...constraints,...(cursor?[startAfter(cursor)]:[]),limit(size)));
     scanned+=snapshot.size;cursor=snapshot.docs.at(-1)||null;
-    for(const entryDoc of snapshot.docs){const solve=entryDoc.data();if(typeof solve.uid!=="string"||!solve.uid||seen.has(solve.uid)||!isValidRankingTypeEntry(solve,rankingType))continue;seen.add(solve.uid);entries.push(solve);if(entries.length===displayLimit)break;}
+    const retired=await retiredPlayers(snapshot.docs.map(d=>d.data().uid));
+    for(const entryDoc of snapshot.docs){const solve=entryDoc.data();if(typeof solve.uid!=="string"||!solve.uid||retired.has(solve.uid)||seen.has(solve.uid)||!isValidRankingTypeEntry(solve,rankingType))continue;seen.add(solve.uid);entries.push(solve);if(entries.length===displayLimit)break;}
     if(snapshot.size<size){exhausted=true;break;}
   }
   entries.scanLimited=!exhausted&&entries.length<displayLimit&&scanned>=budget;
@@ -856,9 +889,12 @@ const profileRankCache=new Map();
 async function loadProfileRanks(uid,profile,stats,isGuest) {
   const key=uid+':'+profile.rating+':'+profile.normalSinglePbMs+':'+profile.rankedBattles;
   const saved=profileRankCache.get(key);if(saved&&Date.now()-saved.at<60000)return saved.value;
-  const result={battle:isGuest?'Unrated':Number(profile.rankedBattles||0)>0?'Unavailable':'Not ranked yet',single:'Not published yet'};
+  const result={battle:Number(profile.rankedBattles||0)>0?'Unavailable':'Not ranked yet',single:'Not published yet'};
   const requests=[];
-  if(!isGuest&&Number(profile.rankedBattles||0)>0)requests.push(getCountFromServer(query(collection(db,USERS_COLLECTION),where('loginType','==','google'),where('rankedBattles','>',0),where('rating','>',Number(profile.rating)||INITIAL_RATING))).then(s=>{result.battle='#'+(s.data().count+1)}).catch(()=>{}));
+  if(Number(profile.rankedBattles||0)>0)requests.push(Promise.all([
+    getCountFromServer(query(collection(db,USERS_COLLECTION),where('loginType','in',['google','guest']),where('rankedBattles','>',0),where('rating','>',Number(profile.rating)||INITIAL_RATING))),
+    getCountFromServer(query(collection(db,USERS_COLLECTION),where('loginType','in',['google','guest']),where('rankArchived','==',true),where('rankedBattles','>',0),where('rating','>',Number(profile.rating)||INITIAL_RATING)))
+  ]).then(([all,archived])=>{result.battle='#'+(all.data().count-archived.data().count+1)}).catch(()=>{}));
   if(stats?.pbMs>0&&profile.normalSinglePbMs===stats.pbMs)requests.push(getCountFromServer(query(collection(db,USERS_COLLECTION),where('normalSinglePbMs','<',stats.pbMs))).then(s=>{result.single='#'+(s.data().count+1)}).catch(()=>{result.single='Unavailable'}));
   await Promise.all(requests);profileRankCache.set(key,{at:Date.now(),value:result});return result;
 }
@@ -1032,7 +1068,7 @@ function setBattleChoice(choice) {
   randomBattleControls.hidden = choice !== "ranked";
   if (!activeRoomId) {
     setBattleStatus(!currentUser ? "Log in to start a battle."
-      : choice === "ranked" && currentUser.isAnonymous ? "Ranked Battle requires Google Login." : "");
+      : "");
   }
 }
 
@@ -1588,7 +1624,7 @@ async function ensureBattlePlayerRating(player) {
   const request = getDoc(userRef(player.uid))
     .then(snapshot => {
       const profile = snapshot.data();
-      const rating = !profile || profile.loginType === "guest"
+      const rating = !profile
         ? null
         : Math.round(getRating(profile));
       battlePlayerRatings.set(player.uid, rating);
@@ -4159,6 +4195,79 @@ async function leaveBattleMode(options = {}) {
   }
 }
 
+async function linkGoogleAccount(){
+ if(authTransition)return;
+ if(!currentUser?.isAnonymous)return loginWithGoogle();
+ if(window.isBattleMode?.()||window.isTimerRunning?.())throw Error('Finish or abort your solve before linking accounts.');
+ const guest=currentUser,provider=new GoogleAuthProvider();provider.setCustomParameters({prompt:'select_account'});
+ authTransition=true;renderAuthState();
+ try{
+  const prior=await getDoc(doc(db,'accountLinks',guest.uid));
+  if(prior.exists())throw Error('This Guest has a saved merge request. Log out and sign in to the previously selected Google account to confirm or resume it. Guest data has not been deleted.');
+  try{const result=await linkWithPopup(guest,provider);await result.user.getIdToken(true);currentUser=result.user;renderAuthState();await ensureUserProfile();setStatus('Google linked. Your UID and records are unchanged.');return result;}
+  catch(error){if(!['auth/credential-already-in-use','auth/account-exists-with-different-credential'].includes(error.code))throw error;
+   const credential=GoogleAuthProvider.credentialFromError(error);if(!credential)throw error;
+   const secondary=initializeApp(config,'stcube-link-target-'+guest.uid);
+   try{const targetAuth=getAuth(secondary);await setPersistence(targetAuth,browserLocalPersistence);const result=await signInWithCredential(targetAuth,credential),target=result.user,targetDb=getFirestore(secondary);
+    if(target.uid===guest.uid)throw Error('The source and destination accounts must be different.');
+    const [count,oldRating,medals]=await Promise.all([getCountFromServer(query(collection(db,'solves'),where('uid','==',guest.uid))),getDoc(doc(targetDb,'users',target.uid)),getDoc(doc(db,'rankingMedals',guest.uid))]);
+    const c=window.RankingMedals.counts(medals.data());
+    let localCount=0;try{const rows=JSON.parse(localStorage.getItem('virtualCubeSolveHistory')||'[]');localCount=(await window.HistorySync.prepare(rows.filter(r=>r.ownerUid===guest.uid||r.syncOwnerUid===guest.uid),guest.uid)).length;}catch{}
+    if(!window.confirm(`Merge this Guest into ${target.displayName||'your Google account'}?\nGuest ranking records: ${count.data().count}\nLocal Guest solves available: ${localCount} (may overlap cloud records)\nGuest medals: ${c.gold} gold, ${c.silver} silver, ${c.bronze} bronze\nGoogle rating stays ${Number(oldRating.data()?.rating)||1200}.\nOriginal Guest data will NOT be deleted. Duplicate solves/award events will not be added twice. Unknown shared history requires separate confirmation. You can retry if interrupted.`)){setStatus('Merge cancelled. Guest data is unchanged.');return;}
+    await window.AccountMigration.create(migrationSdk,db).offer(guest.uid,target.uid);
+    await window.AccountMigration.create(migrationSdk,targetDb).accept(guest.uid,target.uid,(target.displayName||'Player').slice(0,24));
+    return await signInWithCredential(auth,credential);
+   }finally{await signOut(getAuth(secondary)).catch(()=>{});await deleteApp(secondary);}
+  }
+ }finally{authTransition=false;renderAuthState();}
+}
+async function syncLocalHistory(){
+ const user=currentUser;if(!user)return;
+ let rows;try{rows=JSON.parse(localStorage.getItem('virtualCubeSolveHistory')||'[]');}catch{return;}
+ const prepared=await window.HistorySync.prepare(rows,user.uid),owned=prepared.filter(r=>rows[r.index].ownerUid===user.uid||rows[r.index].syncOwnerUid===user.uid),shared=prepared.filter(r=>!rows[r.index].ownerUid&&!rows[r.index].syncOwnerUid);
+ let selected=owned;
+ const consentKey='stcube-history-consent-'+user.uid;
+ const unownedCount=new Set([...shared.map(r=>r.key),...getPendingSolves().filter(r=>!r.ownerUid).map(r=>r.solveId)]).size;
+ if(unownedCount&&!localStorage.getItem(consentKey)){
+  const yes=window.confirm(`This browser has ${unownedCount} unowned normal solve records. They may belong to someone else on a shared device. Import them into this account? Records owned by other accounts will NOT be imported. Local history will be kept.`);
+  localStorage.setItem(consentKey,yes?'yes':'no');
+ }
+ if(localStorage.getItem(consentKey)==='yes')selected=selected.concat(shared);
+ const writer=window.AccountMigration.create(migrationSdk,db);
+ for(const record of selected){if(currentUser?.uid!==user.uid)return;if(localStorage.getItem(PENDING_V2_PREFIX+record.key))continue;
+  await writer.importSolve(user.uid,getPlayerName(),record);
+  // Re-read after the transaction: a new solve in this/another tab must survive.
+  const latest=JSON.parse(localStorage.getItem('virtualCubeSolveHistory')||'[]'),original=rows[record.index];
+  const match=latest.find(r=>r.solveId===original.solveId&&r.completedAt===original.completedAt&&r.time===original.time&&r.scramble===original.scramble);
+  if(match&&(!match.ownerUid||match.ownerUid===user.uid)&&(!match.syncOwnerUid||match.syncOwnerUid===user.uid)){match.syncOwnerUid=user.uid;localStorage.setItem('virtualCubeSolveHistory',JSON.stringify(latest));}
+ }
+ // Ownership labels from another account alone are not proof. Only the
+ // two-account accepted link authorizes importing that Guest's unsent rows.
+ const links=await writer.sources(user.uid);
+ for(const link of links){
+  const sourceRows=rows.filter(r=>r.ownerUid===link.sourceUid&&(!r.syncOwnerUid||r.syncOwnerUid===link.sourceUid));
+  const verified=await window.HistorySync.prepare(sourceRows.map(r=>({...r,ownerUid:user.uid,syncOwnerUid:user.uid})),user.uid);
+  for(const record of verified){
+   if(currentUser?.uid!==user.uid)return;
+   const ids=['import_'+record.key+'_single',...(record.existingSolveId?['normal_'+record.existingSolveId+'_single']:[])];
+   const saved=await Promise.all(ids.map(id=>getDoc(doc(db,'solves',id))));
+   if(saved.some(s=>s.exists()))continue; // Cloud copies use their own durable receipts.
+   await writer.importSolve(user.uid,getPlayerName(),{...record,existingSolveId:null},{uid:link.sourceUid,id:'local:'+record.key});
+  }
+ }
+}
+async function resumeAccountMerge(){
+ if(!currentUser)return;const user=currentUser,writer=window.AccountMigration.create(migrationSdk,db);
+ if(!user.isAnonymous)for(const link of await writer.offers(user.uid)){
+  if(currentUser?.uid!==user.uid)return;
+  const [source,target]=await Promise.all([getDoc(doc(db,'users',link.sourceUid)),getDoc(userRef(user.uid))]);
+  if(window.confirm(`Resume the saved merge from ${source.data()?.name||'Guest'} into this Google account? Original Guest records will be kept. Solves and medal award events are deduplicated. Your Google rating stays ${Number(target.data()?.rating)||1200}.`))await writer.accept(link.sourceUid,user.uid,getPlayerName().slice(0,24));
+ }
+ let pending=false;for(let page=0;page<10;page++){if(currentUser?.uid!==user.uid)return;const result=await writer.resume(user.uid,getPlayerName());pending=result.pending;if(!pending)break;}
+ const transferred=await writer.medals(user.uid);if(transferred.added)medalTotalsCache.clear();invalidateRankingCache();
+ if(pending||transferred.pending)setStatus('Merge progress is saved. More records remain; use Resume Merge or revisit to continue.');
+}
+async function synchronizeAccount(){if(!currentUser)return;const uid=currentUser.uid,work=async()=>{try{await resumeAccountMerge();await syncLocalHistory();await submitPendingSolves();}catch(error){setStatus('Sync paused safely. Local history and source accounts are unchanged. Use Resume Merge to retry.');console.warn('Account sync deferred',error.code||error.message);}};if(navigator.locks)await navigator.locks.request('stcube-account-sync-'+uid,{ifAvailable:true},lock=>lock?work():undefined);else await work();}
 async function loginWithGoogle() {
   if (googleLoginPending) return;
 
@@ -4168,7 +4277,7 @@ async function loginWithGoogle() {
   const provider = new GoogleAuthProvider();
 
   try {
-    const credential = await signInWithPopup(auth, provider);
+    const credential = currentUser?.isAnonymous ? await linkGoogleAccount() : await signInWithPopup(auth, provider);
     window.trackCubeEvent?.("login", { method: "google" });
     return credential;
   } finally {
@@ -4199,15 +4308,20 @@ function getGoogleLoginErrorMessage(error) {
 }
 
 async function loginAsGuest() {
-  const name = nameInput.value.trim();
+  const name = nameInput.value.trim().slice(0,24);
   if (!name) {
     setStatus("Please enter a player name.");
     nameInput.focus();
     return;
   }
 
+  if(auth.currentUser)return;
+  guestLoginBtn.disabled=true;
+  pendingGuestName=name;
   const credential = await signInAnonymously(auth);
   await updateProfile(credential.user, { displayName: name });
+  currentUser=credential.user;await ensureUserProfile();renderAuthState();setStatus(`Logged in as ${name} (Guest)`);
+  guestLoginBtn.disabled=false;pendingGuestName='';
   window.trackCubeEvent?.("login", { method: "guest" });
 }
 
@@ -4280,6 +4394,18 @@ function setupModalUi() {
 }
 
 function setupAuthUi() {
+  document.getElementById('battleGoogleLoginBtn').addEventListener('click',()=>googleLoginBtn.click());
+  document.getElementById('battleGuestLoginBtn').addEventListener('click',()=>{
+    if(!nameInput.value.trim()){
+      const name=window.prompt('Choose a Guest player name (up to 24 characters).');
+      if(!name?.trim())return;
+      nameInput.value=name.trim().slice(0,24);
+    }
+    guestLoginBtn.click();
+  });
+  document.getElementById('resumeSyncBtn').addEventListener('click',()=>{if(!currentUser)return;localStorage.removeItem('stcube-history-consent-'+currentUser.uid);ensureUserProfile().then(synchronizeAccount).catch(()=>setStatus('Profile sync is still unavailable. Your local history is unchanged; please retry.'));});
+  document.getElementById('linkGoogleBtn').addEventListener('click',()=>linkGoogleAccount().catch(error=>setStatus(error.message||'Google linking failed. Your accounts are unchanged.')));
+  document.getElementById('accountLogoutBtn').addEventListener('click',()=>logoutBtn.click());
   document.getElementById("openBattleBtn")?.addEventListener("click", () => setBattleChoice(selectedBattleMode));
   googleLoginBtn.addEventListener("click", () => {
     loginWithGoogle().catch(error => {
@@ -4293,6 +4419,7 @@ function setupAuthUi() {
 
   guestLoginBtn.addEventListener("click", () => {
     loginAsGuest().catch(error => {
+      guestLoginBtn.disabled=false;
       setStatus("Guest login failed.");
       console.error(error);
     });
@@ -4595,6 +4722,7 @@ if (isConfigured()) {
   const app = initializeApp(config);
   auth = getAuth(app);
   db = getFirestore(app);
+  setPersistence(auth,browserLocalPersistence).catch(error=>setStatus('Persistent sign-in is unavailable in this browser. '+error.message));
   window.addEventListener('stcube:medals-updated',()=>medalTotalsCache.clear());
   window.MedalAutomation?.start({
     sdk:{doc,getDoc,getDocs,collection,query,where,orderBy,startAfter,limit,runTransaction,Timestamp,serverTimestamp},
@@ -4624,7 +4752,9 @@ if (isConfigured()) {
       ++rankedSearchGeneration;clearMatchmakingListeners();clearFriendLobby();releaseRankedSearchLock();
       if(window.BotBattle?.active)leaveBattleMode().catch(console.error);
     }
+    if(currentUser?.uid!==user?.uid)profileDisplayName='';
     currentUser = user;
+    authReady=true;renderAuthState();
     window.dispatchEvent(new Event('stcube:analytics-identity'));
     if(user)rankedRecoveryPromise=recoverAbandonedRankedSearch();
     if (!profileModal.hidden) showProfile().catch(console.error);
@@ -4633,7 +4763,7 @@ if (isConfigured()) {
       setStatus(`Logged in as ${user.displayName || "Guest"}`);
       updateAccountSummary(user, null);
       ensureUserProfile()
-        .then(() => submitPendingSolves())
+        .then(() => synchronizeAccount())
         .then(() => processBattleInboxes())
         .then(() => Promise.all([refreshTotalUsers(),refreshBattleAccountRating(true)]))
         .catch(console.error);

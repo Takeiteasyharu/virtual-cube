@@ -21,5 +21,6 @@ credentials*.json
 .medal-previews/
 .medal-verification/
 .rotation-verification/
+.auth-verification/
 .rotation-before.js
 

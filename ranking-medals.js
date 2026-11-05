@@ -20,7 +20,8 @@
    if(at>=p.end){late++;continue;} // Late/offline submissions cannot change the closed snapshot.
    if(at<p.start||s[p.field]!==p.key)throw Error('Record period/timestamp mismatch: '+row.id);
    const type=metric==='ao5'?'ao5':'single';
-   if(s.schemaVersion!==2||s.source!=='normal'||s.completed!==true||s.valid!==true||s.mode!=='virtual'||s.rankingType!==type||typeof s.uid!=='string'||!s.uid||typeof s.solveId!=='string'||row.id!=='normal_'+s.solveId+'_'+type||s.eventId!=='normal_'+s.solveId||typeof s.name!=='string'||typeof s.scramble!=='string'||!s.scramble.trim()||!Number.isFinite(s.time)||s.time<=2||s.time>=3600)throw Error('Unverifiable normal-solve provenance: '+row.id);
+   const prefix=s.schemaVersion===2?'normal_':s.schemaVersion===3?'import_':null;
+   if(!prefix||s.source!=='normal'||s.completed!==true||s.valid!==true||s.mode!=='virtual'||s.rankingType!==type||typeof s.uid!=='string'||!s.uid||typeof s.solveId!=='string'||row.id!==prefix+s.solveId+'_'+type||s.eventId!==prefix+s.solveId||typeof s.name!=='string'||typeof s.scramble!=='string'||!s.scramble.trim()||!Number.isFinite(s.time)||s.time<=2||s.time>=3600)throw Error('Unverifiable normal-solve provenance: '+row.id);
    const field=metric==='tps'?'tps':metric==='moves'?'moveCount':'time',value=s[field];
    if(!Number.isFinite(value)||(metric==='moves'&&!Number.isInteger(value)))throw Error('Missing or malformed metric: '+row.id);
    if(value<=0)continue;

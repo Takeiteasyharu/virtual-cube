@@ -28,6 +28,9 @@ jobs:
       - name: Test input and render scheduling
         run: node --test tests/player-presence.test.cjs tests/input-render.test.cjs tests/toy-room.test.cjs tests/normal-focus.test.cjs
 
+      - name: Test account-aware history preparation
+        run: node --test tests/history-sync.test.cjs
+
       - name: Test medal model and ranking limits
         run: node --test tests/medals.test.cjs tests/medal-history.test.cjs tests/ranking-limits.test.cjs tests/ranking-view.test.cjs
 
@@ -64,6 +67,8 @@ jobs:
             manifest.json \
             online.js \
             profile-records.js \
+            history-sync.js \
+            account-migration.js \
             profile-progress.js \
             profile-view.js \
             ranking-medals.js \

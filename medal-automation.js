@@ -7,6 +7,15 @@
   const {doc,getDoc,getDocs,collection,query,where,orderBy,startAfter,limit,runTransaction,Timestamp,serverTimestamp}=sdk;
   const now=options.now||Date.now,tracking=options.trackingStart||M.TRACKING_START,canWork=options.canWork||(()=>true),pageSize=10,maxReads=options.maxReads||1000;
   let reads=0;const ref=(...parts)=>doc(db,...parts),zero=()=>Timestamp.fromMillis(0),at=n=>Timestamp.fromMillis(n);
+  const retirementCache=new Map();
+  async function retiredBefore(uid,end){
+   if(!retirementCache.has(uid)){
+    if(reads>=maxReads)return null;
+    const snapshot=await getDoc(ref('rankingRetirements',uid));reads++;
+    retirementCache.set(uid,snapshot.data()?.retiredAt?.toMillis?.()??Infinity);
+   }
+   return retirementCache.get(uid)<end;
+  }
   const stamp=()=>serverTimestamp(),periodFor=(kind,start)=>M.period(kind,M.keys(start)[kind]);
   async function claim(kind){
    if(!canWork())return null;
@@ -24,6 +33,9 @@
     const requested=Math.min(pageSize,maxReads-reads);
     const snapshot=await getDocs(query(collection(db,'solves'),where('rankingType','==',type),where('valid','==',true),where(p.field,'==',p.key),orderBy(field,metric==='tps'?'desc':'asc'),...(cursor?[startAfter(cursor)]:[]),limit(requested)));reads+=Math.max(1,snapshot.size);
     for(const d of snapshot.docs){const raw=d.data(),row={id:d.id,data:{...raw,createdAt:raw.createdAt?.toMillis?.()??raw.createdAt}};
+     const retired=await retiredBefore(raw.uid,p.end);
+     if(retired===null)return {deferred:true};
+     if(retired)continue;
      try{const one=M.podium([row],metric,p,M.first('today',tracking),now());if(one.winners.length&&!seen.has(raw.uid)){seen.add(raw.uid);result.push(one.winners[0]);if(result.length===3)return {status:'finalized',winners:result.map(({uid,solveId,value})=>({uid,solveId,value})),problemSolveId:''};}}
      catch(error){return {status:'unverifiable',winners:[],problemSolveId:d.id};}
     }

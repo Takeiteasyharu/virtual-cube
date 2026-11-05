@@ -4,6 +4,20 @@ const sdk=require('firebase/firestore'),M=require('../ranking-medals.js'),A=requ
 const {doc,setDoc,getDoc,updateDoc,deleteDoc,Timestamp,serverTimestamp}=sdk;
 let env;const db=u=>env.authenticatedContext(u).firestore(),at=s=>Timestamp.fromMillis(Date.parse(s));
 const worker=u=>A.create(sdk,db(u),u,{trackingStart:'2026-09-01'});
+test('a merged account replaces its retired source only for periods ending after retirement',async()=>{
+ await reset();await seed('2026-09-01',['guest-source']);
+ await admin(async d=>{
+  await setDoc(doc(d,'rankingRetirements','guest-source'),{v:1,retired:true,retiredAt:at('2026-09-01T13:00:00Z')});
+  for(const type of ['single','ao5']){
+   const source=(await getDoc(doc(d,'solves','normal_2026-09-01-guest-source_'+type))).data();
+   const solveId='merged-2026-09-01';
+   await setDoc(doc(d,'solves','import_'+solveId+'_'+type),{...source,uid:'merged',name:'Google',schemaVersion:3,solveId,eventId:'import_'+solveId,createdAt:at('2026-09-01T13:00:00Z')});
+  }
+ });
+ await cursor('today','2026-09-01');await worker('visitor').step('today');
+ const total=(await getDoc(doc(db('visitor'),'rankingMedals','merged'))).data();
+ assert.equal(total.gold,4);assert(!(await getDoc(doc(db('visitor'),'rankingMedals','guest-source'))).exists());
+});
 const admin=fn=>env.withSecurityRulesDisabled(c=>fn(c.firestore()));
 async function reset(){await env.clearFirestore();}
 async function seed(day,users=['A','B','C']){await admin(async d=>{for(let i=0;i<users.length;i++)for(const type of ['single','ao5']){

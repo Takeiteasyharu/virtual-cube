@@ -26,7 +26,7 @@
     return 'dnf';
   }
   function create(sdk,db){
-    const {doc,runTransaction,serverTimestamp,getDoc,getDocs,collection,query,where,limit}=sdk;
+    const {doc,runTransaction,serverTimestamp,getDoc,getDocs,collection,query,where,limit,Timestamp}=sdk;
     const cleanCalendar=(value,stamp)=>{const {changed,...data}=value;return {...data,updatedAt:stamp};};
     async function prepareCalendar(uid){
       const ref=doc(db,'users',uid,'activityCalendar','current'),detailRef=doc(db,'users',uid,'profileStats','details');
@@ -63,13 +63,18 @@
       const id='normal_'+input.solveId,singleId=id+'_single',ao5Id=id+'_ao5';
       const er=doc(db,'users',uid,'profileEvents',id),sr=doc(db,'users',uid,'profileStats','current'),ur=doc(db,'users',uid),single=doc(db,'solves',singleId);
       return commit(async tx=>{
-        const [e,s,u,existing]=await Promise.all([tx.get(er),tx.get(sr),tx.get(ur),tx.get(single)]);
+        const [e,s,u,existing,imported]=await Promise.all([tx.get(er),tx.get(sr),tx.get(ur),tx.get(single),tx.get(doc(db,'solveImportClaims',input.solveId))]);
         if(e.exists())return false;
+        if(imported.exists()){
+          if(imported.data().uid!==uid)throw Error('Solve ID belongs to another account');
+          return false;
+        }
         if(existing.exists())throw Error('Solve ID already belongs to a recorded solve');
         const progress=await progressRead(tx,uid);
         const stamp=serverTimestamp(),hasAo5=Number.isFinite(input.ao5)&&input.ao5>2&&input.ao5<3600;
         const event={v:1,id,uid,kind:'normal',createdAt:stamp,timeMs:Math.round(input.time*1000),moveCount:input.moveCount,tpsMilli:Math.round(input.tps*1000),ao5Ms:hasAo5?Math.round(input.ao5*1000):0,ao12Ms:Number.isFinite(input.ao12)?Math.round(input.ao12*1000):0,singleId,ao5Id:hasAo5?ao5Id:''};
         const entry={schemaVersion:2,solveId:input.solveId,eventId:id,uid,name,source:'normal',completed:true,valid:true,mode:'virtual',scramble:input.scramble,time:input.time,tps:input.tps,moveCount:input.moveCount,moves:input.moves,dayKey:keys.today,weekKey:keys.week,monthKey:keys.month,createdAt:stamp};
+        if(Timestamp&&Number.isFinite(Date.parse(input.solvedAt)))entry.solvedAt=Timestamp.fromMillis(Date.parse(input.solvedAt));
         tx.set(single,{...entry,rankingType:'single'});
         if(hasAo5)tx.set(doc(db,'solves',ao5Id),{...entry,rankingType:'ao5',time:input.ao5});
         const summary=advance(s.data(),event,stamp);progressWrite(tx,uid,progress,s.data(),summary,event,stamp);

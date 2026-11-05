@@ -8,8 +8,8 @@ const hook=`
 import {connectFirestoreEmulator} from 'https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js';
 const fixtureUid=localStorage.getItem('randomTestUid');
 db=getFirestore(initializeApp({projectId:'${project}',apiKey:'demo',appId:'demo'}));
-connectFirestoreEmulator(db,'127.0.0.1',8780,{mockUserToken:{sub:fixtureUid,firebase:{sign_in_provider:'google.com'}}});
-currentUser={uid:fixtureUid,displayName:'Test Player',isAnonymous:false};getBattleScramble=async()=> 'R U F2';setupAuthUi();
+connectFirestoreEmulator(db,'127.0.0.1',8780,{mockUserToken:{sub:fixtureUid,firebase:{sign_in_provider:fixtureUid==='human-high'?'google.com':'anonymous'}}});
+currentUser={uid:fixtureUid,displayName:'Test Player',isAnonymous:fixtureUid!=='human-high'};getBattleScramble=async()=> 'R U F2';setupAuthUi();
 rankedRecoveryPromise=recoverAbandonedRankedSearch();await rankedRecoveryPromise;
 window.__randomTest={start:startRankedBattle,cancel:cancelRandomMatch,leave:leaveBattleMode,choice:()=>setBattleChoice('ranked'),get room(){return activeRoom},get id(){return activeRoomId},get own(){return rankedOwnQueueRoomId},get token(){return rankedSearchToken},get botEnabled(){return rankedSearchBotEnabled}};
 `;
@@ -29,7 +29,7 @@ async function open(browser,uid,viewport={width:1440,height:1000}){
 async function turn(p,m){await p.evaluate(m=>performMove(m),m);await p.waitForFunction(()=>!isCubeBusy());}
 (async()=>{
  const env=await initializeTestEnvironment({projectId:project,firestore:{host:'127.0.0.1',port:8780,rules:fs.readFileSync(path.join(root,'firestore.rules'),'utf8')}});
- await env.withSecurityRulesDisabled(async c=>{for(const [uid,rating]of [['solo',2100],['mobile',2100],['human-low',400],['human-high',2800]])await sdk.setDoc(sdk.doc(c.firestore(),'users',uid),{uid,name:'Test Player',rating,loginType:'google'});});
+ await env.withSecurityRulesDisabled(async c=>{for(const [uid,rating]of [['solo',2100],['mobile',2100],['human-low',400],['human-high',2800]])await sdk.setDoc(sdk.doc(c.firestore(),'users',uid),{uid,name:'Test Player',rating,loginType:uid==='human-high'?'google':'guest'});});
  await new Promise(r=>server.listen(8777,'127.0.0.1',r));
  const browser=await chromium.launch({channel:'msedge',headless:true,args:['--use-angle=swiftshader','--enable-webgl','--enable-unsafe-swiftshader']});
  try{

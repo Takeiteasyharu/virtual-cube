@@ -246,12 +246,18 @@
         <section class="login-panel" aria-label="Login">
           <h2>Make yourself at home.</h2>
           <p class="toy-support">Save your progress. Find your people.</p>
+          <div id="signedOutAuth" hidden>
           <input id="playerNameInput" type="text" maxlength="24" placeholder="Player name" />
           <div class="buttons auth-buttons">
             <button id="googleLoginBtn">Google Login</button>
             <button id="guestLoginBtn">Guest Login</button>
           </div>
-          <div class="auth-status" id="authStatus">Online features are not configured.</div>
+          </div>
+          <button id="linkGoogleBtn" hidden>Link Google Account</button>
+          <button id="accountLogoutBtn" hidden>Logout</button>
+          <button id="resumeSyncBtn" hidden>Sync Local History / Resume Merge</button>
+          <p id="guestAccountHint" class="toy-support" hidden>Guest accounts stay on this browser. Clearing browser data can lose access. Link Google to keep your account.</p>
+          <div class="auth-status" id="authStatus">Checking sign-in...</div>
           <div class="user-count" id="totalUsersDisplay">Users: -</div>
           <button id="profileBtn" class="profile-button">Profile</button>
         </section>
@@ -412,6 +418,10 @@
     <section class="modal-content feature-content battle-panel" aria-label="Battle selection">
       <div class="modal-heading"><h2 id="battleTitle">Battle</h2><button class="modal-close" data-close-modal="battleModal" aria-label="Close Battle">Close</button></div>
       <div class="toy-battle-intro"><span class="toy-eyebrow">THE PLAY ARENA</span><p>Same scramble. A fresh challenge.</p><small>Race a friend or find your next opponent.</small></div>
+      <div id="battleAuthChoices" hidden class="auth-buttons">
+        <button id="battleGoogleLoginBtn" type="button">Google Login</button>
+        <button id="battleGuestLoginBtn" type="button">Guest Login</button>
+      </div>
       <div class="battle-choice-tabs" role="tablist">
         <button class="battle-choice-tab active" data-battle-choice="friend">Friend Battle</button>
         <button class="battle-choice-tab" data-battle-choice="ranked">Random Battle</button>
@@ -540,6 +550,8 @@
   <script src="profile-progress.js"></script>
   <script src="activity-calendar.js"></script>
   <script src="profile-records.js"></script>
+  <script src="history-sync.js"></script>
+  <script src="account-migration.js"></script>
   <script src="profile-view.js"></script>
   <script src="ranking-medals.js"></script>
   <script src="medal-history.js"></script>
