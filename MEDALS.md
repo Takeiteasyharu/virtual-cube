@@ -1,5 +1,15 @@
 # Automatic permanent ranking medals
 
+## Compact display
+
+All ranking views (including Battle Ratings) and Profile display at most one
+icon for each earned color, always gold then silver then bronze. Zero-count
+colors are omitted, so a name has no more than three medal icons. The shared
+`RankingMedals.symbols()` formatter is presentation-only: actual totals continue
+to accumulate unchanged. Tooltips and accessible labels retain exact career
+counts. Player names, award events, Firestore documents and award transactions
+are not rewritten by this display rule.
+
 ## Operation
 
 No administrator command, Cloud Functions, billing-plan change, or secret is

@@ -33,7 +33,7 @@
   return {metric,winners,late,eligibleRecords:accepted.length};
  }
  function counts(data){if(!data)return {gold:0,silver:0,bronze:0};if(data.v!==1)throw Error('Unknown medal format');for(const k of ['gold','silver','bronze'])if(!Number.isSafeInteger(data[k])||data[k]<0)throw Error('Invalid medal totals');return {gold:data.gold,silver:data.silver,bronze:data.bronze};}
- function symbols(data){const c=counts(data);return '🥇'.repeat(c.gold)+'🥈'.repeat(c.silver)+'🥉'.repeat(c.bronze);}
+ function symbols(data){const c=counts(data);return (c.gold>0?'🥇':'')+(c.silver>0?'🥈':'')+(c.bronze>0?'🥉':'');}
  const TRACKING_START='2026-10-30';
  function first(kind,start=TRACKING_START){const base=period('today',start).start;if(kind==='today')return base;if(kind==='week'){const d=new Date(base);return base+((8-(d.getUTCDay()||7))%7)*86400000;}if(kind==='month'){const d=new Date(base);return d.getUTCDate()===1?base:Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+1,1);}throw Error('Invalid period kind');}
  // Stable certificate key: exactly one award per metric/kind/UTC period.
